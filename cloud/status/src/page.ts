@@ -1,6 +1,8 @@
 import { LOCALES, LOCALE_ORDER, translate, type MessageKey, type Messages } from "./i18n";
 import type { ComponentView, DayView, IncidentView, MaintenanceView, StatusView } from "./view";
 
+export const PROJECT_URL = "https://github.com/AyeOps/ayeops";
+
 const ESCAPES: Record<string, string> = {
   "&": "&amp;",
   "<": "&lt;",
@@ -196,7 +198,7 @@ export function renderPage(view: StatusView, context: PageContext): string {
     `<h2>${escapeHtml(t("components"))}</h2>`,
     `<section><ul>${components.join("")}</ul></section>`,
     `<footer><span>${escapeHtml(updated)}</span>${renderLanguages(locale, t)}`,
-    `<span>${escapeHtml(t("powered_by"))}</span></footer>`,
+    `<a href="${PROJECT_URL}" rel="noopener noreferrer">${escapeHtml(t("powered_by"))}</a></footer>`,
     "</main>",
     "</body>",
     "</html>",

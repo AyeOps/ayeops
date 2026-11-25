@@ -16,6 +16,8 @@ and was never tagged.
 
 ### Added
 
+- Status page: the "Powered by AyeOps" footer links to the project on GitHub, in the
+  page's language, without sending the page's address along.
 - `updates`: `allowed_commands` sets Renovate's `allowedCommands`, the `postUpgradeTasks`
   commands a repository may run; each entry must be a whole-command pattern anchored with `^`
   and `$`, and the default runs none.

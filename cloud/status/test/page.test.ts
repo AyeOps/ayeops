@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { handle } from "../src/app";
 import { runMinute } from "../src/cron";
+import { PROJECT_URL } from "../src/page";
 import { HISTORY_DAYS } from "../src/view";
 import { COMPONENTS, FakeNet, NOW, acmeDatabase, addGlobex, request } from "./helpers";
 
@@ -36,6 +37,18 @@ describe("tenant resolution", () => {
 });
 
 describe("public page", () => {
+  it("links the footer to the AyeOps project in the page's language", async () => {
+    const db = acmeDatabase();
+    for (const [lang, text] of [
+      ["en", "Powered by AyeOps"],
+      ["uk", "Працює на AyeOps"],
+      ["ru", "Работает на AyeOps"],
+    ]) {
+      const html = await (await handle(request(`/?lang=${lang}`), db, NOW)).text();
+      expect(html).toContain(`<a href="${PROJECT_URL}" rel="noopener noreferrer">${text}</a></footer>`);
+    }
+  });
+
   it("lists the components in manifest order", async () => {
     const { html } = await page();
     const positions = COMPONENTS.components.map((component) => html.indexOf(`id="c-${component.id}"`));
@@ -66,7 +79,7 @@ describe("public page", () => {
   it("loads no external assets and forbids them in its CSP", async () => {
     const { response, html } = await page();
     expect(html).not.toMatch(/<script|<link|<img|src=|url\(/i);
-    expect(html).not.toMatch(/href="(?!\?lang=)/);
+    expect(html.replaceAll(`href="${PROJECT_URL}"`, "")).not.toMatch(/href="(?!\?lang=)/);
     expect(response.headers.get("content-security-policy")).toContain("default-src 'none'");
   });
 
