@@ -575,7 +575,7 @@ services:
       timeout: 5s
     image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
     labels:
-      io.ayeops.config-hash: 56c511ac3c22f263
+      io.ayeops.config-hash: 48f043f8db15b691
       io.ayeops.module: grafana
       io.ayeops.service: grafana
     logging:

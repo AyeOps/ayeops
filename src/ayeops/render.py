@@ -26,6 +26,8 @@ from ayeops.baseline import expand, is_baseline
 from ayeops.checks import baseline_sources, checks_context, service_alerts
 from ayeops.dashboards import build, localize, requirement_met
 from ayeops.datastores import job_rpos, offsite_max_age
+from ayeops.duties import SCOPE as DUTY_SCOPE
+from ayeops.duties import overdue_alert, runbook_annotation
 from ayeops.eol import tracked as eol_tracked
 from ayeops.i18n import LANGS
 from ayeops.incidents import incidents_context
@@ -835,6 +837,15 @@ def grafana_rules(
                 "interval": "1m",
                 "rules": service_rules,
             }
+        )
+    duty = overdue_alert(manifest)
+    if duty is not None:
+        rule = grafana_rule(
+            duty, MODULE_RUNBOOK_BASE, {"scope": escape_provisioning(DUTY_SCOPE)}, ("OK", "Error")
+        )
+        rule["annotations"]["runbook_url"] = escape_provisioning(runbook_annotation(manifest))
+        groups.append(
+            {"orgId": 1, "name": "duties", "folder": FOLDER, "interval": "1m", "rules": [rule]}
         )
     return {"apiVersion": 1, "groups": groups}
 

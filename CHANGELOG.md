@@ -14,6 +14,14 @@ and was never tagged.
 
 ### Added
 
+- `duties` in the manifest: recurring work only a person can do (an access review, a manual
+  restore, a credential rotation), each with `title`, `every`, `last_done` and an optional
+  `owner` and `runbook`. One Grafana rule, `duty-overdue` (warning), fires per duty from the day
+  after its due day in the manifest's `timezone`; the due moment is rendered from the manifest
+  and compared with `time()` when the rule runs, so the render does not change by the day.
+  `aye check` refuses a `last_done` after today or not a day (`duty-done`) and an `every` over
+  ten years (`duty-every`); `aye duties` lists the duties with their days left and exits 1 when
+  one is overdue.
 - `metrics`: the alerts `metrics-shipping-backlog` (warning), when for 15 minutes a host's
   vmagent queue holds more than 30 minutes of its own traffic or more than half of its room, and
   `metrics-shipping-dropped` (critical), when in the last hour the full queue dropped blocks or

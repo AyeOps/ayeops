@@ -9,6 +9,8 @@ import pytest
 import yaml
 
 from ayeops import grafana_reader, render
+from ayeops.duties import OWN_RUNBOOK as DUTY_RUNBOOK_LINK
+from ayeops.duties import TITLE as DUTY_TITLE
 from ayeops.manifest import load_manifest
 from ayeops.portal.pages import portal_pages
 from ayeops.registry import MODULES_DIR, Module, load_modules
@@ -255,6 +257,8 @@ def test_service_alerts_link_the_project_runbooks_and_module_alerts_link_the_kit
         for rule in group["rules"]
     }
     assert urls["Website down"][1] == "https://runbooks.acme.example/web-down"
+    duty = urls.pop(DUTY_TITLE)[1]
+    assert duty == DUTY_RUNBOOK_LINK.replace("$", "$$")
     for labels, url in urls.values():
         if "module" in labels:
             assert url.startswith(MODULE_RUNBOOK_BASE) and url.endswith(".md")

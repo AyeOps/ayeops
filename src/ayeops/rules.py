@@ -18,6 +18,8 @@ from ayeops.baseline import dashboard as baseline_dashboard
 from ayeops.baseline import is_baseline, rule_names, spec_problems
 from ayeops.checks import check_alerts, check_problems, service_checks, sql_baseline
 from ayeops.datastores import datastore_problems, datastore_warnings
+from ayeops.duties import ALERT as DUTY_ALERT
+from ayeops.duties import duty_problems
 from ayeops.grafana_reader import SERVICE as READER_SERVICE
 from ayeops.grafana_reader import consumer_problems, declared, mounts_volume
 from ayeops.i18n import is_reserved
@@ -453,7 +455,8 @@ def check_services(
         for alert in service.get("alerts") or []
         for name in alert_names(alert)
     ] + [alert["name"] for check in service_checks(manifest) for alert in check_alerts(check)]
-    for alert, count in sorted(Counter(module_alerts + service_alerts).items()):
+    duty_alerts = [DUTY_ALERT] if manifest.data.get("duties") else []
+    for alert, count in sorted(Counter(module_alerts + service_alerts + duty_alerts).items()):
         if count > 1:
             findings.append(
                 Finding("services", "alert-unique", f"alert {alert!r} is defined {count} times")
@@ -911,6 +914,11 @@ def check_waivers(manifest: Manifest, today: date | None = None) -> list[Finding
     return [Finding(*problem) for problem in waiver_errors(manifest, day)]
 
 
+def check_duties(manifest: Manifest, today: date | None = None) -> list[Finding]:
+    day = today or today_in(manifest.timezone)
+    return [Finding(*problem) for problem in duty_problems(manifest, day)]
+
+
 def unused_warnings(manifest: Manifest, modules: dict[str, Module]) -> list[tuple[str, str, str]]:
     problems = unused_profiles(manifest.raw)
     if unknown_profiles(manifest.raw) or check_local_modules(manifest, modules):
@@ -979,6 +987,7 @@ def check_manifest(
     findings += [Finding(*problem) for problem in autopilot_problems(manifest)]
     findings += [Finding(*problem) for problem in manifest_problems(manifest.raw)]
     findings += check_waivers(manifest, today)
+    findings += check_duties(manifest, today)
     if not manifest.runbook_base_url and (manifest.services or manifest.enabled_modules()):
         findings.append(Finding("runbook_base_url", "alert-runbook", "runbook_base_url is not set"))
     return sorted(findings)

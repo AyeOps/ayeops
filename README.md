@@ -14,7 +14,8 @@ and `aye render` turns the manifest into a docker compose project per host with 
 vmagent, exporters and a provisioned Grafana.
 
 What ships today, as the [modules](#modules) below: metrics and logs, probes and declared
-checks, backups monitoring with off-site copies and restore tests, on-call escalation and an
+checks, [duties](docs/manifest.md#duties) only a person can do with an alert when one is
+overdue, backups monitoring with off-site copies and restore tests, on-call escalation and an
 incident journal, a status page, an MCP hub, and the autopilot's first level in shadow mode,
 which diagnoses but runs no action. A module marked preview works and is tested, but its
 settings, metrics or alerts may still change in a minor release ([changelog](CHANGELOG.md)).

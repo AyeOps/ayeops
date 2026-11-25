@@ -30,6 +30,7 @@ Names (project, hosts, services, alerts) match `^[a-z][a-z0-9-]{0,39}$`.
 | `services` | no | the catalog of your own services, map of name to service |
 | `externals` | no | services outside the fleet that others depend on or that call a service: `{<name>: {title, url, icon}}`, referenced as `external:<name>`; one nobody references warns with `external-used` |
 | `flows` | no | data flows of the project for the [portal](modules.md#portal), see below |
+| `duties` | no | recurring work only a person can do, with the day it was last done; one alert says when one is overdue, see [duties](#duties) |
 
 ## Host
 
@@ -334,6 +335,61 @@ flows:
 | `from`, `to` | yes | `<host>/<service>`, a service name unique across hosts, a probed URL, a cloud dependency name or `external:<name>` (`flow-endpoint`) |
 | `label` | no | text on the edge; a [text](#text-in-several-languages) |
 | `state` | no | `live` (default): dots move along it; `planned`: dashed; `disabled`: dashed and faded |
+
+## Duties
+
+Some duties cannot be automated away: an access review every quarter, a restore done by hand,
+rotating a credential, renewing a contract, calling the on-call phone to see that it rings.
+They live in someone's calendar and lapse without a sound. `duties` lists them with the day
+each was last done, and the alert `duty-overdue` says when one is late:
+
+```yaml
+duties:
+  access-review:
+    title: Review who can sign in to Grafana, the portal and the hosts
+    every: 90d
+    last_done: 2026-10-01
+    owner: ops
+    runbook: access-review
+  token-rotation:
+    title: Rotate the Cloudflare and Telegram API tokens
+    every: 365d
+    last_done: 2026-03-02
+```
+
+The key is the duty's name, `^[a-z][a-z0-9-]{0,39}$`, so two duties cannot share one. The word
+is `duties` and not checks because `aye check` validates the manifest and a service's
+[`checks`](checks.md) are probes a machine runs; a duty is done by a person.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `title` | yes | what to do, one line of up to 120 characters without `"`, `\` or `$`; the alert shows it |
+| `every` | yes | how often, in days: `1d` to `3660d` (ten years, rule `duty-every`) |
+| `last_done` | yes | the day it was last done, `YYYY-MM-DD`, quoted or not; a day that is not real or that lies after today in the manifest's `timezone` fails rule `duty-done` |
+| `owner` | no | who does it, free text of up to 80 characters, e.g. a team or a person; the alert shows it |
+| `runbook` | no | how to do it: a slug appended to `runbook_base_url`, or an absolute URL; the alert links it instead of the [duty-overdue](runbooks/duty-overdue.md) page |
+
+A duty is due on `last_done` plus `every` and overdue from the first moment of the next day in
+the manifest's `timezone`. The due moment is written into the alert rule as a Unix time when the
+manifest is rendered, and the rule compares it with `time()` at each evaluation, so the render
+depends on the manifest alone and stays the same from one day to the next. The rule, one for all
+duties in the rule group `duties` on the Grafana host, returns one series per duty with the
+labels `duty`, `title`, `due`, `every` and, when set, `owner` and `runbook`; it is `1` from the
+overdue moment on and `0` before, and fires (severity `warning`) after an hour. Each duty is
+its own notification, through the `scope` label. Nothing is scraped or stored: the duties exist
+in the manifest and in the rule.
+
+Doing the duty is recorded by editing `last_done` and committing the manifest, so the registry
+is reviewed like any other change and its history is the git log; the alert resolves once the
+render with the new day is deployed. `aye duties` lists every duty with its due day and the days
+left, earliest due day first, and exits 1 when one is overdue, so a scheduled pipeline can nag too:
+
+```text
+$ aye duties --today 2026-12-31
+access-review: overdue, was due on 2026-12-30, 1 day ago (every 90d, owner ops): Review who can sign in to Grafana, the portal and the hosts
+token-rotation: due on 2027-03-02, in 61 days (every 365d): Rotate the Cloudflare and Telegram API tokens
+ayeops.yaml: 1 of 2 duty(s) overdue
+```
 
 ## Mail
 

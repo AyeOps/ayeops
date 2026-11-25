@@ -135,6 +135,22 @@
           "state": {"enum": ["live", "planned", "disabled"]}
         }
       }
+    },
+    "duties": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/name"},
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "every", "last_done"],
+        "properties": {
+          "title": {"type": "string", "pattern": "^[^\\s\"\\\\$][^\"\\\\$\\r\\n]{0,119}$"},
+          "every": {"type": "string", "pattern": "^[1-9][0-9]{0,3}d$"},
+          "last_done": true,
+          "owner": {"type": "string", "pattern": "^[^\\s\"\\\\$][^\"\\\\$\\r\\n]{0,79}$"},
+          "runbook": {"type": "string", "pattern": "^[^\\s\"\\\\$]+$"}
+        }
+      }
     }
   },
   "$defs": {
