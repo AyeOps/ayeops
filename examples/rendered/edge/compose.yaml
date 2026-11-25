@@ -742,7 +742,7 @@ services:
       timeout: 10s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: f030a1df9f91a47e
+      io.ayeops.config-hash: 3a77d456fb4fea25
       io.ayeops.module: sentinel
       io.ayeops.service: sentinel
     logging:

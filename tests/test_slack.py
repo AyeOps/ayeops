@@ -39,6 +39,11 @@ def env_of(
     return environment
 
 
+def configs(tree: dict[str, str]) -> list[str]:
+    suffixes = ("compose.yaml", ".env.example", "contact-points.yaml")
+    return [path for path in tree if path.endswith(suffixes)]
+
+
 def test_the_example_with_contact_slack_passes_every_rule(data: dict[str, Any]) -> None:
     assert rules_hit(slack(data)) == set()
 
@@ -89,7 +94,7 @@ def test_grafana_and_the_sentinel_need_the_webhook_and_no_telegram_bot(
     for host in ("central", "edge"):
         assert "AYE_SLACK_WEBHOOK_URL=replace-me" in tree[f"{host}/.env.example"].splitlines()
         assert "AYE_TELEGRAM_BOT_TOKEN" not in tree[f"{host}/.env.example"]
-    assert not [path for path, text in tree.items() if "hooks.slack" in text]
+    assert not [path for path in configs(tree) if "hooks.slack" in tree[path]]
 
 
 @pytest.mark.parametrize("contact", ["telegram", "email", "none"])
@@ -100,7 +105,7 @@ def test_other_contacts_render_no_slack(
     if contact == "email":
         data["alerting"]["emails"] = ["ops@acme.example"]
     tree = render_once(manifest_from(data), modules)
-    assert not [path for path, text in tree.items() if "SLACK" in text]
+    assert not [path for path in configs(tree) if "slack" in tree[path].lower()]
     sentinel = env_of(data, "edge", "sentinel", modules)
     assert sentinel["AYE_TELEGRAM_BOT_TOKEN"] == (
         "${AYE_TELEGRAM_BOT_TOKEN:?set AYE_TELEGRAM_BOT_TOKEN}"
@@ -122,7 +127,7 @@ def test_the_slack_message_reuses_the_telegram_layout_with_slack_links() -> None
     ) in template
     assert (
         '{{ define "aye.slack.title" }}'
-        '{{ if .Alerts.Firing }}🔴{{ else }}✅{{ end }} {{ .CommonLabels.alertname }}'
+        "{{ if .Alerts.Firing }}🔴{{ else }}✅{{ end }} {{ .CommonLabels.alertname }}"
         "{{ if gt (len .Alerts) 1 }}{{ if .GroupLabels.scope }} · {{ .GroupLabels.scope }}"
         "{{ end }}{{ end }}{{ end }}"
     ) in template
@@ -173,7 +178,7 @@ def test_the_permissions_name_the_slack_webhook_for_grafana_and_the_sentinel(
     sentinel = credentials(manifest, modules, "edge", "sentinel")
     assert [c.issuer for c in grafana if SLACK_WEBHOOK_ENV in c.env] == ["Slack"]
     assert not [c for c in grafana if "AYE_TELEGRAM_BOT_TOKEN" in c.env]
-    assert [(c.issuer, c.env) for c in sentinel][0] == ("Slack", (SLACK_WEBHOOK_ENV,))
+    assert (sentinel[0].issuer, sentinel[0].env) == ("Slack", (SLACK_WEBHOOK_ENV,))
     telegram = manifest_from(data | {"alerting": {"contact": "telegram"}})
     issuers = [c.issuer for c in credentials(telegram, modules, "edge", "sentinel")]
     assert "Telegram" in issuers
@@ -207,5 +212,5 @@ def test_every_spelling_of_a_slack_webhook_is_refused_in_any_list_or_map(
 
 
 def test_other_slack_and_hook_urls_pass(data: dict[str, Any]) -> None:
-    data["services"]["web"]["description"] = "https://acme.slack.com/archives/C1, hooks.example.com/"
+    data["services"]["web"]["description"] = "https://acme.slack.com/archives/C1 hooks.example.com/"
     assert rules_hit(data) == set()

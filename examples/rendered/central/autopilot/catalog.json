@@ -110,7 +110,7 @@
       "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-notify-failing.md",
       "service": null,
       "severity": "critical",
-      "title": "Sentinel cannot reach Telegram"
+      "title": "Sentinel cannot deliver its messages"
     },
     "aye-smart-failing": {
       "expr": "smartctl_device_smart_status == bool 0",
@@ -166,6 +166,7 @@
     "AYE_OPENAI_ADMIN_KEY",
     "AYE_RESTSTORE_METRICS_PASSWORD",
     "AYE_SENTINEL_PING_URL",
+    "AYE_SLACK_WEBHOOK_URL",
     "AYE_SMTP_PASSWORD",
     "AYE_SMTP_USER",
     "AYE_STATUS_PUSH_SECRET",

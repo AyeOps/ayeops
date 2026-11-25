@@ -911,7 +911,7 @@
       "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-notify-failing.md",
       "severity": "critical",
       "summary": "The sentinel on {{ .Labels.host }} failed to send its last message about {{ .Labels.watch }}",
-      "title": "Sentinel cannot reach Telegram"
+      "title": "Sentinel cannot deliver its messages"
     },
     "sentinel-ping-failing": {
       "expr": "ayeops_sentinel_ping_success == bool 0",
@@ -1513,7 +1513,7 @@
     },
     "sentinel-notify-failing": {
       "name": "sentinel-notify-failing",
-      "text": "# Sentinel cannot reach Telegram\n\nThe last message of the sentinel was not accepted by Telegram. The next time the central host\ndies, the sentinel will notice but you will not hear it, except through the dead-man ping.\n\n## What to do\n\n1. `docker compose logs sentinel` on the sentinel's host: `telegram_failed` lines carry the\n   HTTP status (the token is never logged).\n2. `401`: the bot token in `AYE_TELEGRAM_BOT_TOKEN` is wrong or was revoked; `400 chat not\n   found` or `403`: `AYE_TELEGRAM_CHAT_ID` is wrong, or the bot was removed from the chat.\n   Compare with the values of the Grafana contact point, which should be the same.\n3. A connection error: the sentinel's host cannot reach `api.telegram.org`; check its DNS and\n   outbound firewall.\n4. After fixing the `.env`, `docker compose up -d sentinel`. The message is retried every round\n   until it is delivered, and the alert clears with the next delivered one.\n",
+      "text": "# Sentinel cannot deliver its messages\n\nThe last message of the sentinel was not accepted by Telegram, or by Slack with\n`alerting.contact: slack`. The next time the central host\ndies, the sentinel will notice but you will not hear it, except through the dead-man ping.\n\n## What to do\n\n1. `docker compose logs sentinel` on the sentinel's host: `telegram_failed` lines carry the\n   HTTP status (the token is never logged).\n2. `401`: the bot token in `AYE_TELEGRAM_BOT_TOKEN` is wrong or was revoked; `400 chat not\n   found` or `403`: `AYE_TELEGRAM_CHAT_ID` is wrong, or the bot was removed from the chat.\n   Compare with the values of the Grafana contact point, which should be the same.\n3. A connection error: the sentinel's host cannot reach `api.telegram.org`; check its DNS and\n   outbound firewall.\n4. With contact `slack`: `slack_failed` lines carry the status (the webhook URL is never\n   logged). `403`: a workspace admin restricts the webhook, or it was revoked; `404`: the\n   webhook, its app or its channel is gone; `410`: the channel was archived. Make a new webhook\n   and put it into `AYE_SLACK_WEBHOOK_URL` in the `.env` of the sentinel's and of the Grafana\n   host. A connection error: the host cannot reach `hooks.slack.com`.\n5. After fixing the `.env`, `docker compose up -d sentinel`. The message is retried every round\n   until it is delivered, and the alert clears with the next delivered one.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-notify-failing.md"
     },
     "sentinel-ping-failing": {
@@ -2747,7 +2747,7 @@
         "sentinel-ping-failing",
         "sentinel-stalled"
       ],
-      "description": "Checks Grafana, VictoriaMetrics and the freshness of up on the watched host every minute and tells Telegram when they stop answering.",
+      "description": "Checks Grafana, VictoriaMetrics and the freshness of up on the watched host every minute and tells Telegram, or Slack with contact slack, when they stop answering.",
       "host": "edge",
       "id": "edge/sentinel",
       "logs": "docker",
