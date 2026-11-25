@@ -232,7 +232,7 @@ Ports bind to `127.0.0.1` unless the manifest exposes them on an explicit addres
 | `vulns` | preview | Trivy once a day over every image the host's compose projects run: known vulnerabilities per image, severity and fix as metrics, an alert for a critical one with a fix and for a scan that failed or did not run |
 | `eol` | preview | endoflife.date once a day for the cycles the host's image tags carry, its OS and listed components: days until end of support and of security support as metrics, an alert 90 days before security support ends, after it ended, and when the data is 3 days old |
 | `probes` | stable | blackbox-exporter for HTTP 2xx and TLS expiry and for the host's own internet (ping of the gateway and public addresses, DNS), RDAP exporter for domain expiry |
-| `checks` | stable | the runners of the [checks](docs/checks.md) declared under a service: HTTP, TCP and DNS through blackbox-exporter, sandboxed scripts and read-only SQL queries, each with its metrics and alert |
+| `checks` | stable | the runners of the [checks](docs/checks.md) declared under a service: HTTP, TCP, SMTP (greeting, `STARTTLS` or TLS on 465, certificate expiry) and DNS through blackbox-exporter, sandboxed scripts and read-only SQL queries, each with its metrics and alert |
 | `cloudflare` | stable | optional: Cloudflare edge traffic, cache, errors and origin time of proxied zones, and the free-plan limits of R2, Workers and D1 |
 | `delivery` | stable | optional: recording rules, the `Delivery` and `Quality` dashboards and alerts over what CI and deploy scripts push with `aye report`: deploy and CI durations and failures, tests, flaky tests, coverage, mutation score, merge lead time |
 | `github` | stable | optional: GitHub Actions minutes and billed usage of organizations and users, with an 80 % alert, and the importer of `aye report` artifacts from GitHub-hosted runners |
@@ -261,7 +261,7 @@ Details: [docs/modules.md](docs/modules.md).
 - [Manifest reference](docs/manifest.md)
 - [Catalog rules](docs/rules.md): a new service ships with a description, a metric and an alert
 - [Modules](docs/modules.md)
-- [Checks](docs/checks.md): HTTP, TCP, DNS, script and read-only SQL checks declared under a service
+- [Checks](docs/checks.md): HTTP, TCP, SMTP, DNS, script and read-only SQL checks declared under a service
 - [Deploy](docs/deploy.md): `aye deploy` swaps a host's files atomically and recreates exactly the services whose config changed, and rolls a fleet out canary first; `aye diff` shows beforehand what it would change and `aye doctor` says read-only why a deploy would fail
 - [Host init](docs/host-init.md): a deploy user that may run one helper on one directory, and the narrowest credentials with `aye permissions`
 - [Ansible inventory](docs/inventory.md): `aye inventory` writes the hosts of the manifest as an Ansible inventory for the hardening and bootstrap playbooks a team already runs
