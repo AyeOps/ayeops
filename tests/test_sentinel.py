@@ -1244,6 +1244,81 @@ def test_telegram_sender_logs_why_a_message_was_not_delivered(
     )
 
 
+SLACK_HOOK = "https://hooks.slack.test/services/T/B/x"
+
+
+def test_slack_sender_posts_plain_escaped_text_and_takes_only_a_2xx_answer_as_delivered(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    web = Web(Answer("200"), Answer(299), Answer(199), Answer(300))
+    monkeypatch.setattr(s, "urllib", web)
+    send = s.slack_sender(SLACK_HOOK)
+    assert [send("a & b <c> d") for _ in range(4)] == [True, True, False, False]
+    request = (
+        (SLACK_HOOK,),
+        {
+            "data": b'{"text": "a &amp; b &lt;c&gt; d", "mrkdwn": false}',
+            "headers": {"Content-Type": "application/json"},
+            "method": "POST",
+        },
+    )
+    assert web.built == [request] * 4
+    assert web.opened == [(("request",), {"timeout": 15})] * 4
+    assert capsys.readouterr().out == ""
+
+
+def test_slack_sender_passes_its_timeout_and_logs_why_without_the_url(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    web = Web(Answer(204), http_error(404), ValueError("bad url"), TimeoutError("slow"))
+    monkeypatch.setattr(s, "urllib", web)
+    send = s.slack_sender(SLACK_HOOK, 2.5)
+    assert [send("hi") for _ in range(4)] == [True, False, False, False]
+    assert web.opened == [(("request",), {"timeout": 2.5})] * 4
+    logged = capsys.readouterr().out
+    assert logged == (
+        '{"event": "slack_failed", "status": 404}\n'
+        '{"error": "ValueError", "event": "slack_failed"}\n'
+        '{"error": "TimeoutError", "event": "slack_failed"}\n'
+    )
+    assert "hooks" not in logged
+
+
+def test_slack_text_escapes_the_three_control_characters_once() -> None:
+    assert s.slack_text("&lt; & <b> >") == "&amp;lt; &amp; &lt;b&gt; &gt;"
+    assert s.slack_text("🔴 acme: central • grafana: HTTP 502") == (
+        "🔴 acme: central • grafana: HTTP 502"
+    )
+
+
+def test_the_sender_follows_the_webhook_variable_else_the_telegram_bot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    made: list[tuple[str, tuple[Any, ...]]] = []
+
+    def slack_sender(*args: Any) -> str:
+        made.append(("slack", args))
+        return "slack"
+
+    def telegram_sender(*args: Any) -> str:
+        made.append(("telegram", args))
+        return "tg"
+
+    monkeypatch.setattr(s, "slack_sender", slack_sender)
+    monkeypatch.setattr(s, "telegram_sender", telegram_sender)
+    bot = {"AYE_TELEGRAM_BOT_TOKEN": "123:secret", "AYE_TELEGRAM_CHAT_ID": "-100"}
+    assert s.sender_from({**bot, "AYE_SLACK_WEBHOOK_URL": f" {SLACK_HOOK}\n"}) == "slack"
+    assert s.sender_from(bot) == "tg"
+    assert s.sender_from({**bot, "AYE_SLACK_WEBHOOK_URL": "  "}) == "tg"
+    assert made == [
+        ("slack", (SLACK_HOOK,)),
+        ("telegram", ("123:secret", "-100")),
+        ("telegram", ("123:secret", "-100")),
+    ]
+    assert s.sender_from({"AYE_SLACK_WEBHOOK_URL": SLACK_HOOK}) == "slack"
+    assert s.SLACK_WEBHOOK_ENV == "AYE_SLACK_WEBHOOK_URL"
+
+
 def test_the_origin_defaults_to_the_host_name_of_the_container(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

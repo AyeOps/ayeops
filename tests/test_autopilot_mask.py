@@ -72,6 +72,13 @@ PATTERNS = [
     ("push ", GITLAB, " refused", "gitlab-token"),
     ("slack ", fake("xox", "b-", "1234567890-AbCdEfGhIj"), " failed", "slack-token"),
     ("slack ", fake("xox", "p-", "1234567890-AbCdEfGhIj"), " failed", "slack-token"),
+    (
+        "POST ",
+        fake("https://hooks.", "slack.com/services/", "T0000/B0000/AbCdEfGhIj"),
+        " failed",
+        "slack-webhook",
+    ),
+    ("to ", fake("https://hooks.", "slack-gov.com/services/", "T0/B0/Zz"), "", "slack-webhook"),
     ("charge with ", fake("sk", "_live_", "AbCdEfGhIj012345"), "", "stripe-key"),
     ("maps ", fake("AI", "za", "SyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q"), "", "google-key"),
     (

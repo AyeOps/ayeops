@@ -1283,7 +1283,7 @@ hit rate, not its list price.
 Who watches the watcher. Every alert of the kit leaves through the Grafana of the central host,
 so when that host dies, nobody hears about it. The sentinel is one stdlib Python script on
 `python:3.13.16-alpine3.23` (48 MB limit) that runs on **another** host, checks the central
-one every minute and talks to Telegram itself.
+one every minute and talks to Telegram itself, or to Slack with `alerting.contact: slack`.
 
 ```yaml
 hosts:
@@ -1331,7 +1331,10 @@ check and the time of the first failure, then one every `reminder` while it stay
 all-clear with the length of the outage when a round passes again. A message that Telegram did
 not accept is sent again next round; an all-clear that did not arrive keeps the alert open, so a
 relapse is not announced twice. Messages are plain text to `AYE_TELEGRAM_BOT_TOKEN` and
-`AYE_TELEGRAM_CHAT_ID`, the same chat as the Grafana contact point.
+`AYE_TELEGRAM_CHAT_ID`, the same chat as the Grafana contact point. With
+[`alerting.contact: slack`](manifest.md#slack) they go to the Grafana contact point's incoming
+webhook in `AYE_SLACK_WEBHOOK_URL` instead, as plain text with `&`, `<` and `>` escaped, and the
+host needs no Telegram bot; with `email` or `none` the sentinel stays on Telegram.
 
 The sentinel shares the fate of its own host. When it and the host it watches sit with one
 provider (or in one zone of it), turn on the status Worker's [notices](status.md#notices) as
@@ -1379,7 +1382,7 @@ connection error while the central host's own alerts keep arriving.
 `ayeops_sentinel_notice_failures_total{kind}`, `ayeops_sentinel_ping_success`. With `metrics`
 on the sentinel's host vmagent scrapes it and ships it to the central storage, so the central
 Grafana watches the sentinel in turn: `target-down`, `sentinel-notify-failing` (the last
-message did not reach Telegram), `sentinel-ping-failing` (15m), `sentinel-stalled` (no finished
+message did not reach Telegram or Slack), `sentinel-ping-failing` (15m), `sentinel-stalled` (no finished
 round for 5 minutes). `/health` answers 503 once rounds stop. `node` on the same host adds
 `host-down` for the sentinel's machine.
 
@@ -1401,7 +1404,7 @@ Restart=always
 ```
 
 `sentinel.env` holds the `AYE_SENTINEL_*` lines of the rendered `compose.yaml` plus the two
-`AYE_TELEGRAM_*` values and `AYE_SENTINEL_PING_URL`. `aye deploy` and the config hash do not
+`AYE_TELEGRAM_*` values (or `AYE_SLACK_WEBHOOK_URL`) and `AYE_SENTINEL_PING_URL`. `aye deploy` and the config hash do not
 cover this path.
 
 ## oncall
@@ -1449,7 +1452,9 @@ hosts:
 to the `oncall` contact point with `continue: true`, then a catch-all to the ops contact. So a
 critical alert reaches both, and a stopped GoAlert, bridge or Telegram bot never means silence:
 the ops channel still gets it. `aye check` refuses the module with `alerting.contact: none`
-(rule `oncall-fallback`). `warning` and `info` never reach GoAlert.
+(rule `oncall-fallback`). `warning` and `info` never reach GoAlert. With
+[`alerting.contact: slack`](manifest.md#slack) the ops channel is Slack, while the messages to
+the person on call and the topics stay in Telegram: the acknowledge button needs a bot.
 
 **How a message travels.** Grafana posts to `http://oncall-bridge:8080/grafana` with
 `Authorization: Bearer $AYE_ONCALL_WEBHOOK_SECRET`. The bridge adds `dashboard_url` from
@@ -2110,7 +2115,8 @@ Provisioned: the VictoriaMetrics datasource (uid `victoriametrics`), the dashboa
 rules of every module enabled on any host plus the alerts of your services, and with
 `alerting.contact: telegram` a Telegram contact point and the default notification policy.
 With `alerting.contact: email` the contact point is an `email` one that sends to
-`alerting.emails`. Both carry a link to the dashboard panel of the alert, see
+`alerting.emails`; with `alerting.contact: slack` a `slack` one that posts to the incoming
+webhook in `AYE_SLACK_WEBHOOK_URL` ([Slack](manifest.md#slack)). All three carry a link to the dashboard panel of the alert, see
 [alerts](#modules); the links point at `root_url`, so without one they lead to Grafana's
 `localhost`. With [`mail`](manifest.md#mail) Grafana sends through that relay
 (`GF_SMTP_*`; `tls: starttls` becomes `GF_SMTP_STARTTLS_POLICY=MandatoryStartTLS`, `tls` and
@@ -2140,7 +2146,11 @@ worker-01, worker-02, worker-03, ...
 with the hosts of the firing alerts (their `instance` for an alert without a host), or each
 alert's summary when they all are on one host (two full disks of one host name their mount
 points), and a `✅ 3 x Host down` part for the alerts that resolved since. A single alert reads
-as before. Grafana cuts a Telegram message at 4096 characters, about 300 host names. The email
+as before. Grafana cuts a Telegram message at 4096 characters, about 300 host names. A Slack
+message has the same lines with Slack links (`<url|runbook>`) instead of HTML and `&`, `<` and
+`>` escaped in alert names, scopes and summaries; its title is the mark, the alert name and, for
+a group, the scope (`🔴 Host down · workers`), and links to the alert rule. Slack collapses a text
+of more than 700 characters or 5 lines behind "Show more". The email
 contact point uses Grafana's default template, which already lists every alert of the group;
 [oncall](#oncall) folds the group into one GoAlert alert.
 
