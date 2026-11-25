@@ -225,7 +225,12 @@ Alerts: `host-down` (no fresh `up{job="node"}` for three minutes, using MetricsQ
 exporter answering `up == 0`; judged per host with `max by (host)` and fired on every node
 series of the host seen in the last day, so a series whose labels changed, a host that moved to
 another group or the `project` label arriving, does not fire for a day while the new series is
-up; while the host is down it [holds back](#grafana) its other alerts), `disk-full` (> 80 % for 15m), `memory-low` (< 10 % available for
+up; while the host is down it [holds back](#grafana) its other alerts; a host marked
+[`volatile`](manifest.md#volatile-hosts-and-maintenance-windows) is left out), `host-gone`
+(warning, rendered only when some host is volatile: no successful node scrape of a volatile host
+for its `volatile` duration, a day by default, `for` 5m; the expression in `module.yaml` is the
+shape for one day over every host, the rendered rule names the volatile hosts and their
+durations), `disk-full` (> 80 % for 15m), `memory-low` (< 10 % available for
 10m), `swap-out-sustained` (`rate(node_vmstat_pswpout[5m])` above 256 pages per second, about
 1 MiB/s, for 10m), `battery-low` (< 20 % and not on AC), `reboot-pending` (info, a reboot has
 waited for 7 days).
@@ -2208,6 +2213,50 @@ resolves when the host goes down and fires again after it is back if its cause r
 without node, or an alert without a `host` label, is never held back; probes of the host's
 services from another host carry the prober's `host` and still page, since users see that
 outage.
+
+**Volatile hosts and maintenance windows.** A host's
+[`volatile` and `maintenance`](manifest.md#volatile-hosts-and-maintenance-windows) fields
+add more guards of the same form, each an `unless` before the `or` branch, so the series stay
+at 0 instead of vanishing:
+
+| Rule | Guard |
+|---|---|
+| `host-down` | `unless on (host) (label_replace(vector(1), "host", "<volatile host>", "", "") or ...)`: the volatile hosts are left out |
+| `host-gone` | none from the hold: it judges the volatile hosts itself, by `1 - ((max by (host) (max_over_time(<up>[<volatile>])) + on (host) group_right () (0 * last_over_time(<up>[<volatile> + 7d]))) or 0 * last_over_time(<up>[<volatile> + 7d]))` with `<up>` `up{job="node", host=~"<hosts>"}`, one term per duration |
+| every rule, both of these included | `unless on (host) (label_replace(<windows>, "host", "<host>", "", "") or ...)` for every host with a window |
+| a service rule of a service whose `host` is volatile | also `unless on () (max by (host) (<node up of that host over <volatile> + 7d>) == 0)` |
+| a service rule of a service whose `host` has windows | also `unless on () (<windows of that host>)` |
+
+A window term is `vector(time() - <offset>) % <period> < <duration>`, in seconds: the period is
+a day for a window without `days`, else a week, and the offset is the window's start counted
+from the epoch (1970-01-01, a Thursday, 00:00 UTC), one term per day. The remainder is the
+time since the window last opened, so a window that crosses midnight or the end of the week
+needs no second term, and a host's terms join with `or`. `<windows>` exists only while a window
+is open; the query depends on nothing but the clock, so it holds through a restart of Grafana
+and a window that opened before the rule was provisioned.
+
+The `on ()` guards make the declared host, not the label of the series, decide for a service:
+an HTTP check from the central host of a service on a volatile workstation is held while the
+workstation is down or in its window, which the host label alone (the prober's) cannot do. A
+host without `node` has no freshness to judge, so `volatile` needs `node` on the host; a window
+needs nothing.
+
+Three limits. A rule with `no_data: alerting` whose only series come from a volatile host still
+fires as no data once those series have been gone for the lookback (5 minutes): a module whose
+silence pages (backups, offsite, objectstore, oncall, status) belongs on a host that stays on.
+The guards hold rules, not notifications: an alert that fired before a window opened resolves
+when it opens, and fires again after it closes if its cause remains. And the
+[status page](status.md) shows the components of a host in its window as operational, since
+nothing fires; announce a public maintenance through the status admin API, or a Grafana
+silence with a `maintenance` matcher, as before.
+
+Grafana's mute timings were the other way to do windows: a notification policy per host, with
+its `mute_time_intervals` and a copy of the autopilot and oncall routes under it. They mute
+notifications only, so the alert still fires: the incident journal records it and the status
+reporter turns its component into an outage; and a window crossing midnight is two time
+intervals. Generated silences would need an
+API call on every deploy and go stale when the manifest changes. The guard lives in the rule,
+where the hold already is, and every reader of alert state sees the same thing.
 
 The rule query is the least magic of what Grafana `13.2.3` offers. Grafana 13 has inhibition
 rules, but only through its App Platform API (`notifications.alerting.grafana.app/v1beta1`,

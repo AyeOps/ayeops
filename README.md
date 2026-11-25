@@ -219,7 +219,7 @@ Ports bind to `127.0.0.1` unless the manifest exposes them on an explicit addres
 |---|---|---|
 | `metrics` | stable | VictoriaMetrics single-node and vmagent; `role: agent` ships to a central host over remote_write |
 | `logs` | stable | Loki and Alloy; Alloy ships the containers of the compose projects declared for its host, optionally journald, to a central Loki |
-| `node` | stable | node-exporter, plus textfile collectors for laptop battery capacity, status and AC, and for a pending reboot |
+| `node` | stable | node-exporter, plus textfile collectors for laptop battery capacity, status and AC, and for a pending reboot; `host-down` leaves out a host the manifest marks [`volatile`](docs/manifest.md#volatile-hosts-and-maintenance-windows), which warns only after a day away, and a host's declared maintenance windows hold its alerts back |
 | `containers` | stable | cAdvisor |
 | `smart` | stable | smartctl_exporter: SMART health, bad sectors, NVMe wear, drive temperature |
 | `gpu` | stable | nvidia_gpu_exporter: NVIDIA GPU temperature, memory and driver health |
