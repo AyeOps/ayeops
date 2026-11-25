@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ayeops.dev/schema/status-push.schema.json",
+  "title": "AyeOps status push",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tenant", "ts", "components"],
+  "properties": {
+    "tenant": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,39}$"},
+    "ts": {"type": "integer", "minimum": 0},
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "state"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,39}$"},
+          "state": {"enum": ["operational", "degraded", "outage", "maintenance", "no_data"]}
+        }
+      }
+    }
+  }
+}

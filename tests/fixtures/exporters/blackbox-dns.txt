@@ -1,0 +1,15 @@
+probe_dns_additional_rrs
+probe_dns_answer_rrs
+probe_dns_authority_rrs
+probe_dns_duration_seconds
+probe_dns_lookup_time_seconds
+probe_dns_query_succeeded
+probe_duration_seconds
+probe_ip_addr_hash
+probe_ip_protocol
+probe_success
+scrape_duration_seconds
+scrape_samples_post_metric_relabeling
+scrape_samples_scraped
+scrape_series_added
+up

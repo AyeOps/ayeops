@@ -1,0 +1,6 @@
+HTTP/1.1 401 Unauthorized
+Content-Type: application/json
+www-authenticate: Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:google/cadvisor:pull"
+Date: Thu, 05 Nov 2026 20:21:46 GMT
+Content-Length: 73
+x-github-edge-region: fra

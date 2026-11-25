@@ -1,0 +1,46 @@
+{
+  "data": {
+    "viewer": {
+      "accounts": [
+        {
+          "r2StorageAdaptiveGroups": [
+            {
+              "dimensions": {
+                "bucketName": "media",
+                "datetime": "2026-01-15T11:00:00Z"
+              },
+              "max": {
+                "metadataSize": 1000000,
+                "objectCount": 52000,
+                "payloadSize": 4000000000
+              }
+            },
+            {
+              "dimensions": {
+                "bucketName": "media",
+                "datetime": "2026-01-15T10:00:00Z"
+              },
+              "max": {
+                "metadataSize": 1000000,
+                "objectCount": 51000,
+                "payloadSize": 3900000000
+              }
+            },
+            {
+              "dimensions": {
+                "bucketName": "backups",
+                "datetime": "2026-01-15T11:00:00Z"
+              },
+              "max": {
+                "metadataSize": 2000,
+                "objectCount": 31,
+                "payloadSize": 250000000
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "errors": null
+}

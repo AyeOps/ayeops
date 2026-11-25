@@ -1,0 +1,49 @@
+{% set b = 'branch=~"' ~ (settings.branches | map('replace', '.', '\\\\.') | join('|')) ~ '|"' %}
+{% set ok = 'aye_step_duration_seconds{result="ok",' ~ b ~ '}' %}
+groups:
+  - name: delivery
+    interval: {{ settings.evaluation_interval | tojson }}
+    rules:
+      - record: "aye:step_duration_seconds:median30d"
+        expr: {{ ('max without (result) (median_over_time(' ~ ok ~ '[30d]))') | tojson }}
+      - record: "aye:step_duration_seconds:median3d"
+        expr: {{ ('max without (result) (median_over_time(' ~ ok ~ '[3d]))') | tojson }}
+      - record: "aye:step_duration_seconds:last"
+        expr: {{ ('max without (result) (last_over_time(' ~ ok ~ '[7d]))') | tojson }}
+      - record: "aye:step_ok_runs:30d"
+        expr: {{ ('max without (result) (count_over_time(' ~ ok ~ '[30d]))') | tojson }}
+      - record: "aye:step_runs:1d"
+        expr: {{ ('sum without (result) (count_over_time(aye_step_duration_seconds{' ~ b ~ '}[1d]))') | tojson }}
+      - record: "aye:step_failure_ratio:7d"
+        expr: {{ ('1 - avg_over_time(aye_step_success{' ~ b ~ '}[7d])') | tojson }}
+      - record: "aye:step_success:last"
+        expr: {{ ('last_over_time(aye_step_success{' ~ b ~ '}[7d])') | tojson }}
+{% for metric in ["aye_coverage_lines_percent", "aye_mutation_score_percent"] %}
+      - record: {{ ("aye:" ~ metric[4:] ~ ":last") | tojson }}
+        expr: {{ ('last_over_time(' ~ metric ~ '{' ~ b ~ '}[30d])') | tojson }}
+      - record: {{ ("aye:" ~ metric[4:] ~ ":median30d") | tojson }}
+        expr: {{ ('median_over_time(' ~ metric ~ '{' ~ b ~ '}[30d])') | tojson }}
+{% endfor %}
+      - record: "aye:pr_lead_time_seconds:median30d"
+        expr: {{ ('median_over_time(aye_pr_lead_time_seconds{' ~ b ~ '}[30d])') | tojson }}
+{% if settings.expect %}
+  - name: delivery-expected
+    interval: {{ settings.evaluation_interval | tojson }}
+    rules:
+{% for item in settings.expect %}
+{% set seconds = (item.every[:-1] | int) * (3600 if item.every[-1] == "h" else 86400) %}
+{% set owner = item.get("project") or project %}
+{% set age = 'time() - max(last_over_time(aye_step_finished_timestamp_seconds{project="' ~ owner ~ '",step="' ~ item.step ~ '",' ~ b ~ '}[90d]))' %}
+      - record: "aye:delivery_last_report_age_seconds"
+        expr: {{ age | tojson }}
+        labels:
+          project: {{ owner | tojson }}
+          step: {{ item.step | tojson }}
+      - record: "aye:delivery_overdue"
+        expr: {{ ('(' ~ age ~ ') > bool ' ~ seconds ~ ' or vector(1)') | tojson }}
+        labels:
+          project: {{ owner | tojson }}
+          step: {{ item.step | tojson }}
+          expected: {{ item.every | tojson }}
+{% endfor %}
+{% endif %}

@@ -1,0 +1,103 @@
+{
+  "secret": "acme-push-secret",
+  "now": 1792742460,
+  "header": "X-AyeOps-Signature",
+  "valid": [
+    {
+      "name": "api degraded, checkout outage",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742460,\"components\":[{\"id\":\"api\",\"state\":\"degraded\"},{\"id\":\"payments-checkout\",\"state\":\"outage\"}]}",
+      "signature": "sha256=d62ffbc1d1b6bfbf16125e5d7c99d3e0a311ee802dc9ec7ff1c9254bcf33d1b6"
+    },
+    {
+      "name": "website no data, docs in maintenance",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742460,\"components\":[{\"id\":\"website\",\"state\":\"no_data\"},{\"id\":\"docs\",\"state\":\"maintenance\"}]}",
+      "signature": "sha256=5907c850487ce57f406c525186e77a02769360a3f10c56314b6a4f2563798298"
+    },
+    {
+      "name": "ts 300 s behind is still accepted",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742160,\"components\":[{\"id\":\"api\",\"state\":\"operational\"}]}",
+      "signature": "sha256=5bae32ee35da9468714ae1396f818ea200ac16d87a8cfacb6d16daac83027900"
+    },
+    {
+      "name": "ts 300 s ahead is still accepted",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742760,\"components\":[{\"id\":\"api\",\"state\":\"operational\"}]}",
+      "signature": "sha256=47e05854d56bcf1b6d2e74107dfc834d470760139b893da032f4e876b8ad3112"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "ts missing",
+      "body": "{\"tenant\":\"acme\",\"components\":[{\"id\":\"api\",\"state\":\"operational\"}]}",
+      "signature": "sha256=1e4dd887f7f72878285ca29b95c96773b067ad17e3aae8d7b5fc80ac2ed1b9e5"
+    },
+    {
+      "name": "ts as a string",
+      "body": "{\"tenant\":\"acme\",\"ts\":\"1792742460\",\"components\":[{\"id\":\"api\",\"state\":\"operational\"}]}",
+      "signature": "sha256=aee9782ca9e1e4a4a14cf60a0a8cbfcf77ecfa9c03e9411e73afa85919caaf7e"
+    },
+    {
+      "name": "state outside the five",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742460,\"components\":[{\"id\":\"api\",\"state\":\"down\"}]}",
+      "signature": "sha256=da61bdb5ea9379ab843ba6dbd6eeae55d839488c9ecc44c5753ab4d94c823c27"
+    },
+    {
+      "name": "unknown top-level field",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742460,\"components\":[{\"id\":\"api\",\"state\":\"operational\"}],\"source\":\"grafana\"}",
+      "signature": "sha256=119a4562f2c7d220ee7e8e85c7e678ad842d6f2a73b245d03b73663bb93f139b"
+    },
+    {
+      "name": "no components",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742460,\"components\":[]}",
+      "signature": "sha256=ffb42739ebda61d9819492e76c0e1841531e1459b7f3342a2a8d1876dc347692"
+    },
+    {
+      "name": "tenant with upper case",
+      "body": "{\"tenant\":\"Acme\",\"ts\":1792742460,\"components\":[{\"id\":\"api\",\"state\":\"operational\"}]}",
+      "signature": "sha256=108d68e0c7285d4874e59a8c3d803bd9dac624930e89748ed901f78077e6b060"
+    },
+    {
+      "name": "component with a title instead of an id",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742460,\"components\":[{\"id\":\"api\",\"state\":\"operational\",\"title\":\"API\"}]}",
+      "signature": "sha256=99062035daac68a4bc7891f5695b76ef5a43c67c91a1d53964c53422d4dc0667"
+    }
+  ],
+  "rejected": [
+    {
+      "name": "same component twice",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742460,\"components\":[{\"id\":\"api\",\"state\":\"operational\"},{\"id\":\"api\",\"state\":\"outage\"}]}",
+      "signature": "sha256=a813c5ea73af51d6904efdbe0801c8385d80900052cb3dc44b0e86e9693689f1",
+      "status": 400
+    },
+    {
+      "name": "component the tenant does not have",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742460,\"components\":[{\"id\":\"billing-cron\",\"state\":\"outage\"}]}",
+      "signature": "sha256=330e6884b17c6a5854ef922580ca8058c0d0da17308d58c5b07c0bcd1dab5390",
+      "status": 422
+    },
+    {
+      "name": "ts 301 s behind",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742159,\"components\":[{\"id\":\"api\",\"state\":\"operational\"}]}",
+      "signature": "sha256=bdbefb7dd251c3dfd7cde8887151acb5ce234d71527b18a08ac289b7e20f8c8a",
+      "status": 401
+    },
+    {
+      "name": "ts 301 s ahead",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742761,\"components\":[{\"id\":\"api\",\"state\":\"operational\"}]}",
+      "signature": "sha256=27da7a5736851ed754c67b8b3ee50e666d78b952aa54f502a707d37e919af972",
+      "status": 401
+    },
+    {
+      "name": "tenant that does not exist",
+      "body": "{\"tenant\":\"globex\",\"ts\":1792742460,\"components\":[{\"id\":\"api\",\"state\":\"operational\"}]}",
+      "signature": "sha256=80741b357c24ebc8810473c4d6bb7a08f0a76cf3b0ab71ff1e6549733b01aed6",
+      "status": 401
+    },
+    {
+      "name": "signed with another secret",
+      "body": "{\"tenant\":\"acme\",\"ts\":1792742460,\"components\":[{\"id\":\"api\",\"state\":\"operational\"}]}",
+      "signature": "sha256=3fc889f2fe88cddfb431ba9d990533a1e6217dc97f2986e7b3edf293fe8363d7",
+      "status": 401,
+      "signed_with": "another-secret"
+    }
+  ]
+}

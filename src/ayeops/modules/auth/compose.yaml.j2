@@ -1,0 +1,36 @@
+{% set domain = modules.get("ingress", {}).get("domain") or "" %}
+services:
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5-alpine@sha256:8e4bec4f9fe4de10de63070209204075e4407503170aa19893d6e8d99f083d1b
+    environment:
+      OAUTH2_PROXY_PROVIDER: {{ settings.provider | tojson }}
+{% if settings.provider == "oidc" %}
+      OAUTH2_PROXY_OIDC_ISSUER_URL: {{ settings.issuer_url | tojson }}
+{% endif %}
+      OAUTH2_PROXY_CLIENT_ID: "${AYE_AUTH_CLIENT_ID:?set AYE_AUTH_CLIENT_ID}"
+      OAUTH2_PROXY_CLIENT_SECRET: "${AYE_AUTH_CLIENT_SECRET:?set AYE_AUTH_CLIENT_SECRET}"
+      OAUTH2_PROXY_COOKIE_SECRET: "${AYE_AUTH_COOKIE_SECRET:?set AYE_AUTH_COOKIE_SECRET}"
+      OAUTH2_PROXY_CODE_CHALLENGE_METHOD: S256
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/oauth2-proxy/emails.txt
+      OAUTH2_PROXY_COOKIE_NAME: _aye_sso
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      OAUTH2_PROXY_COOKIE_EXPIRE: 24h
+      OAUTH2_PROXY_COOKIE_CSRF_PER_REQUEST: "true"
+      OAUTH2_PROXY_COOKIE_DOMAINS: {{ ("." ~ domain) | tojson }}
+      OAUTH2_PROXY_WHITELIST_DOMAINS: {{ ("." ~ domain) | tojson }}
+      OAUTH2_PROXY_REDIRECT_URL: {{ ("https://auth." ~ domain ~ "/oauth2/callback") | tojson }}
+      OAUTH2_PROXY_UPSTREAMS: static://202
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_METRICS_ADDRESS: 0.0.0.0:9180
+      OAUTH2_PROXY_REQUEST_LOGGING: "false"
+      OAUTH2_PROXY_SILENCE_PING_LOGGING: "true"
+    volumes:
+      - "./auth/emails.txt:/etc/oauth2-proxy/emails.txt:ro"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4180/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -1,0 +1,78 @@
+name: backups
+summary: The metrics contract of every dump job on a host, its own and the built-in dumps of other modules, each wrapped by backups/backup_run.sh, with an alert on a failed run and one on a missing run whose threshold follows from the cron schedule, and systemd timers for the jobs whose command the manifest gives.
+requires:
+  metrics: {}
+  node: {}
+defaults:
+  jobs: {}
+  timezone: UTC
+  interval: 300
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    jobs:
+      type: object
+      minProperties: 1
+      propertyNames:
+        pattern: '^[a-z][a-z0-9_-]{0,39}$'
+      additionalProperties:
+        type: object
+        additionalProperties: false
+        required: [schedule]
+        dependentRequired:
+          command: [output]
+          output: [command]
+        properties:
+          schedule:
+            type: string
+            pattern: '^[0-9*,/-]+( [0-9*,/-]+){4}$'
+          grace:
+            type: string
+            pattern: '^[1-9][0-9]{0,3}[mh]$'
+          command:
+            type: string
+            pattern: '^[^\x00-\x1f\x7f]+$'
+          output:
+            type: string
+            pattern: '^/[^"\\`\x00-\x1f\x7f]+$'
+    timezone:
+      type: string
+      pattern: '^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$'
+    interval:
+      type: integer
+      minimum: 30
+      maximum: 3600
+services:
+  backup-jobs:
+    description: Writes the declared dump jobs with the age after which each counts as missing into the node textfile directory, so a job that never ran is missed as well as one that stopped.
+    memory: 16m
+    cpus: 0.05
+    metrics: [ayeops_backup_max_age_seconds, ayeops_backup_rpo_seconds, ayeops_backup_declared_timestamp_seconds, ayeops_backup_last_success_timestamp_seconds, ayeops_backup_last_run_success, ayeops_backup_last_size_bytes, ayeops_backup_last_duration_seconds]
+    alerts: [backup-missing, backup-failed]
+    logs: docker
+    status:
+      internal: users never see a dump until a restore needs it
+alerts:
+  - name: backup-failed
+    title: Backup job failed
+    expr: max by (host, project, group, backup) ((ayeops_backup_last_run_success == bool 0) and on (host, project, group, backup) ayeops_backup_max_age_seconds)
+    for: 5m
+    severity: warning
+    summary: "The last run of the backup job {{ .Labels.backup }} on {{ .Labels.host }} failed or left no output"
+    runbook: backup-failed
+  - name: backup-missing
+    title: Backup job missed its schedule
+    expr: max by (host, project, group, backup) (time() - (max by (host, project, group, backup) (ayeops_backup_last_success_timestamp_seconds) or max by (host, project, group, backup) (ayeops_backup_declared_timestamp_seconds)) > bool on (host, project, group, backup) max by (host, project, group, backup) (ayeops_backup_max_age_seconds))
+    for: 10m
+    severity: critical
+    summary: "The backup job {{ .Labels.backup }} on {{ .Labels.host }} has not succeeded within its schedule plus grace"
+    runbook: backup-missing
+    no_data: alerting
+dashboards: []
+files:
+  - src: files/backup_run.sh
+    dest: backups/backup_run.sh
+  - src: files/backup_jobs.sh
+    dest: backups/backup_jobs.sh

@@ -1,0 +1,151 @@
+version: 1
+project: e2e
+runbook_base_url: https://runbooks.e2e.test
+alerting:
+  contact: none
+hosts:
+  central:
+    arch: amd64
+    zone: runner
+    address: 10.213.0.1
+    public_bind: 10.213.0.1
+    compose:
+      - file: apps/app.compose.yaml
+        name: e2e-apps
+    modules:
+      metrics:
+        role: server
+        scrape_interval: 15s
+        expose: [8428]
+      logs:
+        role: server
+        expose: [3100]
+      node: {}
+      probes:
+        http:
+          - http://10.213.0.1:8080/
+          - https://portal.ops.e2e.test
+      grafana:
+        datasources:
+          - name: E2E orders
+            uid: e2e-orders
+            type: postgres
+            url: 10.213.0.1:5432
+            database: e2e
+            user: grafana_ro
+            password_env: AYE_GRAFANA_PG_PASSWORD
+      checks: {}
+      incidents: {}
+      ingress:
+        domain: ops.e2e.test
+        routes:
+          grafana: grafana:3000
+          metrics: victoriametrics:8428
+          portal: portal:8080
+      auth:
+        emails: [ops@e2e.test]
+        open: [portal]
+      portal: {}
+      objectstore:
+        bucket: e2e-offsite
+        quota: 1g
+        expose: [3900]
+      secrets:
+        url: http://127.0.0.1:8090
+      backups: {}
+  edge:
+    arch: amd64
+    modules:
+      metrics:
+        role: agent
+        scrape_interval: 15s
+        remote_write:
+          host: central
+      logs:
+        role: agent
+        push:
+          host: central
+      node: {}
+      containers: {}
+      disk-forecast: {}
+      network:
+        interfaces: [eth0]
+      offsite:
+        source: /tmp/aye-e2e-backups/*.dump
+        target:
+          host: central
+        schedule: "00:00"
+        settle_minutes: 0
+        verify: none
+      hygiene:
+        dry_run: true
+  offline:
+    arch: amd64
+    zone: rendered only
+    modules:
+      metrics:
+        role: agent
+        remote_write:
+          host: central
+      cloudflare:
+        zones: [e2e.test]
+        accounts: [0123456789abcdef0123456789abcdef]
+      smart: {}
+      gpu: {}
+services:
+  web:
+    host: central
+    description: Static page served by nginx, the application the probes and checks watch.
+    url: http://10.213.0.1:8080/
+    metrics:
+      - probe_success
+    checks:
+      home:
+        type: http
+        url: http://10.213.0.1:8080/
+        expect_status: 200
+        expect_body: aye-e2e
+        interval: 15
+        timeout: 5
+        alert: {for: 2m, severity: critical, runbook: web-home}
+    alerts:
+      - name: web-probes-flow
+        title: Probes of the web page
+        severity: warning
+        runbook: web-probes-flow
+        baseline:
+          metric: probe_success{instance="http://10.213.0.1:8080/"}
+          kind: gauge
+          by: [host]
+          window: 15m
+          floor: 0
+    logs: docker
+    status:
+      internal: test fixture of the end-to-end run
+  db:
+    host: central
+    description: PostgreSQL with one table that the SQL check and the Grafana datasource read.
+    icon: postgresql
+    checks:
+      port:
+        type: tcp
+        address: 10.213.0.1:5432
+        interval: 15
+        timeout: 5
+        alert: {for: 2m, severity: critical, runbook: db-port}
+      orders:
+        type: sql
+        datasource: e2e-orders
+        query: select count(*) as value from orders
+        interval: 15
+        timeout: 5
+        alert:
+          op: "<"
+          threshold: 1
+          for: 2m
+          severity: warning
+          no_data: alerting
+          runbook: db-orders
+    logs: docker
+    status:
+      internal: test fixture of the end-to-end run

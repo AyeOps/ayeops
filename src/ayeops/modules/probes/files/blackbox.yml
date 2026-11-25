@@ -1,0 +1,26 @@
+modules:
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      follow_redirects: true
+{% if settings.internet or settings.gateway %}
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+{% endif %}
+{% if settings.internet %}
+  dns:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: {{ settings.dns_query | tojson }}
+      query_type: A
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      valid_rcodes: [NOERROR]
+{% endif %}

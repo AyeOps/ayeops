@@ -1,0 +1,39 @@
+services:
+  hygiene:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/hygiene_runner.py"]
+    network_mode: none
+    read_only: true
+    tmpfs: ["/tmp:size=4m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 32
+    environment:
+      AYE_HYGIENE_SCHEDULE: {{ settings.schedule | tojson }}
+      AYE_HYGIENE_IMAGES_UNTIL: {{ settings.images_until | tojson }}
+      AYE_HYGIENE_CONTAINERS_UNTIL: {{ settings.containers_until | tojson }}
+      AYE_HYGIENE_BUILD_CACHE_KEEP: {{ settings.build_cache_keep | tojson }}
+      AYE_HYGIENE_VOLUMES: {{ (settings.volumes | string | lower) | tojson }}
+      AYE_HYGIENE_DRY_RUN: {{ (settings.dry_run | string | lower) | tojson }}
+      AYE_HYGIENE_TEXTFILE: "/textfile/ayeops_hygiene.prom"
+      AYE_HYGIENE_DISK: "/disk"
+      AYE_HYGIENE_JOURNAL: {{ ("/journal" if settings.journal_dir else "") | tojson }}
+    volumes:
+      - "./hygiene/hygiene_runner.py:/app/hygiene_runner.py:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/etc/localtime:/etc/localtime:ro"
+      - {{ (settings.disk_path ~ ":/disk:ro") | tojson }}
+{% if settings.journal_dir %}
+      - {{ (settings.journal_dir ~ ":/journal:ro") | tojson }}
+{% endif %}
+      - {{ (textfile ~ ":/textfile") | tojson }}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/hygiene.alive') > 300)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+volumes:
+{% if textfile == "node-textfile" %}
+  node-textfile: {}
+{% endif %}

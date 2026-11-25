@@ -1,0 +1,29 @@
+{
+	"Ref": "ghcr.io/acme/tool:1.4.2",
+	"Descriptor": {
+		"mediaType": "application/vnd.oci.image.manifest.v1+json",
+		"digest": "sha256:5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b",
+		"size": 1015,
+		"platform": {
+			"architecture": "arm64",
+			"os": "linux"
+		}
+	},
+	"Raw": "eyJzY2hlbWFWZXJzaW9uIjoyfQ==",
+	"OCIManifest": {
+		"schemaVersion": 2,
+		"mediaType": "application/vnd.oci.image.manifest.v1+json",
+		"config": {
+			"mediaType": "application/vnd.oci.image.config.v1+json",
+			"digest": "sha256:c0b1a2d3e4f5061728394a5b6c7d8e9fc0b1a2d3e4f5061728394a5b6c7d8e9f",
+			"size": 2410
+		},
+		"layers": [
+			{
+				"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+				"digest": "sha256:f0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b3c2d1e0f",
+				"size": 3642244
+			}
+		]
+	}
+}

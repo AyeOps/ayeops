@@ -1,0 +1,52 @@
+name: gpu
+summary: nvidia_gpu_exporter for temperature, memory, utilisation and power of NVIDIA GPUs through nvidia-smi.
+requires:
+  metrics: {}
+defaults:
+  vendor: nvidia
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    vendor:
+      enum: [nvidia]
+    expose:
+      type: array
+      items:
+        enum: [9835]
+services:
+  nvidia-gpu-exporter:
+    description: Runs nvidia-smi through the NVIDIA container runtime and exposes temperature, memory, utilisation and power of every GPU.
+    memory: 64m
+    cpus: 0.1
+    metrics: [nvidia_smi_temperature_gpu, nvidia_smi_memory_used_bytes, nvidia_smi_memory_total_bytes, nvidia_smi_last_collect_success]
+    alerts: [target-down, gpu-temperature-high, gpu-memory-full, gpu-collect-failing]
+    logs: docker
+    status:
+      internal: GPU telemetry, not a user-facing component
+alerts:
+  - name: gpu-temperature-high
+    title: GPU above 85 °C
+    expr: nvidia_smi_temperature_gpu > bool 85
+    for: 10m
+    severity: warning
+    summary: "GPU {{ .Labels.uuid }} on {{ .Labels.host }} has been above 85 °C for 10 minutes"
+    runbook: gpu-temperature-high
+  - name: gpu-memory-full
+    title: GPU memory above 95 %
+    expr: nvidia_smi_memory_used_bytes / nvidia_smi_memory_total_bytes > bool 0.95
+    for: 15m
+    severity: warning
+    summary: "GPU {{ .Labels.uuid }} on {{ .Labels.host }} has used more than 95 % of its memory for 15 minutes"
+    runbook: gpu-memory-full
+  - name: gpu-collect-failing
+    title: nvidia-smi failing
+    expr: nvidia_smi_last_collect_success == bool 0
+    for: 5m
+    severity: critical
+    summary: "nvidia-smi on {{ .Labels.host }} has failed for 5 minutes; the driver may have lost the GPU"
+    runbook: gpu-collect-failing
+dashboards: []
+files: []

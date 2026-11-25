@@ -1,0 +1,189 @@
+name: mutants
+
+on:
+  pull_request:
+    paths:
+      - "src/ayeops/backups.py"
+      - "src/ayeops/baseline.py"
+      - "src/ayeops/checks_sql.py"
+      - "src/ayeops/dashboards.py"
+      - "src/ayeops/datastores.py"
+      - "src/ayeops/defaults.py"
+      - "src/ayeops/deploy.py"
+      - "src/ayeops/eol.py"
+      - "src/ayeops/i18n.py"
+      - "src/ayeops/inventory.py"
+      - "src/ayeops/modules/eol/files/eol_agent.py"
+      - "src/ayeops/modules/hygiene/files/hygiene_runner.py"
+      - "src/ayeops/modules/mcp/files/catalog_server.py"
+      - "src/ayeops/modules/objectstore/files/reststore_admin.py"
+      - "src/ayeops/modules/oncall/files/oncall_bridge.py"
+      - "src/ayeops/modules/reconciler/files/reconciler.py"
+      - "src/ayeops/modules/sentinel/files/sentinel.py"
+      - "src/ayeops/modules/updates/files/updates_agent.py"
+      - "src/ayeops/modules/vulns/files/vulns_agent.py"
+      - "src/ayeops/mounts.py"
+      - "src/ayeops/portal/disks.py"
+      - "src/ayeops/promql.py"
+      - "src/ayeops/render_index.py"
+      - "src/ayeops/sentinel.py"
+      - "src/ayeops/status_deploy.py"
+      - "src/ayeops/strict.py"
+      - "src/ayeops/texthygiene.py"
+      - "src/ayeops/unused.py"
+      - "src/ayeops/up.py"
+      - "src/ayeops/yamlkeys.py"
+      - "src/ayeops/mutants.py"
+      - ".github/workflows/mutants.yml"
+  workflow_dispatch:
+    inputs:
+      fresh:
+        description: Test every mutant again instead of reusing the verdicts of unchanged functions
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutants-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  select:
+    runs-on: ${{ fromJSON(contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && vars.AYE_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 5
+    outputs:
+      modules: ${{ steps.select.outputs.modules }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - name: modules whose mutated functions changed
+        id: select
+        env:
+          AYE_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+        run: uv run --locked python -m ayeops.mutants select --base "$AYE_BASE"
+
+  mutants:
+    needs: select
+    if: needs.select.outputs.modules != '[]'
+    runs-on: ${{ fromJSON(contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && vars.AYE_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.select.outputs.modules) }}
+    env:
+      AYE_MODULE: ${{ matrix.module }}
+      AYE_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - run: uv sync --locked --group mutants
+      - name: cache keys of the module
+        id: key
+        if: github.event_name != 'pull_request'
+        run: uv run --no-sync python -m ayeops.mutants cache-key "$AYE_MODULE"
+      - name: restore the verdicts of the last full run
+        if: github.event_name != 'pull_request' && !inputs.fresh
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: mutants/**/*.meta
+          key: ${{ steps.key.outputs.key }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.key.outputs.key }}-
+            ${{ steps.key.outputs.prefix }}-
+      - name: narrow mutmut to the module and its tests
+        run: uv run --no-sync python -m ayeops.mutants narrow "$AYE_MODULE"
+      - name: functions the pull request changed
+        id: functions
+        if: github.event_name == 'pull_request'
+        run: uv run --no-sync python -m ayeops.mutants functions "$AYE_MODULE" --base "$AYE_BASE" --output "$RUNNER_TEMP/mutants-functions.txt"
+      - name: mutmut run
+        id: run
+        if: github.event_name != 'pull_request' || steps.functions.outputs.count != '0'
+        run: |
+          names=()
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            mapfile -t names < "$RUNNER_TEMP/mutants-functions.txt"
+          fi
+          uv run --no-sync mutmut run --max-children "$(nproc)" "${names[@]}"
+      - name: mutmut results
+        id: results
+        if: steps.run.outcome == 'success'
+        run: uv run --no-sync mutmut results --all true > mutants/results.txt
+      - name: no surviving mutant in the changed functions
+        if: github.event_name == 'pull_request' && steps.functions.outputs.count != '0'
+        run: uv run --no-sync python -m ayeops.mutants gate mutants/results.txt --functions "$RUNNER_TEMP/mutants-functions.txt"
+      - name: keep the results for the baselines job
+        if: github.event_name != 'pull_request'
+        env:
+          AYE_JOB_INDEX: ${{ strategy.job-index }}
+        run: cp mutants/results.txt "$RUNNER_TEMP/mutants-results-$AYE_JOB_INDEX.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name != 'pull_request'
+        with:
+          name: mutants-results-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/mutants-results-${{ strategy.job-index }}.txt
+          retention-days: 7
+      - name: report the mutation score
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: ./ci/github
+        with:
+          name: mutants
+          mutants: mutants/results.txt
+          suite: ${{ matrix.module }}
+      - name: score against the baseline
+        if: github.event_name != 'pull_request'
+        run: uv run --no-sync python -m ayeops.mutants score mutants/results.txt --modules "$AYE_MODULE"
+      - name: save the verdicts for the next full run
+        if: always() && github.event_name != 'pull_request' && steps.key.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: mutants/**/*.meta
+          key: ${{ steps.key.outputs.key }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+  baselines:
+    needs: mutants
+    if: always() && github.event_name != 'pull_request' && needs.mutants.result != 'skipped'
+    runs-on: ${{ fromJSON(contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && vars.AYE_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: mutants-results-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/mutants-results
+      - name: raise the baselines that improved
+        id: raise
+        run: |
+          cat "$RUNNER_TEMP"/mutants-results/*.txt > "$RUNNER_TEMP/mutants-results.txt"
+          uv run --locked python -m ayeops.mutants score "$RUNNER_TEMP/mutants-results.txt" --write || true
+          if git diff --quiet -- tests/mutants.toml; then
+            echo "raised=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "raised=true" >> "$GITHUB_OUTPUT"
+            { echo; echo '```diff'; git diff -- tests/mutants.toml; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.raise.outputs.raised == 'true'
+        with:
+          name: mutants-toml
+          path: tests/mutants.toml

@@ -1,0 +1,81 @@
+services:
+{% if checks.probes %}
+  check-blackbox:
+    image: prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
+    command:
+      - "--config.file=/etc/blackbox/blackbox.yml"
+      - "--web.listen-address=:9116"
+    volumes:
+      - "./checks/blackbox.yml:/etc/blackbox/blackbox.yml:ro"
+    ports: [9116]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9116/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+{% endif %}
+{% for runner, group, config, network in [("check-scripts", checks.scripts, "scripts.json", false), ("check-scripts-net", checks.scripts_net, "scripts-net.json", true)] %}
+{% if group.checks %}
+  {{ runner }}:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/check_runner.py"]
+{% if not network %}
+    network_mode: none
+{% endif %}
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    environment:
+      AYE_CHECKS_CONFIG: {{ ("/app/" ~ config) | tojson }}
+      AYE_CHECKS_TEXTFILE: {{ ("/textfile/ayeops_" ~ runner | replace("-", "_") ~ ".prom") | tojson }}
+      AYE_CHECKS_RUNNER: {{ runner | tojson }}
+{% for name in group.env %}
+      {{ name }}: {{ ("${" ~ name ~ "}") | tojson }}
+{% endfor %}
+    volumes:
+      - "./checks/check_runner.py:/app/check_runner.py:ro"
+      - {{ ("./checks/" ~ config ~ ":/app/" ~ config ~ ":ro") | tojson }}
+      - {{ (textfile ~ ":/textfile") | tojson }}
+{% for mount in group.mounts %}
+      - {{ mount | tojson }}
+{% endfor %}
+    healthcheck:
+      test: ["CMD", "python", "-c", {{ ("import os, sys, time; sys.exit(time.time() - os.path.getmtime('/textfile/ayeops_" ~ runner | replace("-", "_") ~ ".prom') > 120)") | tojson }}]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+{% endif %}
+{% endfor %}
+{% if checks.sql.checks %}
+  check-sql:
+    image: postgres:18.6-alpine3.24@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b
+    entrypoint: ["/bin/sh", "/app/sql_runner.sh"]
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    environment:
+      AYE_CHECKS_CONFIG: "/app/sql-checks.sh"
+      AYE_CHECKS_TEXTFILE: "/textfile/ayeops_check_sql.prom"
+{% for name in checks.sql.env %}
+      {{ name }}: {{ ("${" ~ name ~ "}") | tojson }}
+{% endfor %}
+    volumes:
+      - "./checks/sql_runner.sh:/app/sql_runner.sh:ro"
+      - "./checks/sql_metrics.awk:/app/sql_metrics.awk:ro"
+      - "./checks/sql-checks.sh:/app/sql-checks.sh:ro"
+      - {{ (textfile ~ ":/textfile") | tojson }}
+    healthcheck:
+      test: ["CMD-SHELL", "find /textfile/ayeops_check_sql.prom -mmin -2 | grep -q ."]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+{% endif %}
+volumes:
+{% if checks.textfile and textfile == "node-textfile" %}
+  node-textfile: {}
+{% endif %}

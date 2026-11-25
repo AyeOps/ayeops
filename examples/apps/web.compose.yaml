@@ -1,0 +1,31 @@
+name: acme-apps
+services:
+  web:
+    image: nginx:1.29.2-alpine
+    ports:
+      - "127.0.0.1:8080:80"
+    mem_limit: 64m
+    cpus: 0.25
+    restart: unless-stopped
+    labels:
+      io.ayeops.service: web
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  mcp:
+    image: python:3.13.9-slim
+    command: ["python", "-m", "http.server", "8000"]
+    ports:
+      - "127.0.0.1:8090:8000"
+    mem_limit: 128m
+    cpus: 0.25
+    restart: unless-stopped
+    labels:
+      io.ayeops.service: mcp
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

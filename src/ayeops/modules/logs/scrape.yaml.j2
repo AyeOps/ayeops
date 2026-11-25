@@ -1,0 +1,8 @@
+- job_name: alloy
+  static_configs:
+    - targets: ["alloy:12345"]
+{% if settings.role == "server" %}
+- job_name: loki
+  static_configs:
+    - targets: ["loki:3100"]
+{% endif %}

@@ -1,0 +1,39 @@
+services:
+{% if blackbox %}
+  blackbox:
+    image: prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
+    command:
+      - "--config.file=/etc/blackbox/blackbox.yml"
+{% if settings.internet or settings.gateway %}
+    sysctls:
+      net.ipv4.ping_group_range: "0 2147483647"
+{% endif %}
+    volumes:
+      - "./probes/blackbox.yml:/etc/blackbox/blackbox.yml:ro"
+    ports: [9115]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9115/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+{% endif %}
+{% if settings.domains %}
+  rdap-exporter:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/rdap_exporter.py"]
+    user: "65534:65534"
+    environment:
+      AYE_RDAP_DOMAINS: {{ settings.domains | join(",") | tojson }}
+      AYE_RDAP_BOOTSTRAP_URL: {{ settings.rdap_bootstrap_url | tojson }}
+      AYE_RDAP_REFRESH_SECONDS: {{ settings.rdap_refresh_seconds | string | tojson }}
+      AYE_RDAP_PORT: "9130"
+    volumes:
+      - "./probes/rdap_exporter.py:/app/rdap_exporter.py:ro"
+    ports: [9130]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9130/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+{% endif %}
+volumes: {}

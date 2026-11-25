@@ -1,0 +1,51 @@
+{% set gated = "auth" in modules %}
+{% set used = middlewares.values() | sum(start=[]) %}
+http:
+  routers:
+{% for name, target in settings.routes | dictsort %}
+    {{ name }}:
+      rule: {{ ("Host(`" ~ name ~ "." ~ settings.domain ~ "`)") | tojson }}
+      entryPoints: [websecure]
+      service: {{ name | tojson }}
+{% if middlewares[name] %}
+      middlewares: {{ middlewares[name] | tojson }}
+{% endif %}
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: {{ ("*." ~ settings.domain) | tojson }}
+{% if gated and target.split(":")[0] == "grafana" %}
+    {{ name }}_metrics:
+      rule: {{ ("Host(`" ~ name ~ "." ~ settings.domain ~ "`) && PathPrefix(`/metrics`)") | tojson }}
+      entryPoints: [websecure]
+      service: {{ name | tojson }}
+      middlewares: [sso]
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: {{ ("*." ~ settings.domain) | tojson }}
+{% endif %}
+{% endfor %}
+{% if used or gated %}
+  middlewares:
+{% if "sso" in used or gated %}
+    sso:
+      forwardAuth:
+        address: "http://oauth2-proxy:4180/"
+        trustForwardHeader: false
+        maxResponseBodySize: 1048576
+{% endif %}
+{% if "vmui" in used %}
+    vmui:
+      redirectRegex:
+        regex: "^https://([^/]+)/$"
+        replacement: "https://${1}/vmui/"
+{% endif %}
+{% endif %}
+  services:
+{% for name, target in settings.routes | dictsort %}
+    {{ name }}:
+      loadBalancer:
+        servers:
+          - url: {{ ("http://" ~ target) | tojson }}
+{% endfor %}

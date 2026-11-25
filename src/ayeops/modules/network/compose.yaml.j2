@@ -1,0 +1,46 @@
+services:
+  net-exporter:
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    command:
+      - "--web.listen-address=:9101"
+      - "--collector.disable-defaults"
+      - "--collector.netdev"
+      - "--no-collector.netdev.netlink"
+      - {{ ("--collector.netdev.device-include=^(" ~ (settings.interfaces | map("replace", ".", "[.]") | join("|")) ~ ")$") | tojson }}
+      - "--collector.netclass"
+      - "--collector.netclass.ignore-invalid-speed"
+      - "--collector.textfile"
+      - "--collector.textfile.directory=/textfile"
+      - "--path.procfs=/host/proc/1"
+      - "--path.sysfs=/host/sys"
+    volumes:
+      - "/proc:/host/proc:ro"
+      - "/sys:/host/sys:ro"
+      - "network-textfile:/textfile:ro"
+    ports: [9101]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9101/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+{% if settings.wifi %}
+  wifi:
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    entrypoint: ["sh", "/wifi.sh"]
+    user: "0:0"
+    network_mode: host
+    environment:
+      AYE_TEXTFILE_DIR: /textfile
+      AYE_WIFI_INTERVAL: {{ settings.wifi_interval | string | tojson }}
+      AYE_WIFI_PORT: {{ settings.wifi_port | string | tojson }}
+    volumes:
+      - "./network/wifi.sh:/wifi.sh:ro"
+      - "network-textfile:/textfile"
+    healthcheck:
+      test: ["CMD-SHELL", "find /textfile/wifi.prom -mmin -5 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+{% endif %}
+volumes:
+  network-textfile: {}

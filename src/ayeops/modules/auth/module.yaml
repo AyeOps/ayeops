@@ -1,0 +1,93 @@
+name: auth
+summary: oauth2-proxy asking Traefik's forwardAuth for a Google or OIDC sign-in in front of every ingress route without a login of its own, limited to a list of email addresses.
+requires:
+  ingress: {}
+defaults:
+  provider: google
+  issuer_url: null
+  endpoints: null
+  emails: []
+  admins: null
+  open: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  required: [emails]
+  properties:
+    provider:
+      enum: [google, oidc]
+    issuer_url:
+      type: ["string", "null"]
+      pattern: "^https://"
+    endpoints:
+      type: ["object", "null"]
+      additionalProperties: false
+      required: [authorize, token, userinfo]
+      properties:
+        authorize:
+          type: string
+          pattern: "^https://"
+        token:
+          type: string
+          pattern: "^https://"
+        userinfo:
+          type: string
+          pattern: "^https://"
+    emails:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        type: string
+        pattern: '^[^@\s''"\\A-Z]+@[^@\s''"\\A-Z]+$'
+    admins:
+      type: ["array", "null"]
+      uniqueItems: true
+      items:
+        type: string
+        pattern: '^[^@\s''"\\A-Z]+@[^@\s''"\\A-Z]+$'
+    open:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        pattern: "^[a-z][a-z0-9-]{0,39}$"
+  if:
+    required: [provider]
+    properties:
+      provider:
+        const: oidc
+  then:
+    required: [issuer_url]
+    properties:
+      issuer_url:
+        type: string
+services:
+  oauth2-proxy:
+    description: Signs people in with Google or an OIDC provider and answers Traefik's forwardAuth for every ingress route without a login of its own, letting through only the listed email addresses.
+    memory: 64m
+    cpus: 0.25
+    metrics: [oauth2_proxy_requests_total, oauth2_proxy_response_duration_seconds_count]
+    alerts: [target-down]
+    logs: docker
+    status:
+      internal: operator sign-in in front of internal UIs, not a user-facing component
+alerts: []
+dashboards: []
+files:
+  - src: files/emails.txt.j2
+    dest: auth/emails.txt
+    when: emails
+    template: true
+permissions:
+  - issuer: "{{ 'Google' if settings.provider == 'google' else 'OIDC provider ' ~ settings.issuer_url }}"
+    credential: OAuth 2.0 client of type web application
+    env: [AYE_AUTH_CLIENT_ID, AYE_AUTH_CLIENT_SECRET]
+    grants:
+      - "scopes openid, email and profile only; no API enabled for the client"
+      - "redirect URI https://auth.{{ modules.ingress.domain }}/oauth2/callback{% if modules.grafana and modules.grafana.root_url %} and {{ modules.grafana.root_url }}/login/{{ 'google' if settings.provider == 'google' else 'generic_oauth' }}{% endif %}{% if modules.errors and settings.provider == 'google' %} and {{ modules.errors.url }}/accounts/google/login/callback/{% endif %}"
+generated:
+  - env: [AYE_AUTH_COOKIE_SECRET]
+    format: base64url
+    bytes: 32

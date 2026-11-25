@@ -1,0 +1,45 @@
+services:
+{% if settings.role == "server" %}
+  loki:
+    image: grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
+    command:
+      - "-config.file=/etc/loki/loki.yaml"
+    volumes:
+      - "./logs/loki.yaml:/etc/loki/loki.yaml:ro"
+      - "loki-data:/loki"
+    ports: [3100]
+    healthcheck:
+      test: ["CMD", "/usr/bin/loki", "-health", "-health.url=http://127.0.0.1:3100/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+{% endif %}
+  alloy:
+    image: grafana/alloy:v1.21.3@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4
+    command:
+      - "run"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--storage.path=/var/lib/alloy/data"
+      - "--disable-reporting"
+      - "/etc/alloy/config.alloy"
+    volumes:
+      - "./logs/config.alloy:/etc/alloy/config.alloy:ro"
+      - "alloy-data:/var/lib/alloy/data"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+{% if settings.journald %}
+      - "/var/log/journal:/var/log/journal:ro"
+      - "/run/log/journal:/run/log/journal:ro"
+      - "/etc/machine-id:/etc/machine-id:ro"
+{% endif %}
+    ports: [12345]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/12345 && printf 'GET /-/ready HTTP/1.0\r\n\r\n' >&3 && head -n 1 <&3 | grep -q ' 200 '"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+{% if settings.role == "server" %}
+  loki-data: {}
+{% endif %}
+  alloy-data: {}

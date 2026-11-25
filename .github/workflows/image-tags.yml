@@ -1,0 +1,62 @@
+name: image-tags
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/ayeops/modules/*/compose.yaml.j2"
+      - "examples/rendered/*/compose.yaml"
+      - "ci/image_digest.py"
+      - ".github/workflows/image-tags.yml"
+  pull_request:
+    paths:
+      - "src/ayeops/modules/*/compose.yaml.j2"
+      - "examples/rendered/*/compose.yaml"
+      - "ci/image_digest.py"
+      - ".github/workflows/image-tags.yml"
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-tags-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  digests:
+    runs-on: ${{ fromJSON(contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && vars.AYE_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: the pins this change adds point to their tags
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set --
+          for ref in $(git diff --unified=0 "$BASE" HEAD -- 'src/ayeops/modules/*/compose.yaml.j2' 'examples/rendered/*/compose.yaml' | sed -n 's/^+[[:space:]]*image:[[:space:]]*//p' | tr -d "\"'" | sort -u); do
+            case $ref in
+              *"{"* | *'$'*) continue ;;
+            esac
+            set -- "$@" "$ref"
+          done
+          if [ "$#" -eq 0 ]; then
+            echo "no image pin changed"
+            exit 0
+          fi
+          uv run --no-project python -I ci/image_digest.py --check "$@"
+      - name: every tag still points to its pinned digest
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          set --
+          for file in src/ayeops/modules/*/compose.yaml.j2 examples/rendered/*/compose.yaml; do
+            set -- "$@" --file "$file"
+          done
+          uv run --no-project python -I ci/image_digest.py --check "$@"

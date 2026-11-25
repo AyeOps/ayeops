@@ -1,0 +1,111 @@
+http:
+  middlewares:
+    sso:
+      forwardAuth:
+        address: http://oauth2-proxy:4180/
+        maxResponseBodySize: 1048576
+        trustForwardHeader: false
+    vmui:
+      redirectRegex:
+        regex: ^https://([^/]+)/$
+        replacement: https://${1}/vmui/
+  routers:
+    auth:
+      entryPoints:
+      - websecure
+      rule: Host(`auth.ops.acme.example`)
+      service: auth
+      tls:
+        certResolver: letsencrypt
+        domains:
+        - main: '*.ops.acme.example'
+    grafana:
+      entryPoints:
+      - websecure
+      rule: Host(`grafana.ops.acme.example`)
+      service: grafana
+      tls:
+        certResolver: letsencrypt
+        domains:
+        - main: '*.ops.acme.example'
+    grafana_metrics:
+      entryPoints:
+      - websecure
+      middlewares:
+      - sso
+      rule: Host(`grafana.ops.acme.example`) && PathPrefix(`/metrics`)
+      service: grafana
+      tls:
+        certResolver: letsencrypt
+        domains:
+        - main: '*.ops.acme.example'
+    hub:
+      entryPoints:
+      - websecure
+      middlewares:
+      - sso
+      rule: Host(`hub.ops.acme.example`)
+      service: hub
+      tls:
+        certResolver: letsencrypt
+        domains:
+        - main: '*.ops.acme.example'
+    metrics:
+      entryPoints:
+      - websecure
+      middlewares:
+      - sso
+      - vmui
+      rule: Host(`metrics.ops.acme.example`)
+      service: metrics
+      tls:
+        certResolver: letsencrypt
+        domains:
+        - main: '*.ops.acme.example'
+    oncall:
+      entryPoints:
+      - websecure
+      middlewares:
+      - sso
+      rule: Host(`oncall.ops.acme.example`)
+      service: oncall
+      tls:
+        certResolver: letsencrypt
+        domains:
+        - main: '*.ops.acme.example'
+    portal:
+      entryPoints:
+      - websecure
+      middlewares:
+      - sso
+      rule: Host(`portal.ops.acme.example`)
+      service: portal
+      tls:
+        certResolver: letsencrypt
+        domains:
+        - main: '*.ops.acme.example'
+  services:
+    auth:
+      loadBalancer:
+        servers:
+        - url: http://oauth2-proxy:4180
+    grafana:
+      loadBalancer:
+        servers:
+        - url: http://grafana:3000
+    hub:
+      loadBalancer:
+        servers:
+        - url: http://agentgateway:3000
+    metrics:
+      loadBalancer:
+        servers:
+        - url: http://victoriametrics:8428
+    oncall:
+      loadBalancer:
+        servers:
+        - url: http://goalert:8081
+    portal:
+      loadBalancer:
+        servers:
+        - url: http://portal:8080

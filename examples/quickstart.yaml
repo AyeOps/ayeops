@@ -1,0 +1,21 @@
+version: 1
+project: quickstart
+runbook_base_url: https://runbooks.quickstart.example
+alerting:
+  contact: none
+hosts:
+  local:
+    arch: amd64
+    modules:
+      metrics:
+        role: server
+        retention: 7d
+        scrape_interval: 15s
+      node:
+        rslave: false
+      containers: {}
+      probes:
+        http:
+          - http://grafana:3000/api/health
+          - https://example.com
+      grafana: {}

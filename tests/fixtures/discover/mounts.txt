@@ -1,0 +1,11 @@
+/dev/nvme0n1p2 / ext4 rw,relatime 0 0
+proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
+sysfs /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
+/dev/nvme0n1p1 /boot/efi vfat rw,relatime 0 0
+/dev/sda /srv/data xfs rw,relatime 0 0
+tmpfs /run tmpfs rw,nosuid,nodev 0 0
+/dev/nvme0n1p2 /var/lib/docker ext4 rw,relatime 0 0
+overlay /var/lib/docker/overlay2/abc/merged overlay rw,relatime 0 0
+/dev/loop0 /snap/core22/1380 squashfs ro,nodev,relatime 0 0
+nas:/export /mnt/nas\040share nfs4 rw,relatime 0 0
+/dev/nvme0n1p2 / ext4 rw,relatime 0 0

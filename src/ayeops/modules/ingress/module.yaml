@@ -1,0 +1,79 @@
+name: ingress
+summary: Traefik serving human HTTPS names for the internal services of a host over a private network, with a wildcard Let's Encrypt certificate from a DNS-01 challenge.
+requires:
+  metrics: {}
+defaults:
+  domain: null
+  provider: cloudflare
+  routes: {}
+  email: null
+  expose: [443, 80]
+  without_auth: null
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  required: [domain, routes]
+  properties:
+    domain:
+      type: string
+      pattern: '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$'
+    provider:
+      enum: [cloudflare]
+    routes:
+      type: object
+      minProperties: 1
+      propertyNames:
+        pattern: "^[a-z][a-z0-9-]{0,39}$"
+      additionalProperties:
+        type: string
+        pattern: "^[a-z][a-z0-9_-]*:[0-9]{1,5}$"
+    email:
+      type: ["string", "null"]
+      pattern: '^[^@\s''"\\]+@[^@\s''"\\]+$'
+    expose:
+      type: array
+      items:
+        enum: [443, 80]
+    without_auth:
+      oneOf:
+        - type: ["string", "null"]
+          minLength: 1
+        - type: object
+          additionalProperties: false
+          required: [reason]
+          properties:
+            reason:
+              type: string
+              minLength: 1
+            until: true
+services:
+  traefik:
+    description: Answers HTTPS for the internal services of its host under names below the ingress domain, with one wildcard certificate.
+    memory: 128m
+    cpus: 0.5
+    metrics: [traefik_entrypoint_requests_total, traefik_service_requests_total, traefik_tls_certs_not_after]
+    alerts: [target-down, probe-failing, tls-expiring]
+    logs: docker
+    status:
+      internal: operator access over the private network, not a user-facing component
+alerts: []
+dashboards: []
+files:
+  - src: files/traefik.yml.j2
+    dest: ingress/traefik.yml
+    when: domain
+    template: true
+  - src: files/routes.yml.j2
+    dest: ingress/dynamic/routes.yml
+    when: domain
+    template: true
+    live: true
+permissions:
+  - issuer: Cloudflare
+    credential: custom API token
+    env: [AYE_CLOUDFLARE_DNS_API_TOKEN]
+    when: "settings.provider == 'cloudflare'"
+    grants:
+      - "Zone > Zone > Read and Zone > DNS > Edit on the zone that holds {{ settings.domain }} only"
+      - "used by Traefik for the DNS-01 certificate and by aye dns for the A records"

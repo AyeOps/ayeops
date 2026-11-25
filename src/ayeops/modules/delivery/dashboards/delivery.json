@@ -1,0 +1,732 @@
+{
+  "editable": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "panels": [],
+      "title": "Deploys",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum(count_over_time(aye_step_duration_seconds{step=\"deploy\",project=~\"$project\",branch=~\"$branch\"}[7d]))",
+          "legendFormat": "deploys",
+          "refId": "A"
+        }
+      ],
+      "title": "Deploys, 7 days",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 3,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max(aye:step_failure_ratio:7d{step=\"deploy\",project=~\"$project\",branch=~\"$branch\"})",
+          "legendFormat": "failed",
+          "refId": "A"
+        }
+      ],
+      "title": "Deploy failure rate, 7 days",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 4,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max(aye:step_duration_seconds:median30d{step=\"deploy\",project=~\"$project\",branch=~\"$branch\"})",
+          "legendFormat": "median",
+          "refId": "A"
+        }
+      ],
+      "title": "Median deploy, 30 days",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 5,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "time() - max(last_over_time(aye_step_finished_timestamp_seconds{step=\"deploy\",project=~\"$project\",branch=~\"$branch\"}[90d]))",
+          "legendFormat": "age",
+          "refId": "A"
+        }
+      ],
+      "title": "Since the last deploy",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 6
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "id": 6,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (project, job, result) (last_over_time(aye_step_duration_seconds{step=\"deploy\",project=~\"$project\",branch=~\"$branch\"}[$__interval]))",
+          "legendFormat": "{{project}} {{job}} {{result}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (project, job) (aye:step_duration_seconds:median30d{step=\"deploy\",project=~\"$project\",branch=~\"$branch\"})",
+          "legendFormat": "{{project}} {{job}} 30-day median",
+          "refId": "B"
+        }
+      ],
+      "title": "Deploy duration",
+      "type": "timeseries",
+      "interval": "1h"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "id": 7,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum by (project, result) (count_over_time(aye_step_duration_seconds{step=\"deploy\",project=~\"$project\",branch=~\"$branch\"}[$__interval]))",
+          "legendFormat": "{{project}} {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Deploys per day",
+      "type": "timeseries",
+      "interval": "1d"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 8,
+      "panels": [],
+      "title": "CI",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 6
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 9,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (project, job) (last_over_time(aye_step_duration_seconds{step=\"ci\",project=~\"$project\",branch=~\"$branch\"}[$__interval]))",
+          "legendFormat": "{{project}} {{job}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (project, job) (aye:step_duration_seconds:median30d{step=\"ci\",project=~\"$project\",branch=~\"$branch\"})",
+          "legendFormat": "{{project}} {{job}} 30-day median",
+          "refId": "B"
+        }
+      ],
+      "title": "CI duration per job",
+      "type": "timeseries",
+      "interval": "1h"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 10,
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (step, job) (aye:step_duration_seconds:median30d{project=~\"$project\",branch=~\"$branch\"})",
+          "legendFormat": "{{step}} {{job}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Median step duration, 30 days",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "id": 11,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (step) (aye:step_failure_ratio:7d{project=~\"$project\",branch=~\"$branch\"})",
+          "legendFormat": "{{step}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Step failure rate, 7 days",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "id": 12,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (report, name, result, branch, pipeline_id, commit, url) (last_over_time(aye_report_info{project=~\"$project\",branch=~\"$branch\"}[1d]))",
+          "legendFormat": "",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "title": "Latest runs",
+      "type": "table",
+      "description": "Run ids, commits and links live only on aye_report_info; the logs of every report are in Loki under {job=\"aye-report\"}."
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "id": 13,
+      "panels": [],
+      "title": "Pull requests",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 6
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 31
+      },
+      "id": 14,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (repo, start) (last_over_time(aye_pr_lead_time_seconds{project=~\"$project\",branch=~\"$branch\"}[$__interval]))",
+          "legendFormat": "{{repo}} {{start}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (repo, start) (aye:pr_lead_time_seconds:median30d{project=~\"$project\",branch=~\"$branch\"})",
+          "legendFormat": "{{repo}} 30-day median",
+          "refId": "B"
+        }
+      ],
+      "title": "Lead time, first commit to merge",
+      "type": "timeseries",
+      "interval": "1h"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 6
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 31
+      },
+      "id": 15,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (repo) (last_over_time(aye_pr_commits{project=~\"$project\",branch=~\"$branch\"}[$__interval]))",
+          "legendFormat": "{{repo}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Commits per merge",
+      "type": "timeseries",
+      "interval": "1h"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 31
+      },
+      "id": 16,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum(count_over_time(aye_pr_lead_time_seconds{project=~\"$project\",branch=~\"$branch\"}[30d]))",
+          "legendFormat": "merges",
+          "refId": "A"
+        }
+      ],
+      "title": "Merges, 30 days",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "id": 17,
+      "panels": [],
+      "title": "GitHub Actions minutes",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "id": 18,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "ayeops_github_included_minutes_used / ayeops_github_included_minutes",
+          "legendFormat": "{{account}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Included minutes used this month",
+      "type": "bargauge",
+      "description": "Private repositories only, Windows minutes count twice and macOS ten times, as GitHub counts them against the included quota; alert at 80%."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "id": 19,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum by (account) (ayeops_github_usage_net_dollars)",
+          "legendFormat": "{{account}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Paid this month",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 46
+      },
+      "id": 20,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum by (repo, sku) (ayeops_github_usage{product=\"actions\",unit=\"Minutes\"})",
+          "legendFormat": "{{repo}} {{sku}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Minutes by repository",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 46
+      },
+      "id": 21,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum by (account, product, sku, repo, unit) (ayeops_github_usage)",
+          "legendFormat": "",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "title": "Usage this month",
+      "type": "table"
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": [
+    "ayeops"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "victoriametrics"
+        },
+        "definition": "label_values(aye_report_info, project)",
+        "includeAll": true,
+        "label": "Project",
+        "multi": true,
+        "name": "project",
+        "query": {
+          "query": "label_values(aye_report_info, project)",
+          "refId": "project"
+        },
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "victoriametrics"
+        },
+        "definition": "label_values(aye_report_info{project=~\"$project\"}, branch)",
+        "includeAll": true,
+        "label": "Branch",
+        "multi": true,
+        "name": "branch",
+        "query": {
+          "query": "label_values(aye_report_info{project=~\"$project\"}, branch)",
+          "refId": "branch"
+        },
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "AyeOps / Delivery",
+  "uid": "ayeops-delivery",
+  "version": 1
+}

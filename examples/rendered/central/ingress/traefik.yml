@@ -1,0 +1,35 @@
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+        - 1.1.1.1:53
+        - 1.0.0.1:53
+      storage: /acme/acme.json
+entryPoints:
+  metrics:
+    address: :8082
+  web:
+    address: :80
+    http:
+      redirections:
+        entryPoint:
+          scheme: https
+          to: websecure
+  websecure:
+    address: :443
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+log:
+  level: INFO
+metrics:
+  prometheus:
+    entryPoint: metrics
+ping:
+  entryPoint: metrics
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true

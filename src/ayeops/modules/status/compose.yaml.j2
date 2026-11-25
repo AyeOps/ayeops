@@ -1,0 +1,32 @@
+services:
+  status-reporter:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/status_reporter.py"]
+    user: "65534:65534"
+    group_add: [{{ grafana_reader.group | tojson }}]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      AYE_STATUS_TENANT: {{ status.tenant | tojson }}
+      AYE_STATUS_URL: {{ status.url | tojson }}
+      AYE_STATUS_PUSH_SECRET: "${AYE_STATUS_PUSH_SECRET:?set AYE_STATUS_PUSH_SECRET}"
+      AYE_STATUS_COMPONENTS: {{ status.components | tojson | tojson }}
+      AYE_STATUS_GRAFANA: http://grafana:3000
+      {{ grafana_reader.env }}: {{ grafana_reader.token_file | tojson }}
+      AYE_STATUS_INTERVAL: {{ settings.interval | tojson }}
+      AYE_STATUS_TIMEOUT: {{ settings.timeout | tojson }}
+      AYE_STATUS_PORT: "9136"
+    volumes:
+      - "./status/status_reporter.py:/app/status_reporter.py:ro"
+      - {{ grafana_reader.volume | tojson }}
+    depends_on:
+      grafana:
+        condition: service_healthy
+      {{ grafana_reader.service }}:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9136/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3

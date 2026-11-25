@@ -1,0 +1,21 @@
+name: disk-forecast
+summary: An alert that extrapolates the last day of filesystem usage and fires when a filesystem fills up within 7 days.
+requires:
+  node: {}
+defaults:
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties: {}
+services: {}
+alerts:
+  - name: disk-full-forecast
+    title: Disk full within 7 days
+    expr: (predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"}[1d], 7 * 86400) < bool 0) * (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} < bool 0.5)
+    for: 1h
+    severity: warning
+    summary: "{{ .Labels.mountpoint }} on {{ .Labels.host }} fills up within 7 days at the pace of the last day"
+    runbook: disk-full-forecast
+dashboards: []
+files: []

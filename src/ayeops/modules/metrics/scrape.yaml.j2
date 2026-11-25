@@ -1,0 +1,8 @@
+- job_name: vmagent
+  static_configs:
+    - targets: ["vmagent:8429"]
+{% if settings.role == "server" %}
+- job_name: victoriametrics
+  static_configs:
+    - targets: ["victoriametrics:8428"]
+{% endif %}

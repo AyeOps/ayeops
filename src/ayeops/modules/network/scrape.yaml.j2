@@ -1,0 +1,7 @@
+- job_name: network
+  static_configs:
+    - targets: ["net-exporter:9101"]
+  metric_relabel_configs:
+    - source_labels: [device]
+      regex: {{ (settings.interfaces | map("replace", ".", "[.]") | join("|")) | tojson }}
+      action: keep

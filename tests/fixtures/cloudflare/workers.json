@@ -1,0 +1,39 @@
+{
+  "data": {
+    "viewer": {
+      "accounts": [
+        {
+          "workersInvocationsAdaptive": [
+            {
+              "dimensions": {
+                "scriptName": "router"
+              },
+              "quantiles": {
+                "cpuTimeP50": 1500,
+                "cpuTimeP99": 9000
+              },
+              "sum": {
+                "errors": 12,
+                "requests": 70000
+              }
+            },
+            {
+              "dimensions": {
+                "scriptName": "og-image"
+              },
+              "quantiles": {
+                "cpuTimeP50": 800,
+                "cpuTimeP99": 2100
+              },
+              "sum": {
+                "errors": 0,
+                "requests": 15000
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "errors": null
+}

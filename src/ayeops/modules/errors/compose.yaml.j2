@@ -1,0 +1,142 @@
+{% if settings.provider == "glitchtip" %}
+{% set site = settings.url.split("://")[1] %}
+{% macro app_environment() %}
+      DATABASE_URL: "postgres://glitchtip:${AYE_ERRORS_DB_PASSWORD:?set AYE_ERRORS_DB_PASSWORD}@glitchtip-db:5432/glitchtip"
+      VALKEY_URL: "redis://:${AYE_ERRORS_CACHE_PASSWORD:?set AYE_ERRORS_CACHE_PASSWORD}@glitchtip-cache:6379/0"
+      SECRET_KEY: "${AYE_ERRORS_SECRET_KEY:?set AYE_ERRORS_SECRET_KEY}"
+      GLITCHTIP_DOMAIN: {{ settings.url | tojson }}
+      DJANGO_SETTINGS_MODULE: ayeops_settings
+      ALLOWED_HOSTS: {{ [site, host.address, "glitchtip", "localhost", "127.0.0.1"] | join(",") | tojson }}
+      CSRF_TRUSTED_ORIGINS: {{ settings.url | tojson }}
+      ENABLE_USER_REGISTRATION: "false"
+      ENABLE_SOCIAL_APPS_USER_REGISTRATION: "false"
+      ENABLE_ORGANIZATION_CREATION: "false"
+      GLITCHTIP_RETENTION_DAYS: {{ settings.retention_days | string | tojson }}
+      GLITCHTIP_ENABLE_UPTIME: "false"
+      GLITCHTIP_ENABLE_LOGS: "false"
+      ENABLE_OBSERVABILITY_API: "true"
+      VTASKS_CONCURRENCY: "4"
+      GRANIAN_WORKERS: "1"
+      LOG_LEVEL: WARNING
+{% if mail %}
+      EMAIL_HOST: {{ mail.host | tojson }}
+      EMAIL_PORT: {{ mail.port | string | tojson }}
+      EMAIL_HOST_USER: {{ mail.user | tojson }}
+      EMAIL_HOST_PASSWORD: {{ mail.password | tojson }}
+      EMAIL_USE_TLS: {{ (mail.tls == "starttls") | string | lower | tojson }}
+      EMAIL_USE_SSL: {{ (mail.tls == "tls") | string | lower | tojson }}
+      DEFAULT_FROM_EMAIL: {{ mail.from | tojson }}
+{% endif %}
+{% endmacro %}
+services:
+  glitchtip:
+    image: glitchtip/glitchtip:6.2.6@sha256:a3d8eb1b36c1e1603d55ab32711ea3dd8115874742a781a57391a62a16e0dff6
+{% set auth = modules.get("auth") %}
+{% set google = auth and auth.provider == "google" %}
+    command: ["sh", "-c", "python manage.py migrate --no-input --skip-checks && python manage.py maintain_partitions && python manage.py createcachetable{{ ' && python manage.py shell --no-imports < /code/google_app.py' if google }} && exec ./bin/run-web.sh"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      SERVER_ROLE: web
+{{ app_environment() }}
+{% if google %}
+      AYE_AUTH_CLIENT_ID: "${AYE_AUTH_CLIENT_ID:?set AYE_AUTH_CLIENT_ID}"
+      AYE_AUTH_CLIENT_SECRET: "${AYE_AUTH_CLIENT_SECRET:?set AYE_AUTH_CLIENT_SECRET}"
+{% endif %}
+    volumes:
+      - "./errors/ayeops_settings.py:/code/ayeops_settings.py:ro"
+{% if google %}
+      - "./errors/google_app.py:/code/google_app.py:ro"
+{% endif %}
+    ports: ["8095:8000"]
+    depends_on:
+      glitchtip-db:
+        condition: service_healthy
+      glitchtip-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+  glitchtip-worker:
+    image: glitchtip/glitchtip:6.2.6@sha256:a3d8eb1b36c1e1603d55ab32711ea3dd8115874742a781a57391a62a16e0dff6
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      SERVER_ROLE: worker
+{{ app_environment() }}
+    volumes:
+      - "./errors/ayeops_settings.py:/code/ayeops_settings.py:ro"
+    depends_on:
+      glitchtip:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "grep -qs runworker /proc/1/cmdline"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+  glitchtip-db:
+    image: postgres:18.6-alpine3.24@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b
+    command: ["postgres", "-c", "shared_buffers=96MB", "-c", "max_connections=60", "-c", "max_locks_per_transaction=512"]
+    environment:
+      POSTGRES_USER: glitchtip
+      POSTGRES_DB: glitchtip
+      POSTGRES_PASSWORD: "${AYE_ERRORS_DB_PASSWORD:?set AYE_ERRORS_DB_PASSWORD}"
+    volumes:
+      - "errors-db:/var/lib/postgresql"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "glitchtip", "-d", "glitchtip"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+  glitchtip-cache:
+    image: valkey/valkey:9.1.3-alpine3.24@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b
+    command: ["sh", "-c", "exec valkey-server --requirepass \"$$VALKEYCLI_AUTH\" --maxmemory 48mb --maxmemory-policy noeviction --save '' --appendonly no"]
+    environment:
+      VALKEYCLI_AUTH: "${AYE_ERRORS_CACHE_PASSWORD:?set AYE_ERRORS_CACHE_PASSWORD}"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+  glitchtip-backup:
+    image: postgres:18.6-alpine3.24@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b
+    command: ["sh", "/backup.sh"]
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      PGHOST: glitchtip-db
+      PGUSER: glitchtip
+      PGDATABASE: glitchtip
+      PGPASSWORD: "${AYE_ERRORS_DB_PASSWORD:?set AYE_ERRORS_DB_PASSWORD}"
+      AYE_BACKUP_DIR: /backups
+      AYE_TEXTFILE_DIR: /textfile
+      AYE_BACKUP_HOUR: {{ settings.backup_hour | string | tojson }}
+      AYE_BACKUP_KEEP_DAYS: {{ settings.backup_keep_days | string | tojson }}
+    volumes:
+      - "./errors/backup.sh:/backup.sh:ro"
+      - "./backups/backup_run.sh:/backup_run.sh:ro"
+      - "errors-backups:/backups"
+      - {{ (textfile ~ ":/textfile") | tojson }}
+    depends_on:
+      glitchtip-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "find /tmp/backup.alive -mmin -15 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+{% endif %}
+volumes:
+  errors-db: {}
+  errors-backups: {}
+{% if textfile == "node-textfile" %}
+  node-textfile: {}
+{% endif %}

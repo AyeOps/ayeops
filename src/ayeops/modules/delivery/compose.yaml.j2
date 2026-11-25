@@ -1,0 +1,19 @@
+services:
+  vmalert:
+    image: victoriametrics/vmalert:v1.153.0@sha256:0c1c7718b54b03e8559d0f257f31f1bd79ef7fa32ac6e9ed90d7b92a74a4fe76
+    command:
+      - "-rule=/etc/vmalert/rules.yml"
+      - "-datasource.url=http://victoriametrics:8428"
+      - "-remoteWrite.url=http://victoriametrics:8428"
+      - {{ ("-evaluationInterval=" ~ settings.evaluation_interval) | tojson }}
+      - "-notifier.blackhole"
+      - "-httpListenAddr=:8880"
+    volumes:
+      - "./delivery/rules.yml:/etc/vmalert/rules.yml:ro"
+    ports: [8880]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8880/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes: {}

@@ -1,0 +1,147 @@
+name: cloudflare
+summary: Cloudflare analytics exporter for edge traffic, cache, errors, origin time and free-plan limits of R2, Workers and D1.
+requires:
+  metrics: {}
+defaults:
+  zones: []
+  accounts: []
+  refresh_seconds: 300
+  window_seconds: 900
+  lag_seconds: 180
+  top_hosts: 20
+  top_countries: 10
+  limits: {}
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  anyOf:
+    - required: [zones]
+      properties: {zones: {minItems: 1}}
+    - required: [accounts]
+      properties: {accounts: {minItems: 1}}
+  properties:
+    zones:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        pattern: '^[a-z0-9.-]+\.[a-z]{2,}$'
+    accounts:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        pattern: "^[0-9a-f]{32}$"
+    refresh_seconds:
+      type: integer
+      minimum: 60
+    window_seconds:
+      type: integer
+      minimum: 300
+      maximum: 86400
+    lag_seconds:
+      type: integer
+      minimum: 0
+      maximum: 3600
+    top_hosts:
+      type: integer
+      minimum: 1
+      maximum: 100
+    top_countries:
+      type: integer
+      minimum: 1
+      maximum: 50
+    limits:
+      type: object
+      additionalProperties: false
+      properties:
+        workers_requests_day: {type: number, exclusiveMinimum: 0}
+        r2_class_a_month: {type: number, exclusiveMinimum: 0}
+        r2_class_b_month: {type: number, exclusiveMinimum: 0}
+        r2_storage_bytes: {type: number, exclusiveMinimum: 0}
+        d1_rows_read_day: {type: number, exclusiveMinimum: 0}
+        d1_rows_written_day: {type: number, exclusiveMinimum: 0}
+        d1_storage_bytes: {type: number, exclusiveMinimum: 0}
+    expose:
+      type: array
+      items:
+        enum: [9131]
+services:
+  cloudflare-exporter:
+    description: Polls the Cloudflare GraphQL Analytics API for the configured zones and accounts and serves the numbers to vmagent.
+    memory: 64m
+    cpus: 0.5
+    metrics:
+      - ayeops_cloudflare_requests
+      - ayeops_cloudflare_origin_errors
+      - ayeops_cloudflare_usage
+      - ayeops_cloudflare_query_success
+    alerts:
+      - target-down
+      - cloudflare-edge-5xx
+      - cloudflare-origin-errors
+      - cloudflare-cache-ratio-drop
+      - cloudflare-free-limit
+      - cloudflare-query-failing
+    logs: docker
+    status:
+      internal: analytics of the edge, the proxied sites carry the public marks
+alerts:
+  - name: cloudflare-edge-5xx
+    title: Cloudflare edge answers 5xx
+    expr: >-
+      (sum by (zone) (ayeops_cloudflare_requests{status_class="5xx"}) or sum by (zone) (ayeops_cloudflare_requests) * 0)
+      / sum by (zone) (ayeops_cloudflare_requests) > bool 0.02
+      and sum by (zone) (ayeops_cloudflare_requests) >= 100
+    for: 10m
+    severity: warning
+    summary: "More than 2% of the requests to {{ .Labels.zone }} end in 5xx at the edge"
+    runbook: cloudflare-edge-5xx
+    dashboard: {uid: ayeops-cloudflare, panel: 4}
+  - name: cloudflare-origin-errors
+    title: Cloudflare cannot reach the origin
+    expr: sum by (zone, hostname) (ayeops_cloudflare_origin_errors) > bool 0
+    for: 5m
+    severity: warning
+    summary: "Cloudflare answers 520-526 for {{ .Labels.hostname }}"
+    runbook: cloudflare-origin-errors
+  - name: cloudflare-cache-ratio-drop
+    title: Cloudflare cache hit ratio dropped
+    expr: >-
+      (sum by (zone) (ayeops_cloudflare_requests{cache_status=~"hit|stale|updating|revalidated"}) or sum by (zone) (ayeops_cloudflare_requests) * 0)
+      / sum by (zone) (ayeops_cloudflare_requests)
+      < bool 0.5 * (sum by (zone) (ayeops_cloudflare_requests{cache_status=~"hit|stale|updating|revalidated"} offset 1d)
+      / sum by (zone) (ayeops_cloudflare_requests offset 1d))
+      and sum by (zone) (ayeops_cloudflare_requests) >= 100
+    for: 30m
+    severity: info
+    summary: "The cache hit ratio of {{ .Labels.zone }} is less than half of the same time yesterday"
+    runbook: cloudflare-cache-ratio-drop
+  - name: cloudflare-free-limit
+    title: Cloudflare free limit 80% used
+    expr: ayeops_cloudflare_usage / ayeops_cloudflare_free_limit > bool 0.8
+    for: 15m
+    severity: warning
+    summary: "{{ .Labels.resource }} of account {{ .Labels.account }} passed 80% of its free limit"
+    runbook: cloudflare-free-limit
+  - name: cloudflare-query-failing
+    title: Cloudflare analytics query failing
+    expr: ayeops_cloudflare_query_success == bool 0
+    for: 30m
+    severity: warning
+    summary: "The {{ .Labels.dataset }} query for {{ .Labels.target }} has failed for 30 minutes"
+    runbook: cloudflare-query-failing
+dashboards: [cloudflare.json]
+files:
+  - src: files/cloudflare_exporter.py
+    dest: cloudflare/cloudflare_exporter.py
+permissions:
+  - issuer: Cloudflare
+    credential: custom API token, read only
+    env: [AYE_CLOUDFLARE_ANALYTICS_TOKEN]
+    grants:
+      - "{% if settings.zones %}Zone > Zone > Read and Zone > Analytics > Read on {{ settings.zones | join(', ') }}{% endif %}"
+      - "{% if settings.accounts %}Account > Account Analytics > Read on account {{ settings.accounts | join(', ') }}{% endif %}"
+      - "no edit permission and no other zone or account"

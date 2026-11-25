@@ -1,0 +1,305 @@
+version: 1
+ayeops: ">=0.3,<0.4"
+project: acme
+runbook_base_url: https://runbooks.acme.example
+timezone: Europe/Kyiv
+alerting:
+  contact: telegram
+mail:
+  host: smtp.mail.example
+  port: 587
+  from: ops@acme.example
+  from_name: Acme Ops
+brand:
+  name: Acme
+  logo: brand/acme.svg
+  logo_dark: brand/acme-dark.svg
+status_page:
+  hostname: status.acme.example
+  title: Acme
+  locale: en
+hosts:
+  central:
+    arch: arm64
+    zone: datacenter
+    provider: example-cloud
+    address: 10.8.0.1
+    public_bind: 10.8.0.1
+    memory: 12g
+    reserved:
+      postgres: 2g
+    compose:
+      - apps/web.compose.yaml
+    modules:
+      metrics:
+        role: server
+        retention: 90d
+        expose: [8428]
+      logs:
+        role: server
+        retention: 30d
+        expose: [3100]
+      node: {}
+      probes:
+        http:
+          - https://acme.example
+          - https://status.acme.example
+          - https://mcp.acme.example
+          - https://grafana.ops.acme.example
+          - https://portal.ops.acme.example
+        domains:
+          - acme.example
+      grafana:
+        root_url: https://grafana.ops.acme.example
+        dashboards: dashboards
+        datasources:
+          - name: Acme orders
+            uid: acme-orders
+            type: postgres
+            url: 10.8.0.1:5432
+            database: acme
+            user: grafana_ro
+            password_env: AYE_GRAFANA_PG_PASSWORD
+      ingress:
+        domain: ops.acme.example
+        provider: cloudflare
+        routes:
+          grafana: grafana:3000
+          hub: agentgateway:3000
+          metrics: victoriametrics:8428
+          oncall: goalert:8081
+          portal: portal:8080
+      auth:
+        provider: google
+        emails: [ops@acme.example, oncall@acme.example]
+        admins: [ops@acme.example]
+      portal: {}
+      containers: {}
+      reconciler: {}
+      oncall:
+        url: https://oncall.ops.acme.example
+        person:
+          username: oncall
+          name: Acme On-call
+          email: oncall@acme.example
+          telegram_chat_id: "100200300"
+        quiet_hours:
+          start: "23:00"
+          end: "08:00"
+      autopilot:
+        critical_services: [web]
+      delivery:
+        branches: [main]
+        expect:
+          - step: deploy
+            every: 7d
+          - step: ci
+            every: 2d
+      github:
+        accounts:
+          - org: acme
+            included_minutes: 2000
+        reports: [acme/shop]
+      cloudflare:
+        zones: [acme.example]
+        accounts: [0123456789abcdef0123456789abcdef]
+      ai-usage:
+        providers: [anthropic, openai]
+        monthly_budget_usd: {anthropic: 50}
+      incidents: {}
+      status: {}
+      mcp:
+        sources:
+          grafana:
+            kind: grafana
+            description: Dashboards, alert rules and datasources of the acme Grafana.
+          metrics:
+            kind: victoriametrics
+            description: PromQL and metric metadata over every host of acme.
+          backups:
+            kind: s3
+            description: The off-site backup bucket on the central Garage, with sizes and ages.
+            endpoint: http://garage:3900
+            region: garage
+          catalog:
+            kind: catalog
+            description: Hosts and services of the acme catalog with their alerts and runbooks.
+      objectstore:
+        bucket: acme-offsite
+        quota: 40g
+        expose: [3900]
+  edge:
+    arch: amd64
+    zone: office
+    icon: ubuntu
+    memory: 16g
+    units:
+      acme-db: postgresql.service
+    modules:
+      metrics:
+        role: agent
+        scrape_interval: 60s
+        remote_write:
+          host: central
+      logs:
+        role: agent
+        journald: true
+        push:
+          host: central
+      node:
+        battery: true
+        reboot: true
+        textfile_dir: /var/lib/ayeops/textfile
+      containers: {}
+      smart: {}
+      gpu: {}
+      network:
+        interfaces: [enp3s0, wlan0]
+        wifi: true
+      disk-forecast: {}
+      probes:
+        internet: true
+        gateway: 192.168.1.1
+      backups:
+        timezone: Europe/Berlin
+        jobs:
+          acme-db:
+            schedule: "30 4 * * *"
+            grace: 1h
+            output: /var/backups/acme/acme-$(date -u +%Y%m%dT%H%MZ).dump
+            command: >-
+              runuser -u postgres -- pg_dump --format=custom --file="$AYE_BACKUP_OUTPUT" acme
+              && find /var/backups/acme -name 'acme-*.dump' -mtime +14 -delete
+      offsite:
+        source: /var/backups/acme/*.dump
+        target:
+          host: central
+        schedule: "05:30"
+        timezone: Europe/Berlin
+      hygiene: {}
+      image-updates:
+        timezone: Europe/Berlin
+      updates:
+        repositories: [acme/web, acme/ops]
+        timezone: Europe/Berlin
+        allowed_commands: ['^make generate$']
+      vulns:
+        timezone: Europe/Berlin
+      eol:
+        timezone: Europe/Berlin
+        components:
+          - name: acme web app
+            product: django
+            cycle: "5.2"
+      sentinel:
+        watch: central
+services:
+  web:
+    host: central
+    description: Public website of acme, served by nginx behind the CDN.
+    criticality: critical
+    url: https://acme.example
+    depends_on:
+      - cdn
+    metrics:
+      - probe_success
+      - probe_duration_seconds
+    alerts:
+      - name: web-down
+        title: Website down
+        expr: probe_success{instance="https://acme.example"} == bool 0
+        for: 3m
+        severity: critical
+        summary: https://acme.example does not answer with 2xx
+        runbook: web-down
+    logs: docker
+    status:
+      public: Website
+      probe: https://acme.example
+    cloud:
+      - name: cdn
+        limit: 1 TB egress per month
+        on_exceed: traffic above the limit is billed per GB
+  acme-db:
+    host: edge
+    description: PostgreSQL database of the acme shop on the office server, dumped every night and copied to central.
+    criticality: high
+    icon: postgresql
+    data:
+      engine: postgres
+      backup: acme-db
+      rpo: 26h
+      rto: 4h
+      copies: [host, offsite]
+    metrics:
+      - ayeops_backup_last_success_timestamp_seconds
+      - ayeops_backup_last_size_bytes
+    alerts:
+      - name: acme-db-dump-small
+        title: Database dump suspiciously small
+        expr: max by (host) (ayeops_backup_last_size_bytes{backup="acme-db"}) < bool 1048576
+        for: 10m
+        severity: warning
+        summary: The newest dump of the acme database is smaller than 1 MiB
+        runbook: acme-db-dump-small
+    logs: journald
+    status:
+      internal:
+        reason: customers reach the shop, never its database
+        until: 2031-06-30
+  mcp:
+    host: central
+    description: Public MCP endpoint that lets AI assistants read the acme catalog.
+    url: https://mcp.acme.example
+    icon: mcp
+    clients:
+      - external:ai-assistants
+    metrics:
+      - probe_success
+      - probe_duration_seconds
+      - mcp_tool_calls_total
+    alerts:
+      - name: mcp-down
+        title: MCP endpoint down
+        expr: probe_success{instance="https://mcp.acme.example"} == bool 0
+        for: 3m
+        severity: critical
+        summary: https://mcp.acme.example does not answer with 2xx
+        runbook: mcp-down
+      - name: mcp-calls-flow
+        title: MCP tool calls
+        severity: warning
+        runbook: mcp-calls-flow
+        baseline:
+          metric: mcp_tool_calls_total{service="mcp"}
+          by: [tool]
+          above: 5
+          empty_share: 0.5
+          quiet:
+            - {days: [sun], from: "03:00", to: "04:00"}
+          skip:
+            - match: {tool: legacy-search}
+              reason: legacy-search is retired and answers only until the clients move
+              until: 2030-01-01
+    logs: docker
+    status:
+      public: MCP endpoint
+externals:
+  ai-assistants:
+    title: AI assistants
+  telegram-api:
+    title: Telegram Bot API
+    url: https://api.telegram.org
+flows:
+  - from: central/grafana
+    to: external:telegram-api
+    label: alert messages
+    state: live
+  - from: web
+    to: cdn
+    label: pages and assets
+    state: live
+  - from: web
+    to: central/victoriametrics
+    label: request metrics
+    state: planned

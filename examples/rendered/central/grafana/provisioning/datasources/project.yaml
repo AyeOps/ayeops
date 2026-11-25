@@ -1,0 +1,19 @@
+apiVersion: 1
+datasources:
+- access: proxy
+  editable: false
+  isDefault: false
+  jsonData:
+    connMaxLifetime: 60
+    database: acme
+    maxIdleConns: 0
+    maxIdleConnsAuto: false
+    maxOpenConns: 2
+    sslmode: disable
+  name: Acme orders
+  secureJsonData:
+    password: ${AYE_GRAFANA_PG_PASSWORD}
+  type: grafana-postgresql-datasource
+  uid: acme-orders
+  url: 10.8.0.1:5432
+  user: grafana_ro

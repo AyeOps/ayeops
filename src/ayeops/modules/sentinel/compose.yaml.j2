@@ -1,0 +1,27 @@
+services:
+  sentinel:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/sentinel.py"]
+    user: "65534:65534"
+    environment:
+      AYE_TELEGRAM_BOT_TOKEN: "${AYE_TELEGRAM_BOT_TOKEN:?set AYE_TELEGRAM_BOT_TOKEN}"
+      AYE_TELEGRAM_CHAT_ID: "${AYE_TELEGRAM_CHAT_ID:?set AYE_TELEGRAM_CHAT_ID}"
+      AYE_SENTINEL_PING_URL: "${AYE_SENTINEL_PING_URL:-}"
+      AYE_SENTINEL_PROJECT: {{ project | tojson }}
+      AYE_SENTINEL_HOST: {{ host.name | tojson }}
+      AYE_SENTINEL_WATCH: {{ settings.watch | tojson }}
+      AYE_SENTINEL_CHECKS: {{ sentinel.checks | tojson | tojson }}
+      AYE_SENTINEL_FAILURES_BEFORE_ALERT: {{ settings.failures_before_alert | string | tojson }}
+      AYE_SENTINEL_REMINDER: {{ settings.reminder | tojson }}
+      AYE_SENTINEL_INTERVAL: {{ settings.interval | tojson }}
+      AYE_SENTINEL_TIMEOUT: {{ settings.timeout | tojson }}
+      AYE_SENTINEL_RUNBOOK: {{ sentinel.runbook | tojson }}
+      AYE_SENTINEL_PORT: "9134"
+    volumes:
+      - "./sentinel/sentinel.py:/app/sentinel.py:ro"
+    ports: [9134]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9134/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3

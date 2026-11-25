@@ -1,0 +1,68 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - name: tag matches the version in pyproject.toml
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(uv version --short)"
+          if [ "$TAG" != "v$version" ]; then
+            echo "tag $TAG does not match pyproject.toml version $version, tag v$version instead"
+            exit 1
+          fi
+      - name: tagged commit is on main
+        run: |
+          git merge-base --is-ancestor HEAD origin/main || {
+            echo "$(git rev-parse HEAD) is not on main, merge it before tagging"
+            exit 1
+          }
+      - name: a full mutation run passed on the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          sha="$(git rev-parse HEAD)"
+          passed="$(gh api "repos/$GH_REPO/actions/workflows/mutants.yml/runs?head_sha=$sha&event=workflow_dispatch&status=success" --jq .total_count)"
+          if [ "$passed" = "0" ]; then
+            echo "no full mutation run passed on $sha: run the mutants workflow on main and tag once it is green"
+            exit 1
+          fi
+      - name: build
+        run: uv build --no-sources
+      - name: provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+      - name: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" dist/* --verify-tag --generate-notes --title "AyeOps $TAG"

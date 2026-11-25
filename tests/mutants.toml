@@ -1,0 +1,119 @@
+[modules."src/ayeops/backups.py"]
+tests = ["tests/test_backups.py"]
+score = 93.1
+
+[modules."src/ayeops/baseline.py"]
+tests = ["tests/test_baseline.py"]
+score = 97.9
+
+[modules."src/ayeops/checks_sql.py"]
+tests = ["tests/test_sql_checks.py"]
+score = 100.0
+
+[modules."src/ayeops/dashboards.py"]
+tests = ["tests/test_dashboards.py"]
+score = 98.9
+
+[modules."src/ayeops/datastores.py"]
+tests = ["tests/test_datastores.py"]
+score = 95.7
+
+[modules."src/ayeops/defaults.py"]
+tests = ["tests/test_defaults.py"]
+score = 97.4
+
+[modules."src/ayeops/deploy.py"]
+tests = ["tests/test_deploy.py"]
+score = 78.6
+
+[modules."src/ayeops/eol.py"]
+tests = ["tests/test_eol.py"]
+score = 94.9
+
+[modules."src/ayeops/i18n.py"]
+tests = ["tests/test_portal_i18n.py"]
+score = 98.4
+
+[modules."src/ayeops/inventory.py"]
+tests = ["tests/test_inventory.py"]
+score = 85.5
+
+[modules."src/ayeops/modules/eol/files/eol_agent.py"]
+tests = ["tests/test_eol.py"]
+score = 93.1
+
+[modules."src/ayeops/modules/hygiene/files/hygiene_runner.py"]
+tests = ["tests/test_hygiene.py"]
+score = 96.9
+
+[modules."src/ayeops/modules/mcp/files/catalog_server.py"]
+tests = ["tests/test_mcp_catalog_server.py"]
+score = 82.0
+
+[modules."src/ayeops/modules/objectstore/files/reststore_admin.py"]
+tests = ["tests/test_reststore.py", "tests/test_reststore_admin.py"]
+score = 87.9
+
+[modules."src/ayeops/modules/oncall/files/oncall_bridge.py"]
+tests = ["tests/test_oncall_bridge.py", "tests/test_oncall_topics.py"]
+score = 78.0
+
+[modules."src/ayeops/modules/reconciler/files/reconciler.py"]
+tests = ["tests/test_reconciler.py"]
+score = 81.7
+
+[modules."src/ayeops/modules/sentinel/files/sentinel.py"]
+tests = ["tests/test_sentinel.py"]
+score = 88.7
+
+[modules."src/ayeops/modules/updates/files/updates_agent.py"]
+tests = ["tests/test_updates.py"]
+score = 85.8
+
+[modules."src/ayeops/modules/vulns/files/vulns_agent.py"]
+tests = ["tests/test_vulns.py"]
+score = 92.3
+
+[modules."src/ayeops/mounts.py"]
+tests = ["tests/test_deploy.py"]
+score = 100.0
+
+[modules."src/ayeops/portal/disks.py"]
+tests = ["tests/test_portal_i18n.py"]
+score = 99.5
+
+[modules."src/ayeops/promql.py"]
+tests = ["tests/test_promql.py", "tests/test_sql_checks.py"]
+score = 100.0
+
+[modules."src/ayeops/render_index.py"]
+tests = ["tests/test_render_index.py"]
+score = 97.4
+
+[modules."src/ayeops/sentinel.py"]
+tests = ["tests/test_sentinel_module.py"]
+score = 97.3
+
+[modules."src/ayeops/status_deploy.py"]
+tests = ["tests/test_status_deploy.py"]
+score = 74.3
+
+[modules."src/ayeops/strict.py"]
+tests = ["tests/test_injection.py", "tests/test_strict.py"]
+score = 95.3
+
+[modules."src/ayeops/texthygiene.py"]
+tests = ["tests/test_texthygiene.py"]
+score = 96.2
+
+[modules."src/ayeops/unused.py"]
+tests = ["tests/test_unused.py"]
+score = 95.4
+
+[modules."src/ayeops/up.py"]
+tests = ["tests/test_up.py"]
+score = 84.1
+
+[modules."src/ayeops/yamlkeys.py"]
+tests = ["tests/test_yamlkeys.py"]
+score = 92.9

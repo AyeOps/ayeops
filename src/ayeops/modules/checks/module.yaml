@@ -1,0 +1,91 @@
+name: checks
+summary: Declarative checks of your services, HTTP, TCP and DNS through blackbox-exporter, sandboxed scripts and read-only SQL queries through textfile runners.
+requires:
+  metrics: {}
+defaults:
+  dns_server: 1.1.1.1
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    dns_server:
+      type: string
+      pattern: '^[A-Za-z0-9.:\[\]-]+$'
+    expose:
+      type: array
+      items:
+        enum: [9116]
+services:
+  check-blackbox:
+    description: Runs the HTTP, TCP and DNS checks declared under services.<name>.checks from this host.
+    memory: 64m
+    cpus: 0.25
+    metrics: [probe_success, probe_duration_seconds]
+    alerts: [target-down]
+    logs: docker
+    status:
+      internal: the checks themselves, the checked services carry the public marks
+  check-scripts:
+    description: Runs the script checks without network access and writes their results for node-exporter.
+    memory: 64m
+    cpus: 0.25
+    metrics: [ayeops_check_success, ayeops_check_duration_seconds, ayeops_checks_heartbeat_timestamp_seconds]
+    alerts: [check-runner-stale]
+    logs: docker
+    status:
+      internal: the checks themselves, the checked services carry the public marks
+  check-scripts-net:
+    description: Runs the script checks that declare network true and writes their results for node-exporter.
+    memory: 64m
+    cpus: 0.25
+    metrics: [ayeops_check_success, ayeops_check_duration_seconds, ayeops_checks_heartbeat_timestamp_seconds]
+    alerts: [check-runner-stale]
+    logs: docker
+    status:
+      internal: the checks themselves, the checked services carry the public marks
+  check-sql:
+    description: Runs the read-only SQL checks against their Postgres datasources and writes the values for node-exporter.
+    memory: 64m
+    cpus: 0.25
+    metrics: [ayeops_check_sql_value, ayeops_check_sql_ok, ayeops_check_sql_duration_seconds, ayeops_checks_heartbeat_timestamp_seconds]
+    alerts: [check-runner-stale]
+    logs: docker
+    status:
+      internal: the checks themselves, the checked services carry the public marks
+alerts:
+  - name: check-runner-stale
+    title: Script check runner stale
+    expr: time() - ayeops_checks_heartbeat_timestamp_seconds > bool 300
+    for: 5m
+    severity: warning
+    summary: "The {{ .Labels.runner }} script runner on {{ .Labels.host }} has not written results for 5 minutes"
+    runbook: check-runner-stale
+dashboards: []
+files:
+  - src: files/blackbox.yml.j2
+    dest: checks/blackbox.yml
+    when: checks.probes
+    template: true
+  - src: files/scripts.json.j2
+    dest: checks/scripts.json
+    when: checks.scripts.checks
+    template: true
+  - src: files/scripts-net.json.j2
+    dest: checks/scripts-net.json
+    when: checks.scripts_net.checks
+    template: true
+  - src: files/check_runner.py
+    dest: checks/check_runner.py
+    when: checks.runner
+  - src: files/sql-checks.sh.j2
+    dest: checks/sql-checks.sh
+    when: checks.sql.checks
+    template: true
+  - src: files/sql_runner.sh
+    dest: checks/sql_runner.sh
+    when: checks.sql.checks
+  - src: files/sql_metrics.awk
+    dest: checks/sql_metrics.awk
+    when: checks.sql.checks

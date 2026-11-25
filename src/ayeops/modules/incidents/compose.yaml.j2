@@ -1,0 +1,48 @@
+services:
+  incidents-agent:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/incidents_agent.py"]
+    user: "65534:65534"
+    group_add: [{{ grafana_reader.group | tojson }}]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      AYE_INCIDENTS_GRAFANA: "http://grafana:3000"
+      {{ grafana_reader.env }}: {{ grafana_reader.token_file | tojson }}
+      AYE_INCIDENTS_SERVICES: {{ incidents.services | tojson | tojson }}
+      AYE_INCIDENTS_HOSTS: {{ incidents.hosts | tojson | tojson }}
+      AYE_INCIDENTS_HOST_MODULES: {{ incidents.host_modules | tojson | tojson }}
+      AYE_INCIDENTS_HOST_ALERTS: {{ incidents.host_alerts | tojson | tojson }}
+      AYE_INCIDENTS_VICTORIAMETRICS: "http://victoriametrics:8428"
+      AYE_INCIDENTS_ROUTES: {{ incidents.routes | tojson | tojson }}
+      AYE_INCIDENTS_NIGHT_START: {{ incidents.night.start | tojson }}
+      AYE_INCIDENTS_NIGHT_END: {{ incidents.night.end | tojson }}
+      AYE_INCIDENTS_TIMEZONE: {{ incidents.night.timezone | tojson }}
+      AYE_INCIDENTS_DOWNTIME_SEVERITIES: {{ settings.downtime_severities | join(",") | tojson }}
+      AYE_INCIDENTS_DEGRADED_SEVERITIES: {{ settings.degraded_severities | join(",") | tojson }}
+      AYE_INCIDENTS_REFRESH_SECONDS: {{ settings.refresh_seconds | string | tojson }}
+      AYE_INCIDENTS_BACKFILL_DAYS: {{ settings.backfill_days | string | tojson }}
+{% if "oncall" in modules %}
+      AYE_INCIDENTS_ONCALL: "http://oncall-bridge:8080"
+      AYE_INCIDENTS_ONCALL_SECRET: "${AYE_ONCALL_ACKS_SECRET:?set AYE_ONCALL_ACKS_SECRET}"
+{% endif %}
+      AYE_INCIDENTS_STATE: /tmp
+      AYE_INCIDENTS_PORT: "9136"
+    volumes:
+      - "./incidents/incidents_agent.py:/app/incidents_agent.py:ro"
+      - "/usr/share/zoneinfo:/usr/share/zoneinfo:ro"
+      - "incidents-journal:/tmp"
+      - {{ grafana_reader.volume | tojson }}
+    depends_on:
+      {{ grafana_reader.service }}:
+        condition: service_healthy
+    ports: [9136]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9136/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+volumes:
+  incidents-journal: {}
