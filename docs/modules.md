@@ -132,7 +132,21 @@ writes to `http://<central address>:8428/api/v1/write`; the central host must ru
 and expose `8428` on a private `public_bind` address, since VictoriaMetrics has no
 authentication. A laptop that sleeps keeps its samples on disk and replays them on wake.
 
-Alerts: `target-down`.
+While storage is out of reach, vmagent buffers to `/vmagent-data` up to `queue_max`, then drops
+the oldest blocks. With `-remoteWrite.inmemoryQueues=1` it sends freshly scraped samples ahead of
+that backlog, so a host that reconnects reports at once and its backlog fills in behind; samples
+arrive out of order, which VictoriaMetrics accepts, and so must a `remote_write: {url: ...}`
+store, as it already must for vmagent's parallel queues. During an outage the newest blocks wait
+in the in-memory queue, a few hundred blocks, before they move to disk, so a hard crash of the
+host loses them; `docker compose stop` writes them to disk first.
+
+Alerts: `target-down`; `metrics-shipping-backlog` (warning) when for 15 minutes the queue of a
+host holds more than 30 minutes of its own traffic, compressed bytes as
+`rate(vmagent_remotewrite_block_size_bytes_sum[1h])` measures them, or more than half of its
+room; `metrics-shipping-dropped` (critical) when in the last hour the full queue dropped blocks
+or storage rejected one with `400` or `409`. The queue's own gauges travel through the queue:
+while a host cannot reach storage at all, `host-down` fires and holds both back, and the drops
+of such an outage show once the host reports again.
 
 ## logs
 

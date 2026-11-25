@@ -72,6 +72,14 @@
       "severity": "critical",
       "title": "MCP endpoint down"
     },
+    "aye-metrics-shipping-dropped": {
+      "expr": "sum by (host, project, group) (increase(vm_persistentqueue_blocks_dropped_total[1h])) + sum by (host, project, group) (increase(vmagent_remotewrite_packets_dropped_total[1h])) > bool 0",
+      "module": "metrics",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-shipping-dropped.md",
+      "service": null,
+      "severity": "critical",
+      "title": "vmagent drops metrics"
+    },
     "aye-objectstore-down": {
       "expr": "min by (host, project, group) (up{job=\"garage\"}) == bool 0",
       "module": "objectstore",

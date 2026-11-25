@@ -1882,6 +1882,84 @@ groups:
     noDataState: Alerting
     title: Scrape target down
     uid: aye-target-down
+  - annotations:
+      __dashboardUid__: ayeops-health
+      __panelId__: '12'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-shipping-backlog.md
+      summary: vmagent on {{ .Labels.host }} holds more than 30 minutes of its samples or half its queue room unshipped
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool 1800 * sum by (host, project, group) (rate(vmagent_remotewrite_block_size_bytes_sum[1h]))) + (sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool sum by (host, project, group) (vm_persistentqueue_free_disk_space_bytes))) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool 1800 * sum by (host, project, group) (rate(vmagent_remotewrite_block_size_bytes_sum[1h]))) + (sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool sum by (host, project, group) (vm_persistentqueue_free_disk_space_bytes)))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: metrics
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: vmagent falls behind shipping metrics
+    uid: aye-metrics-shipping-backlog
+  - annotations:
+      __dashboardUid__: ayeops-health
+      __panelId__: '12'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-shipping-dropped.md
+      summary: 'vmagent on {{ .Labels.host }} dropped metrics: its full queue discarded the oldest, or storage rejected a block'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (sum by (host, project, group) (increase(vm_persistentqueue_blocks_dropped_total[1h])) + sum by (host, project, group) (increase(vmagent_remotewrite_packets_dropped_total[1h])) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (sum by (host, project, group) (increase(vm_persistentqueue_blocks_dropped_total[1h])) + sum by (host, project, group) (increase(vmagent_remotewrite_packets_dropped_total[1h])) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 0m
+    labels:
+      module: metrics
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: vmagent drops metrics
+    uid: aye-metrics-shipping-dropped
 - folder: AyeOps
   interval: 1m
   name: network

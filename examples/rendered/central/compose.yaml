@@ -175,7 +175,7 @@ services:
       timeout: 10s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: 94711f86cda21a33
+      io.ayeops.config-hash: 77ca902f4ea2e3a0
       io.ayeops.module: autopilot
       io.ayeops.service: autopilot
     logging:
@@ -575,7 +575,7 @@ services:
       timeout: 5s
     image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
     labels:
-      io.ayeops.config-hash: 88f8055695b3fc6c
+      io.ayeops.config-hash: 56c511ac3c22f263
       io.ayeops.module: grafana
       io.ayeops.service: grafana
     logging:
@@ -764,7 +764,7 @@ services:
       timeout: 5s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: a6649c240c6d7fac
+      io.ayeops.config-hash: 34aca0cc81b0951d
       io.ayeops.module: mcp
       io.ayeops.service: mcp-catalog
     logging:
@@ -1379,6 +1379,7 @@ services:
     - -remoteWrite.label=project=acme
     - -remoteWrite.tmpDataPath=/vmagent-data
     - -remoteWrite.maxDiskUsagePerURL=1GB
+    - -remoteWrite.inmemoryQueues=1
     - -httpListenAddr=:8429
     cpus: 0.5
     healthcheck:

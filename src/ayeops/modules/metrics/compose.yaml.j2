@@ -27,6 +27,7 @@ services:
 {% endif %}
       - "-remoteWrite.tmpDataPath=/vmagent-data"
       - {{ ("-remoteWrite.maxDiskUsagePerURL=" ~ settings.queue_max) | tojson }}
+      - "-remoteWrite.inmemoryQueues=1"
       - "-httpListenAddr=:8429"
     volumes:
       - "./vmagent/scrape.yaml:/etc/vmagent/scrape.yaml:ro"
