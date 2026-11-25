@@ -10,6 +10,7 @@ GRAFANA_PORT = 3000
 GRAFANA_HEALTHY = '"database": "ok"'
 KINDS = ("http", "fresh", "tls")
 RUNBOOK = "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-central-down.md"
+DIGEST_SOURCE = "samples"
 
 Problem = tuple[str, str, str]
 
@@ -80,10 +81,21 @@ def sentinel_checks(manifest: Manifest, settings: dict[str, Any]) -> list[dict[s
     return merged_checks(default_checks(manifest, watch), list(settings.get("checks") or []))
 
 
+def digest_url(settings: dict[str, Any], checks: list[dict[str, Any]]) -> str:
+    own = (settings.get("digest") or {}).get("url")
+    if own:
+        return str(own)
+    for check in checks:
+        if check["name"] == DIGEST_SOURCE and check.get("kind") == "fresh":
+            return str(check.get("url") or "")
+    return ""
+
+
 def sentinel_context(manifest: Manifest, settings: dict[str, Any] | None) -> dict[str, Any]:
     if settings is None:
         return {}
-    return {"checks": sentinel_checks(manifest, settings), "runbook": RUNBOOK}
+    checks = sentinel_checks(manifest, settings)
+    return {"checks": checks, "runbook": RUNBOOK, "digest_url": digest_url(settings, checks)}
 
 
 def check_problem(check: dict[str, Any]) -> str | None:
@@ -144,4 +156,13 @@ def sentinel_problems(manifest: Manifest) -> list[Problem]:
             problem = check_problem(check)
             if problem:
                 problems.append((f"{path}.checks", "sentinel-checks", problem))
+        if settings.get("digest") and not digest_url(settings, checks):
+            problems.append(
+                (
+                    f"{path}.digest",
+                    "sentinel-digest",
+                    f"the digest reads the backup metrics from the VictoriaMetrics of {watch} and"
+                    " there is no samples check to take its address from: set digest.url",
+                )
+            )
     return problems

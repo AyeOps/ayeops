@@ -193,6 +193,8 @@ hosts:
             cycle: "5.2"
       sentinel:
         watch: central
+        digest:
+          at: "08:00"
 services:
   web:
     host: central
