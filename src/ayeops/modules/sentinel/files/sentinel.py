@@ -318,8 +318,8 @@ def digest_text(config: Config, backups: Sequence[Backup] | None, error: str, no
     elif not backups:
         head.append(f"🟠 No backups reported to {config.watch}: no dump job, no off-site copy")
     else:
-        verdicts = [backup_line(backup, now) for backup in backups]
-        bad = [backup.label for backup, (ok, _) in zip(backups, verdicts, strict=True) if not ok]
+        rows = [(backup.label, *backup_line(backup, now)) for backup in backups]
+        bad = [label for label, ok, _ in rows if not ok]
         if bad:
             names = ", ".join(bad[:NAMED])
             if len(bad) > NAMED:
@@ -327,7 +327,7 @@ def digest_text(config: Config, backups: Sequence[Backup] | None, error: str, no
             head.append(f"🟠 {len(bad)} of {len(backups)} backups stale or failed: {names}")
         else:
             head.append(f"✅ All {len(backups)} backups fresh")
-        lines = [line for ok, line in verdicts if not ok] + [line for ok, line in verdicts if ok]
+        lines = [line for _, ok, line in rows if not ok] + [line for _, ok, line in rows if ok]
     return fit(head, lines, tail, DIGEST_LIMIT)
 
 
@@ -677,13 +677,14 @@ class Sentinel:
             self.config.failures_before_alert,
             self.config.reminder_seconds,
         )
-        delivered = False
+        settled = current
         if notice is not None:
             delivered = self.send(notice_text(self.config, previous, current, notice, now))
             self.notices[notice] += int(delivered)
             self.notice_failures[notice] += int(not delivered)
             self.last_notice_ok = int(delivered)
             log_json({"event": notice, "delivered": delivered, "streak": current.streak})
+            settled = settle(previous, current, notice, delivered)
         before = {outcome.name: outcome for outcome in self.outcomes}
         for outcome in outcomes:
             if changed(before.get(outcome.name), outcome):
@@ -695,7 +696,7 @@ class Sentinel:
                     }
                 )
         with self.lock:
-            self.state = settle(previous, current, notice, delivered)
+            self.state = settled
             self.outcomes = outcomes
             self.last_round = now
         self.digest(now)
@@ -761,8 +762,14 @@ def digest_from(env: Mapping[str, str]) -> tuple[str, str, str]:
     parse_clock(at)
     time_zone(zone)
     if not url.startswith(("http://", "https://")):
-        raise ValueError("AYE_SENTINEL_DIGEST_URL must be the http(s) url of /api/v1/query")
+        raise ValueError(
+            f"AYE_SENTINEL_DIGEST_URL must be the http(s) url of /api/v1/query, not {url!r}"
+        )
     return at, zone, url
+
+
+def env_seconds(env: Mapping[str, str], name: str, default: int) -> int:
+    return parse_duration(env[name]) if name in env else default
 
 
 def config_from(env: Mapping[str, str]) -> Config:
@@ -776,10 +783,10 @@ def config_from(env: Mapping[str, str]) -> Config:
         origin=env.get("AYE_SENTINEL_HOST", socket.gethostname()),
         watch=env["AYE_SENTINEL_WATCH"],
         checks=parse_checks(env["AYE_SENTINEL_CHECKS"]),
-        interval_seconds=parse_duration(env.get("AYE_SENTINEL_INTERVAL", "60s")),
-        timeout_seconds=parse_duration(env.get("AYE_SENTINEL_TIMEOUT", "10s")),
+        interval_seconds=env_seconds(env, "AYE_SENTINEL_INTERVAL", 60),
+        timeout_seconds=env_seconds(env, "AYE_SENTINEL_TIMEOUT", 10),
         failures_before_alert=threshold,
-        reminder_seconds=parse_duration(env.get("AYE_SENTINEL_REMINDER", "6h")),
+        reminder_seconds=env_seconds(env, "AYE_SENTINEL_REMINDER", 21600),
         ping_url=ping_url,
         runbook=env.get("AYE_SENTINEL_RUNBOOK", ""),
         digest_at=digest_at,

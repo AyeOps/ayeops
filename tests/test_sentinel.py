@@ -1595,6 +1595,8 @@ def test_time_zone_falls_back_to_utc_only_for_utc(monkeypatch: pytest.MonkeyPatc
         (START, "23:59", "UTC", START + 23 * HOUR + 59 * 60),
         (START, "08:00", "Europe/Kyiv", START + 6 * HOUR),
         (START + 7 * HOUR, "08:00", "Europe/Kyiv", START + DAY + 6 * HOUR),
+        (START + 2 * HOUR, "22:00", "America/New_York", START + 3 * HOUR),
+        (START + 20 * HOUR, "04:00", "Asia/Tokyo", START + DAY + 19 * HOUR),
     ],
 )
 def test_next_digest_is_the_first_slot_after_the_moment(
@@ -1663,6 +1665,9 @@ def test_backups_from_an_empty_result_is_an_empty_list() -> None:
 def test_backups_from_groups_by_host_and_job_and_keeps_the_worst_verdict() -> None:
     answer = json.loads(
         vm_series(
+            "junk",
+            series("up", 1, host="edge"),
+            {"metric": {"host": "x"}, "value": [1, "1"]},
             job("max_age_seconds", 93600),
             job("max_age_seconds", 90000),
             job("last_success_timestamp_seconds", 100),
@@ -1683,7 +1688,6 @@ def test_backups_from_groups_by_host_and_job_and_keeps_the_worst_verdict() -> No
             series("ayeops_backup_max_age_seconds", 60, backup="nohost"),
             series("ayeops_backup_max_age_seconds", 5, host="z"),
             series("up", 1, host="edge"),
-            {"metric": {"host": "x"}, "value": [1, "1"]},
             "junk",
         )
     )
@@ -2079,12 +2083,33 @@ def test_digest_settings_are_read_and_trimmed() -> None:
     assert s.digest_from(blank) == ("08:30", "UTC", "https://vm/q")
 
 
-@pytest.mark.parametrize("url", ["", "ftp://vm/q", "vm/api/v1/query"])
-def test_a_digest_needs_the_url_of_the_query_api(url: str) -> None:
-    env = {"AYE_SENTINEL_DIGEST_AT": "08:30", "AYE_SENTINEL_DIGEST_URL": url}
-    message = r"^AYE_SENTINEL_DIGEST_URL must be the http\(s\) url of /api/v1/query$"
-    with pytest.raises(ValueError, match=message):
+@pytest.mark.parametrize(
+    ("given", "shown"),
+    [
+        ({}, "''"),
+        ({"AYE_SENTINEL_DIGEST_URL": ""}, "''"),
+        ({"AYE_SENTINEL_DIGEST_URL": " ftp://vm/q "}, "'ftp://vm/q'"),
+        ({"AYE_SENTINEL_DIGEST_URL": "vm/api/v1/query"}, "'vm/api/v1/query'"),
+    ],
+)
+def test_a_digest_needs_the_url_of_the_query_api(given: dict[str, str], shown: str) -> None:
+    env = {"AYE_SENTINEL_DIGEST_AT": "08:30", **given}
+    message = f"AYE_SENTINEL_DIGEST_URL must be the http(s) url of /api/v1/query, not {shown}"
+    with pytest.raises(ValueError, match=f"^{re.escape(message)}$"):
         s.digest_from(env)
+
+
+@pytest.mark.parametrize(
+    "name", ["AYE_SENTINEL_INTERVAL", "AYE_SENTINEL_TIMEOUT", "AYE_SENTINEL_REMINDER"]
+)
+def test_a_duration_set_but_empty_is_refused_not_defaulted(name: str) -> None:
+    with pytest.raises(ValueError, match=r"^not a duration: ''$"):
+        s.config_from({**ENV, name: ""})
+
+
+def test_env_seconds_parses_a_set_value_and_falls_back_only_when_unset() -> None:
+    assert s.env_seconds({"X": "2m"}, "X", 7) == 120
+    assert s.env_seconds({}, "X", 7) == 7
 
 
 def test_a_digest_with_a_bad_time_or_zone_stops_the_start() -> None:

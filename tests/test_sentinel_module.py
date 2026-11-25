@@ -13,6 +13,7 @@ from ayeops.sentinel import (
     grafana_health,
     merged_checks,
     sentinel_context,
+    sentinel_problems,
 )
 from tests.conftest import check_once, manifest_from, pinned, render_once, rules_hit, tag_of
 from tests.test_sentinel import GRAFANA, SCRIPT, VM_HEALTH, VM_QUERY, s
@@ -451,3 +452,25 @@ def test_the_sentinel_context_carries_the_digest_url(data: dict[str, Any]) -> No
     context = sentinel_context(manifest, settings)
     assert context["digest_url"] == VM_QUERY
     assert sentinel_context(manifest, None) == {}
+
+
+def test_a_sentinel_sharing_the_zone_of_its_host_is_told_why(data: dict[str, Any]) -> None:
+    acme_with_sentinel(data)
+    del data["hosts"]["edge"]["modules"]["offsite"]
+    data["services"]["acme-db"]["data"]["copies"] = ["host"]
+    data["hosts"]["edge"]["zone"] = "datacenter"
+    assert findings(data) == [
+        (
+            "hosts.edge.modules.sentinel.watch",
+            "sentinel-watch",
+            "edge and central are both in zone 'datacenter': one power or network outage"
+            " silences the host and its sentinel together",
+        )
+    ]
+
+
+def test_a_sentinel_without_watch_names_the_empty_host(data: dict[str, Any]) -> None:
+    data["hosts"]["edge"]["modules"]["sentinel"] = {}
+    assert sentinel_problems(manifest_from(data)) == [
+        ("hosts.edge.modules.sentinel.watch", "sentinel-watch", "unknown host ''")
+    ]
