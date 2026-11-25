@@ -49,7 +49,7 @@ archive() {
     return 1
   fi
   printf '%s\n' "$name" > "$pending"
-  if tar -chf "$1" -C "$storage/snapshots/$name" . && [ -s "$1" ]; then
+  if tar -chf - -C "$storage/snapshots/$name" . > "$1" && [ -s "$1" ]; then
     status=0
   else
     status=1
@@ -198,7 +198,7 @@ check() {
     return 1
   fi
   mkdir -p "$scratch/storage"
-  if ! tar -xf "$dir/$latest" -C "$scratch/storage"; then
+  if ! tar -xf - -C "$scratch/storage" < "$dir/$latest"; then
     reason="cannot extract $latest"
     return 1
   fi

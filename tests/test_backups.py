@@ -975,6 +975,10 @@ def test_an_agent_has_no_store_to_back_up(data: dict[str, Any]) -> None:
     assert metrics_backup_problems(manifest_from(data)) == [
         ("hosts.edge.modules.metrics.backup", "metrics-backup", AGENT_BACKUP)
     ]
+    metrics_of(data, "central")["backup"] = False
+    assert metrics_backup_problems(manifest_from(data)) == [
+        ("hosts.edge.modules.metrics.backup", "metrics-backup", AGENT_BACKUP)
+    ]
     del data["hosts"]["edge"]["modules"]["backups"]
     del data["hosts"]["edge"]["modules"]["offsite"]
     assert metrics_backup_problems(manifest_from(data)) == [

@@ -151,7 +151,8 @@ def test_an_agent_renders_no_backup_and_fails_the_rule(
     data["hosts"]["edge"]["modules"]["metrics"]["backup"] = True
     edge = host_compose(manifest_from(data), "edge", modules)
     assert SERVICE not in edge["services"]
-    assert module_directories(manifest_from(data), modules, "edge") == ()
+    directories = module_directories(manifest_from(data), modules, "edge")
+    assert [path for path, *_ in directories] == ["/var/lib/ayeops/textfile"]
     assert "metrics-backup" in rules_hit(data)
 
 
