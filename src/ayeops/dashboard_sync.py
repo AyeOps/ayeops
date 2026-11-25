@@ -17,7 +17,7 @@ from typing import Any
 
 from ayeops.defaults import UsageError, add_manifest
 from ayeops.local_modules import with_local_modules
-from ayeops.logs import LOKI_DATASOURCE_UID, loki_url
+from ayeops.logs import LOKI_DATASOURCE_UID, logs_settings
 from ayeops.manifest import Manifest, load_manifest
 from ayeops.registry import Module, load_modules
 from ayeops.render import (
@@ -234,7 +234,10 @@ def rendered_uids(context: Context) -> dict[str, str]:
 
 def repo_datasources(context: Context) -> dict[str, dict[str, str]]:
     sources = {"VictoriaMetrics": {"type": "prometheus", "uid": DATASOURCE_UID}}
-    if loki_url(context.manifest, context.host):
+    manifest = context.manifest
+    if any(
+        (logs_settings(manifest, host) or {}).get("role") == "server" for host in manifest.hosts
+    ):
         sources["Loki"] = {"type": "loki", "uid": LOKI_DATASOURCE_UID}
     for source in context.grafana.get("datasources") or []:
         kind = DATASOURCE_TYPES[str(source["type"])]

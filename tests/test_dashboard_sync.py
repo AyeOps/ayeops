@@ -264,6 +264,8 @@ def test_connect_takes_the_url_given_first(acme: sync.Context) -> None:
     environ = ADMIN | {sync.URL_ENV: "https://env.example.test"}
     client = sync.connect("https://given.example.test/", acme.settings, environ, fake)
     assert client == sync.Grafana("https://given.example.test", AUTH, fake)
+    trailing = sync.connect("https://given.example.test/aX/", acme.settings, environ, fake)
+    assert trailing.base == "https://given.example.test/aX"
 
 
 def test_connect_falls_back_to_the_environment_then_the_root_url(acme: sync.Context) -> None:
@@ -988,6 +990,35 @@ def test_run_pulls(manifest_file: Path, capsys: pytest.CaptureFixture[str]) -> N
     assert capsys.readouterr().out.startswith("wrote ")
     shown = sorted(p.name for p in (manifest_file.parent / "dashboards").iterdir())
     assert shown == ["orders.json", "sales.json"]
+
+
+def test_run_passes_out_force_the_manifest_path_and_its_root_url(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "dashboards").mkdir()
+    (tmp_path / "dashboards" / "orders.json").write_text('{"uid": "orders", "title": "Orders"}')
+    path = write_manifest(tmp_path, {"dashboards": "dashboards", "root_url": BASE + "/"})
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "sales.json").write_text('{"uid": "sales"}')
+    fake = Fake()
+    fake.add("sales", dashboard=drawn("sales"))
+    args = namespace(path, "pull", url=None, out=out, force=True)
+    assert sync.run(args, ADMIN, fake) == 0
+    printed = capsys.readouterr().out
+    assert printed.startswith(f"replaced {out / 'sales.json'}")
+    assert f"{path}: 1 dashboard(s) into {out}: 0 written, 1 replaced," in printed
+    assert fake.calls[0][0].startswith(f"{BASE}/api/search?")
+
+
+def test_pull_counts_every_refused_uid(
+    quick: sync.Context, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = Fake()
+    fake.add("bad one", dashboard=drawn("bad one"))
+    fake.add("bad two", dashboard=drawn("bad two"))
+    assert sync.pull(quick, grafana(fake), [], tmp_path, False) == 1
+    assert ", 2 refused;" in capsys.readouterr().out
 
 
 def test_run_stops_on_a_manifest_with_errors(
