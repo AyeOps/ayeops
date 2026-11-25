@@ -116,6 +116,7 @@ def rule_expr(rule: dict[str, Any]) -> str:
 def test_a_down_host_holds_back_every_other_alert_of_that_host_in_the_rendered_rules(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
+    del data["hosts"]["central"]["modules"]["probes"]["links"]
     alerting = rendered_alerting(data, modules)
     rules = {rule["uid"]: rule for rule in all_rules(alerting["rules"])}
     sources = source_exprs(data, modules)
