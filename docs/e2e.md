@@ -41,11 +41,6 @@ in the `docker` group, which is root on that machine. Put it on a machine that h
 value, keeps no credentials and is not in the fleet, ideally an ephemeral runner
 (`./config.sh --ephemeral`) wiped after each job.
 
-While the repository was private, a `runner` job counted the GitHub-hosted minutes of the month
-against the 2000 of the free plan and moved `e2e` to the self-hosted runner past a budget. A
-public repository has no such budget, so the counter and its variables
-`AYE_HOSTED_MINUTES_BUDGET` and `AYE_E2E_RUNS_ON` are gone.
-
 ### The box
 
 On either runner the whole stack runs inside one container, the box:

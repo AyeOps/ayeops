@@ -139,13 +139,13 @@ def test_no_default_route_through_a_gateway_means_no_gateway() -> None:
     lines = ROUTE.read_text(encoding="utf-8").splitlines()
     header, rows = lines[0], lines[1:]
     wlan = rows[0]
-    assert probe.parse_proc_route("\n".join([header, wlan])) == "192.168.31.1"
+    assert probe.parse_proc_route("\n".join([header, wlan])) == "192.168.2.1"
     assert probe.parse_proc_route("\n".join([wlan])) is None
     assert probe.parse_proc_route("\n".join([header, *rows[2:]])) is None
     assert probe.parse_proc_route("") is None
     eight = "\t".join(wlan.split("\t")[:8])
-    assert probe.parse_proc_route("\n".join([header, eight])) == "192.168.31.1"
-    assert probe.parse_proc_route(header + "\nwlan0 00000000 011FA8C0 0003 0 0 600") is None
+    assert probe.parse_proc_route("\n".join([header, eight])) == "192.168.2.1"
+    assert probe.parse_proc_route(header + "\nwlan0 00000000 0102A8C0 0003 0 0 600") is None
     assert probe.parse_proc_route("\n".join([header, wlan.replace("\t0003\t", "\t0002\t")])) is None
     assert probe.parse_proc_route("\n".join([header, wlan.replace("\t0003\t", "\t0001\t")])) is None
     gateway_host = wlan.replace("\t600\t00000000", "\t600\tFFFFFFFF")

@@ -69,7 +69,7 @@ def test_security_reports_go_to_github_private_reporting() -> None:
     security = text("SECURITY.md")
     assert f"{REPOSITORY}/security/advisories/new" in security
     assert "Report a vulnerability" in security
-    assert "0.1.x" in security
+    assert "0.3.x" in security
 
 
 def test_the_code_of_conduct_is_the_contributor_covenant_without_a_private_email() -> None:
