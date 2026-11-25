@@ -361,7 +361,7 @@
       "type": "object",
       "required": ["type", "alert"],
       "properties": {
-        "type": {"enum": ["http", "tcp", "dns", "script", "sql"]}
+        "type": {"enum": ["http", "tcp", "smtp", "dns", "script", "sql"]}
       },
       "allOf": [
         {
@@ -404,6 +404,23 @@
               "timeout": {"$ref": "#/$defs/seconds"},
               "interval": {"type": "integer", "minimum": 15, "maximum": 3600},
               "address": {"type": "string", "pattern": "^([A-Za-z0-9.-]+|\\[[0-9a-fA-F:]+\\]):[0-9]{1,5}$"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "smtp"}}},
+          "then": {
+            "additionalProperties": false,
+            "required": ["address"],
+            "properties": {
+              "type": true,
+              "alert": {"$ref": "#/$defs/check_alert"},
+              "from": {"$ref": "#/$defs/name"},
+              "timeout": {"$ref": "#/$defs/seconds"},
+              "interval": {"type": "integer", "minimum": 15, "maximum": 3600},
+              "address": {"type": "string", "pattern": "^([A-Za-z0-9.-]+|\\[[0-9a-fA-F:]+\\]):[0-9]{1,5}$"},
+              "tls": {"enum": ["starttls", "tls", "none"]},
+              "ehlo": {"type": "string", "pattern": "^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?[.])+[A-Za-z]{2,63}$"}
             }
           }
         },
