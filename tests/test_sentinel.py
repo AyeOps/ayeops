@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import email.message
 import importlib.util
 import json
 import re
+import ssl
 import sys
 import threading
+import time
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any, ClassVar
 
 import pytest
@@ -1062,3 +1065,417 @@ def test_endpoint_serves_metrics_and_health(endpoint: tuple[str, Any, FakeClock]
 def test_http_fetch_names_itself(server: str) -> None:
     s.http_fetch(f"{server}/health", WAIT)
     assert Recorder.headers_seen[0]["User-Agent"] == "ayeops-sentinel"
+
+
+tzset = getattr(time, "tzset", None)
+
+
+@pytest.mark.skipif(tzset is None, reason="needs time.tzset to move the local zone")
+def test_clock_time_is_utc_in_a_zone_far_from_utc(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert tzset is not None
+    monkeypatch.setenv("TZ", "AYE-14")
+    tzset()
+    try:
+        assert time.localtime(START).tm_hour == 14
+        assert s.clock_time(START + 61) == "2026-01-01 00:01 UTC"
+    finally:
+        monkeypatch.undo()
+        tzset()
+
+
+def test_http_verdict_reads_a_body_that_is_not_utf8() -> None:
+    assert s.http_verdict(200, b"\xff ok \xfe", "ok") == (True, "HTTP 200")
+    assert s.http_verdict(200, b"\xff ok \xfe", "fine") == (False, "HTTP 200 without 'fine'")
+    assert s.http_verdict(204, b"\xff", "") == (True, "HTTP 204")
+
+
+def test_the_all_clear_counts_the_outage_from_its_first_failure() -> None:
+    previous = s.State(5, START, START + 120, (s.Outcome("samples", False, "z"),))
+    text = s.notice_text(config(), previous, s.State(), "recovery", START + 2 * HOUR + 60)
+    assert text == (
+        "✅ acme: central answers again after 2h 1m\nSeen from edge by the AyeOps sentinel."
+    )
+    unknown = s.notice_text(config(), s.State(), s.State(), "recovery", START + HOUR)
+    assert unknown == (
+        "✅ acme: central answers again after 0s\nSeen from edge by the AyeOps sentinel."
+    )
+
+
+def test_an_alert_and_a_reminder_without_a_known_start_count_from_now() -> None:
+    failures = (s.Outcome("grafana", False, "HTTP 502"), s.Outcome("samples", False, "z"))
+    current = s.State(3, None, None, failures)
+    alert = s.notice_text(config(), s.State(), current, "alert", START + HOUR + 60)
+    assert alert == (
+        "🔴 acme: central is not answering\n"
+        "3 checks in a row failed since 2026-01-01 01:01 UTC:\n"
+        "• grafana: HTTP 502\n"
+        "• samples: z\n"
+        "Seen from edge by the AyeOps sentinel; alerts of central may not arrive.\n"
+        "Runbook: https://runbooks.example/sentinel-central-down.md"
+    )
+    reminder = s.notice_text(config(runbook=""), s.State(), current, "reminder", START + HOUR)
+    assert reminder == (
+        "🔴 acme: central is still not answering, down for 0s\n"
+        "Failing now:\n"
+        "• grafana: HTTP 502\n"
+        "• samples: z\n"
+        "Seen from edge by the AyeOps sentinel; alerts of central may not arrive."
+    )
+    known = s.State(9, START, START + 120, failures[:1])
+    assert s.notice_text(config(), s.State(), known, "reminder", START + 90).splitlines() == [
+        "🔴 acme: central is still not answering, down for 1m",
+        "Failing now:",
+        "• grafana: HTTP 502",
+        "Seen from edge by the AyeOps sentinel; alerts of central may not arrive.",
+        "Runbook: https://runbooks.example/sentinel-central-down.md",
+    ]
+
+
+class Stream:
+    def __init__(self) -> None:
+        self.written: list[str] = []
+        self.flushed = 0
+
+    def write(self, text: str) -> int:
+        self.written.append(text)
+        return len(text)
+
+    def flush(self) -> None:
+        self.flushed += 1
+
+
+def test_a_log_line_is_flushed_as_soon_as_it_is_written(monkeypatch: pytest.MonkeyPatch) -> None:
+    stream = Stream()
+    monkeypatch.setattr(sys, "stdout", stream)
+    s.log_json({"event": "start", "checks": ["b", "a"]})
+    monkeypatch.undo()
+    assert "".join(stream.written) == '{"checks": ["b", "a"], "event": "start"}\n'
+    assert stream.flushed == 1
+
+
+class Answer:
+    def __init__(self, status: Any, data: bytes = b"") -> None:
+        self.status = status
+        self.data = data
+        self.sizes: list[Any] = []
+
+    def read(self, *size: Any) -> bytes:
+        self.sizes.append(size)
+        return self.data
+
+    def __enter__(self) -> Answer:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+
+class Web:
+    def __init__(self, *answers: Any) -> None:
+        self.answers = list(answers)
+        self.built: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        self.opened: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        self.request = SimpleNamespace(Request=self.build, urlopen=self.open)
+        self.error = s.urllib.error
+
+    def build(self, *args: Any, **kwargs: Any) -> str:
+        self.built.append((args, kwargs))
+        return "request"
+
+    def open(self, *args: Any, **kwargs: Any) -> Any:
+        self.opened.append((args, kwargs))
+        answer = self.answers.pop(0)
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+
+
+def http_error(code: int) -> Any:
+    return s.urllib.error.HTTPError("https://x", code, "x", email.message.Message(), None)
+
+
+def test_http_fetch_names_its_header_passes_the_timeout_and_reads_at_most_64_kib(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answer = Answer("204", b"body")
+    web = Web(answer, http_error(503))
+    monkeypatch.setattr(s, "urllib", web)
+    monkeypatch.setattr(s, "OPENER", web)
+    assert s.http_fetch("http://v/health", 2.5) == (204, b"body")
+    assert web.built == [(("http://v/health",), {"headers": {"User-Agent": "ayeops-sentinel"}})]
+    assert web.opened == [(("request",), {"timeout": 2.5})]
+    assert answer.sizes == [(65536,)]
+    assert s.http_fetch("http://v/health", 2.5) == (503, b"")
+
+
+def test_telegram_sender_builds_a_json_post_and_takes_only_a_2xx_answer_as_delivered(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    web = Web(Answer("200"), Answer(299), Answer(199), Answer(300), Answer(204))
+    monkeypatch.setattr(s, "urllib", web)
+    send = s.telegram_sender("123:secret", "-100")
+    assert [send("hi") for _ in range(4)] == [True, True, False, False]
+    request = (
+        ("https://api.telegram.org/bot123:secret/sendMessage",),
+        {
+            "data": b'{"chat_id": "-100", "text": "hi", "disable_web_page_preview": true}',
+            "headers": {"Content-Type": "application/json"},
+            "method": "POST",
+        },
+    )
+    assert web.built == [request] * 4
+    assert web.opened == [(("request",), {"timeout": 15})] * 4
+    assert s.telegram_sender("t", "c", 2.5)("x") is True
+    assert web.opened[-1] == (("request",), {"timeout": 2.5})
+    assert capsys.readouterr().out == ""
+
+
+def test_telegram_sender_logs_why_a_message_was_not_delivered(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    web = Web(http_error(403), ValueError("bad url"), TimeoutError("slow"))
+    monkeypatch.setattr(s, "urllib", web)
+    send = s.telegram_sender("123:secret", "-100")
+    assert [send("hi") for _ in range(3)] == [False, False, False]
+    assert capsys.readouterr().out == (
+        '{"event": "telegram_failed", "status": 403}\n'
+        '{"error": "ValueError", "event": "telegram_failed"}\n'
+        '{"error": "TimeoutError", "event": "telegram_failed"}\n'
+    )
+
+
+def test_the_origin_defaults_to_the_host_name_of_the_container(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(s, "socket", SimpleNamespace(gethostname=lambda: "box-7"))
+    assert s.config_from(ENV).origin == "box-7"
+    assert s.config_from({**ENV, "AYE_SENTINEL_HOST": "edge"}).origin == "edge"
+    assert s.config_from({**ENV, "AYE_SENTINEL_PING_URL": "   "}).ping_url == ""
+    assert (
+        s.config_from({**ENV, "AYE_SENTINEL_FAILURES_BEFORE_ALERT": "1"}).failures_before_alert == 1
+    )
+    assert (
+        s.config_from({**ENV, "AYE_SENTINEL_FAILURES_BEFORE_ALERT": "2"}).failures_before_alert == 2
+    )
+
+
+def test_the_endpoint_listens_on_every_address_unless_told_a_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    made: list[tuple[Any, ...]] = []
+
+    def listen(*args: Any) -> str:
+        made.append(args)
+        return "server"
+
+    monkeypatch.setattr(s, "ThreadingHTTPServer", listen)
+    sentinel = s.Sentinel(config(), FakeHttp(), no_expiry, FakeTelegram(), FakeClock())
+    assert s.make_server(sentinel, 9134) == "server"
+    assert s.make_server(sentinel, 9200, "127.0.0.1") == "server"
+    assert [args[0] for args in made] == [("", 9134), ("127.0.0.1", 9200)]
+    assert all(len(args) == 2 and issubclass(args[1], BaseHTTPRequestHandler) for args in made)
+
+
+class Wrapped:
+    def __init__(self, certificate: Any) -> None:
+        self.certificate = certificate
+        self.closed = 0
+
+    def getpeercert(self) -> Any:
+        return self.certificate
+
+    def __enter__(self) -> Wrapped:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.closed += 1
+
+
+class Tls:
+    def __init__(self, certificate: Any, error: Exception | None = None) -> None:
+        self.wrapped = Wrapped(certificate)
+        self.error = error
+        self.contexts: list[tuple[Any, ...]] = []
+        self.connected: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        self.wraps: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        self.times: list[tuple[Any, ...]] = []
+        self.raw = SimpleNamespace(close=self.close)
+        self.closed = 0
+
+    def close(self) -> None:
+        self.closed += 1
+
+    def create_default_context(self, *args: Any) -> Tls:
+        self.contexts.append(args)
+        return self
+
+    def create_connection(self, *args: Any, **kwargs: Any) -> Any:
+        self.connected.append((args, kwargs))
+        return self.raw
+
+    def wrap_socket(self, *args: Any, **kwargs: Any) -> Wrapped:
+        self.wraps.append((args, kwargs))
+        if self.error is not None:
+            raise self.error
+        return self.wrapped
+
+    def cert_time_to_seconds(self, *args: Any) -> int:
+        self.times.append(args)
+        return ssl.cert_time_to_seconds(*args)
+
+
+def test_the_certificate_expiry_is_read_over_a_verified_connection_to_the_named_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tls = Tls({"notAfter": "Jan  1 00:00:00 2027 GMT", "subject": ()})
+    monkeypatch.setattr(s, "ssl", tls)
+    monkeypatch.setattr(s, "socket", tls)
+    found = s.certificate_expiry("grafana.example", 8443, 4.5)
+    assert found == 1798761600.0
+    assert isinstance(found, float)
+    assert tls.contexts == [()]
+    assert tls.connected == [((("grafana.example", 8443),), {"timeout": 4.5})]
+    assert tls.wraps == [((tls.raw,), {"server_hostname": "grafana.example"})]
+    assert tls.times == [("Jan  1 00:00:00 2027 GMT",)]
+    assert (tls.wrapped.closed, tls.closed) == (1, 1)
+
+
+@pytest.mark.parametrize("certificate", [None, {}, {"subject": ()}])
+def test_a_certificate_without_an_expiry_fails_the_check_and_closes_the_socket(
+    certificate: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tls = Tls(certificate)
+    monkeypatch.setattr(s, "ssl", tls)
+    monkeypatch.setattr(s, "socket", tls)
+    with pytest.raises(KeyError, match="notAfter"):
+        s.certificate_expiry("grafana.example", 443, 10)
+    assert (tls.wrapped.closed, tls.closed, tls.times) == (1, 1, [])
+
+
+def test_a_failed_handshake_closes_the_socket_and_fails_the_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tls = Tls({}, ssl.SSLError("certificate verify failed"))
+    monkeypatch.setattr(s, "ssl", tls)
+    monkeypatch.setattr(s, "socket", tls)
+    with pytest.raises(ssl.SSLError, match="certificate verify failed"):
+        s.certificate_expiry("grafana.example", 443, 10)
+    assert (tls.wrapped.closed, tls.closed) == (0, 1)
+
+
+class Stop(Exception):
+    pass
+
+
+def test_the_watch_sleeps_what_each_round_leaves_and_starts_the_next_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rounds: list[tuple[Any, ...]] = []
+    naps: list[float] = []
+
+    def one_round(*args: Any) -> float:
+        rounds.append(args)
+        return 7.5 + len(rounds)
+
+    def sleep(seconds: float) -> None:
+        naps.append(seconds)
+        if len(naps) == 3:
+            raise Stop
+
+    monkeypatch.setattr(s, "one_round", one_round)
+    monkeypatch.setattr(s, "time", SimpleNamespace(sleep=sleep))
+    with pytest.raises(Stop):
+        s.run_forever("sentinel")
+    assert rounds == [("sentinel",)] * 3
+    assert naps == [8.5, 9.5, 10.5]
+
+
+@pytest.mark.parametrize(
+    ("extra", "port", "ping"),
+    [
+        ({}, 9134, False),
+        ({"AYE_SENTINEL_PORT": "9200", "AYE_SENTINEL_PING_URL": PING}, 9200, True),
+    ],
+)
+def test_main_starts_the_watch_in_a_daemon_thread_and_serves_the_endpoint(
+    extra: dict[str, str],
+    port: int,
+    ping: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    senders: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+    sentinels: list[Any] = []
+    built: list[tuple[Any, ...]] = []
+    threads: list[Any] = []
+    servers: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+    served: list[int] = []
+    order: list[str] = []
+
+    def sender(*args: Any, **kwargs: Any) -> str:
+        senders.append((args, kwargs))
+        return "send"
+
+    def wall() -> float:
+        return 123.5
+
+    real = s.Sentinel
+
+    def sentinel_of(*args: Any) -> Any:
+        built.append(args)
+        sentinels.append(real(*args))
+        return sentinels[-1]
+
+    class Thread:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self.args, self.kwargs, self.started = args, kwargs, 0
+            self.round_at_start: float | None = None
+            threads.append(self)
+
+        def start(self) -> None:
+            self.started += 1
+            self.round_at_start = sentinels[0].last_round
+            order.append("watch")
+
+    def serve_forever() -> None:
+        served.append(threads[0].started)
+        order.append("serve")
+
+    def make_server(*args: Any, **kwargs: Any) -> Any:
+        servers.append((args, kwargs))
+        return SimpleNamespace(serve_forever=serve_forever)
+
+    env = {
+        **ENV,
+        "AYE_SENTINEL_HOST": "edge",
+        "AYE_TELEGRAM_BOT_TOKEN": "123:secret",
+        "AYE_TELEGRAM_CHAT_ID": "-100",
+        **extra,
+    }
+    monkeypatch.setattr(s, "os", SimpleNamespace(environ=env))
+    monkeypatch.setattr(s, "telegram_sender", sender)
+    monkeypatch.setattr(s, "Sentinel", sentinel_of)
+    monkeypatch.setattr(s, "time", SimpleNamespace(time=wall))
+    monkeypatch.setattr(s, "threading", SimpleNamespace(Thread=Thread, Lock=threading.Lock))
+    monkeypatch.setattr(s, "make_server", make_server)
+    assert s.main() is None
+    assert senders == [(("123:secret", "-100"), {})]
+    assert len(sentinels) == len(threads) == 1
+    sentinel, thread = sentinels[0], threads[0]
+    assert built == [(s.config_from(env), s.http_fetch, s.certificate_expiry, "send", wall)]
+    assert built[0][1] is s.http_fetch and built[0][2] is s.certificate_expiry
+    assert sentinel.last_round == 123.5
+    assert thread.args == ()
+    assert sorted(thread.kwargs) == ["args", "daemon", "target"]
+    assert thread.kwargs["target"] is s.run_forever
+    assert thread.kwargs["args"] == (sentinel,) and thread.kwargs["args"][0] is sentinel
+    assert thread.kwargs["daemon"] is True
+    assert (thread.started, thread.round_at_start) == (1, 123.5)
+    assert servers == [((sentinel, port), {})]
+    assert servers[0][0][0] is sentinel
+    assert (served, order) == ([1], ["watch", "serve"])
+    flag = "true" if ping else "false"
+    assert capsys.readouterr().out == (
+        '{"checks": ["v"], "event": "start", "failures_before_alert": 3, '
+        f'"ping": {flag}, "reminder_seconds": 21600, "watch": "central"}}\n'
+    )

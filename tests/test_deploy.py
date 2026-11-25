@@ -30,28 +30,40 @@ from ayeops.deploy import (
     Connection,
     Result,
     add_connection,
+    add_parser,
     chosen_hosts,
     compose_script,
     connection,
     deploy,
     diff_script,
+    finish,
     fleet,
     healthy,
     host_files,
     hostside,
+    install_timers,
     installed_units,
+    is_central,
     parse_ps,
     parse_pull,
     parse_swap,
+    plan_text,
+    positive,
+    prepare,
     pull_script,
     remote,
     remote_steps,
+    rollout,
+    seconds,
+    ship,
     ssh_runner,
     status_rows,
+    summary,
     swap_script,
     table,
     tarball,
     timers_script,
+    wave_name,
 )
 from ayeops.manifest import Manifest
 from ayeops.mounts import (
@@ -66,7 +78,15 @@ from ayeops.registry import load_modules
 from ayeops.retire import RULES
 from ayeops.rules import check_manifest
 from ayeops.stamp import Stamp
-from tests.conftest import EXAMPLE, RENDERED, WAIT, example_data, manifest_from, render_once
+from tests.conftest import (
+    EXAMPLE,
+    EXAMPLE_STAMP,
+    RENDERED,
+    WAIT,
+    example_data,
+    manifest_from,
+    render_once,
+)
 
 TOOLS = all(shutil.which(tool) for tool in ("sh", "tar", "cmp", "grep"))
 needs_shell = pytest.mark.skipif(not TOOLS, reason="needs sh, tar, cmp and grep")
@@ -1474,3 +1494,546 @@ def test_the_connection_flags_say_their_manifest_defaults() -> None:
     assert "default connect.dir or /opt/ayeops/<host>" in text
     with pytest.raises(SystemExit):
         parser.parse_args(["--sudo", "--helper"])
+
+
+def test_the_first_wave_is_the_canary_and_the_rest_are_numbered_from_one() -> None:
+    assert [wave_name(index) for index in range(4)] == ["canary", "wave 1", "wave 2", "wave 3"]
+
+
+def test_the_plan_names_each_wave_and_lists_its_hosts_with_commas() -> None:
+    assert plan_text([["a"], ["b", "c"], ["d"]]) == "canary: a\nwave 1: b, c\nwave 2: d"
+    assert plan_text([["only"]]) == "canary: only"
+    assert plan_text([]) == ""
+
+
+def test_the_summary_pads_every_host_to_the_longest_name_and_two_spaces() -> None:
+    assert summary({"edge-01": "deployed", "c": "timed out"}) == (
+        "HOST     RESULT\nedge-01  deployed\nc        timed out"
+    )
+    assert summary({"a": "failed", "bb": "skipped"}) == "HOST  RESULT\na     failed\nbb    skipped"
+    assert summary({}) == "HOST  RESULT"
+
+
+@pytest.mark.parametrize(("text", "value"), [("1", 1), ("2", 2), ("40", 40), (" 3 ", 3)])
+def test_positive_reads_a_whole_number_from_one_up(text: str, value: int) -> None:
+    assert positive(text) == value
+
+
+@pytest.mark.parametrize("text", ["0", "-1", "two", "1.5", ""])
+def test_positive_refuses_zero_a_negative_and_anything_but_a_whole_number(text: str) -> None:
+    with pytest.raises(argparse.ArgumentTypeError) as refused:
+        positive(text)
+    assert str(refused.value) == f"{text!r} is not a positive whole number"
+
+
+@pytest.mark.parametrize(("text", "value"), [("0.5", 0.5), ("1", 1.0), ("1e-3", 0.001), ("90", 90)])
+def test_seconds_reads_any_positive_finite_number(text: str, value: float) -> None:
+    assert seconds(text) == value
+
+
+@pytest.mark.parametrize("text", ["0", "-0.5", "soon", "inf", "-inf", "nan", ""])
+def test_seconds_refuses_zero_a_negative_and_what_is_not_a_finite_number(text: str) -> None:
+    with pytest.raises(argparse.ArgumentTypeError) as refused:
+        seconds(text)
+    assert str(refused.value) == f"{text!r} is not a positive number of seconds"
+
+
+def test_rollout_takes_the_first_leaf_as_canary_then_leaves_then_central_hosts() -> None:
+    hosts = ["central", "a", "b", "hub", "c"]
+    assert rollout(hosts, {"central", "hub"}, False, 2) == [["a"], ["b", "c"], ["central", "hub"]]
+    assert rollout(hosts, {"central", "hub"}, False, 1) == [
+        ["a"],
+        ["b"],
+        ["c"],
+        ["central"],
+        ["hub"],
+    ]
+    assert rollout(hosts, {"central", "hub"}, False, 3) == [["a"], ["b", "c", "central"], ["hub"]]
+    assert rollout(hosts, {"central", "hub"}, False, 4) == [["a"], ["b", "c", "central", "hub"]]
+    assert rollout(["a", "b", "c"], set(), False, 1) == [["a"], ["b"], ["c"]]
+    assert rollout(["a", "b", "c"], {"a"}, False, 2) == [["b"], ["c", "a"]]
+
+
+def test_rollout_keeps_the_first_named_host_as_canary_even_when_it_is_central() -> None:
+    hosts = ["central", "a", "b", "hub", "c"]
+    assert rollout(hosts, {"central", "hub"}, True, 1) == [
+        ["central"],
+        ["a"],
+        ["b"],
+        ["c"],
+        ["hub"],
+    ]
+    assert rollout(hosts, {"central", "hub"}, True, 2) == [["central"], ["a", "b"], ["c", "hub"]]
+    assert rollout(["hub", "central", "a"], {"central", "hub"}, True, 5) == [
+        ["hub"],
+        ["a", "central"],
+    ]
+
+
+def test_rollout_of_central_hosts_only_or_of_one_host_starts_with_the_first() -> None:
+    assert rollout(["x", "y"], {"x", "y"}, False, 5) == [["x"], ["y"]]
+    assert rollout(["x", "y", "z"], {"x", "y", "z"}, False, 1) == [["x"], ["y"], ["z"]]
+    assert rollout(["only"], set(), False, 3) == [["only"]]
+    assert rollout(["only"], {"only"}, True, 1) == [["only"]]
+
+
+@pytest.mark.parametrize(
+    ("settings", "central"),
+    [
+        ({"grafana": {}}, True),
+        ({"objectstore": {}}, True),
+        ({"metrics": {"role": "server"}}, True),
+        ({"logs": {"role": "server"}}, True),
+        ({"metrics": {"role": "agent"}, "logs": {"role": "server"}}, True),
+        ({"metrics": {"role": "agent"}, "logs": {"role": "agent"}}, False),
+        ({"metrics": {}, "logs": None}, False),
+        ({"metrics": None, "logs": {}}, False),
+        ({"edge": {"role": "server"}, "sentinel": {}}, False),
+        ({"metrics": {"mode": "server"}, "logs": {"role": "Server"}}, False),
+        ({}, False),
+    ],
+)
+def test_a_host_is_central_with_grafana_the_object_store_or_a_metrics_or_logs_server(
+    settings: dict[str, Any], central: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asked: list[tuple[Any, ...]] = []
+
+    def fake(*args: Any) -> dict[str, Any]:
+        asked.append(args)
+        return settings
+
+    monkeypatch.setattr(deploy_module, "host_settings", fake)
+    manifest, modules = manifest_from(example_data()), load_modules()
+    assert is_central(manifest, "edge", modules) is central
+    assert asked == [(manifest, "edge", modules)]
+
+
+def test_the_example_has_a_central_host_and_a_leaf() -> None:
+    manifest, modules = manifest_from(example_data()), load_modules()
+    assert is_central(manifest, "central", modules) is True
+    assert is_central(manifest, "edge", modules) is False
+
+
+def recorded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[str, tuple[Any, ...], dict[str, Any]]]:
+    seen: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+
+    def fake(name: str, code: int) -> Any:
+        def call(*args: Any, **kwargs: Any) -> int:
+            seen.append((name, args, kwargs))
+            return code
+
+        return call
+
+    monkeypatch.setattr(deploy_module, "deploy", fake("deploy", 3))
+    monkeypatch.setattr(deploy_module, "fleet", fake("fleet", 4))
+    return seen
+
+
+def test_the_cli_passes_every_option_of_several_hosts_to_the_fleet(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen = recorded(monkeypatch)
+    argv = ["deploy", "m.yaml", "--host", "a", "--host", "b", "--sudo", "--dir", "/x"]
+    argv += ["--build-time", "t", "--commit", "c", "--timeout", "60", "--parallel", "4"]
+    assert main(argv) == 4
+    options = {
+        "time": "t",
+        "commit": "c",
+        "timeout": 60.0,
+        "helper": False,
+        "parallel": 4,
+        "dry_run": False,
+    }
+    assert seen == [("fleet", (Path("m.yaml"), ["a", "b"], None, True, "/x"), options)]
+    assert main(["deploy", "m.yaml", "--all", "--helper", "--ssh", "s", "--dry-run"]) == 4
+    plain = {
+        "time": None,
+        "commit": None,
+        "timeout": TIMEOUT,
+        "helper": True,
+        "parallel": 1,
+        "dry_run": True,
+    }
+    assert seen[-1] == ("fleet", (Path("m.yaml"), None, "s", False, None), plain)
+
+
+def test_the_cli_sends_only_one_host_without_a_dry_run_to_the_single_deploy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen = recorded(monkeypatch)
+    assert main(["deploy", "m.yaml", "--host", "h", "--parallel", "2"]) == 3
+    defaults = {"time": None, "commit": None, "timeout": TIMEOUT, "helper": False}
+    assert seen == [("deploy", (Path("m.yaml"), "h", None, False, None), defaults)]
+    assert main(["deploy", "m.yaml", "--host", "h", "--dry-run"]) == 4
+    assert seen[-1][0] == "fleet"
+    assert seen[-1][1][1] == ["h"]
+    assert seen[-1][2]["dry_run"] is True
+    assert main(["deploy", "m.yaml", "--host", "a", "--host", "b"]) == 4
+    assert seen[-1][0] == "fleet"
+    assert main(["deploy", "m.yaml", "--all"]) == 4
+    assert seen[-1][0] == "fleet"
+    assert seen[-1][1][1] is None
+    assert [name for name, _, _ in seen] == ["deploy", "fleet", "fleet", "fleet"]
+
+
+def deploy_parser(monkeypatch: pytest.MonkeyPatch) -> tuple[argparse.ArgumentParser, Any]:
+    monkeypatch.setenv("COLUMNS", "400")
+    parser = argparse.ArgumentParser(prog="aye")
+    commands = parser.add_subparsers(dest="command")
+    add_parser(commands)
+    return parser, commands.choices["deploy"]
+
+
+def test_the_deploy_command_documents_every_option(monkeypatch: pytest.MonkeyPatch) -> None:
+    parser, command = deploy_parser(monkeypatch)
+    listed = " ".join(parser.format_help().split())
+    assert (
+        " deploy render hosts, swap their files atomically over ssh, docker compose up,"
+        " canary first options: "
+    ) in listed
+    text = " ".join(command.format_help().split())
+    documented = (
+        "--host HOST a host to deploy, repeat for several; the first is canary;"
+        " default the only host of the manifest",
+        "--all every host of the manifest",
+        "--ssh SSH ssh destination of a single host, default connect.ssh or the host name",
+        "--sudo run the remote side under sudo sh; default connect.sudo",
+        f"--helper run each step through {HELPER} on a host prepared by aye host-init;"
+        " default connect.helper",
+        "--dir DIR remote directory, default connect.dir or /opt/ayeops/<host>",
+        "--build-time BUILD_TIME footer build time, default now or SOURCE_DATE_EPOCH",
+        "--commit COMMIT footer manifest commit, default git rev-parse",
+        "--timeout TIMEOUT seconds each ssh call may take, default 1800",
+        "--parallel PARALLEL hosts deployed at once after the canary, default 1",
+        "--dry-run print the canary and the waves, connect to nothing",
+    )
+    assert text.endswith(" -h, --help show this help message and exit " + " ".join(documented))
+
+
+def test_the_deploy_command_parses_its_options_and_their_defaults(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    parser, _ = deploy_parser(monkeypatch)
+    assert vars(parser.parse_args(["deploy"])) == {
+        "command": "deploy",
+        "manifest": None,
+        "host": None,
+        "all": False,
+        "ssh": None,
+        "sudo": False,
+        "helper": False,
+        "dir": None,
+        "build_time": None,
+        "commit": None,
+        "timeout": 1800,
+        "parallel": 1,
+        "dry_run": False,
+    }
+    argv = ["deploy", "m.yaml", "--host", "a", "--host", "b", "--ssh", "s", "--helper"]
+    argv += ["--dir", "/d", "--build-time", "t", "--commit", "c", "--timeout", "2.5"]
+    argv += ["--parallel", "3", "--dry-run"]
+    assert vars(parser.parse_args(argv)) == {
+        "command": "deploy",
+        "manifest": Path("m.yaml"),
+        "host": ["a", "b"],
+        "all": False,
+        "ssh": "s",
+        "sudo": False,
+        "helper": True,
+        "dir": "/d",
+        "build_time": "t",
+        "commit": "c",
+        "timeout": 2.5,
+        "parallel": 3,
+        "dry_run": True,
+    }
+    assert parser.parse_args(["deploy", "--all"]).all is True
+    assert parser.parse_args(["deploy", "--all"]).host is None
+    for bad in (["--all", "--host", "a"], ["--parallel", "0"], ["--timeout", "0"]):
+        with pytest.raises(SystemExit):
+            parser.parse_args(["deploy", *bad])
+    err = capsys.readouterr().err
+    assert "argument --host: not allowed with argument --all" in err
+    assert "argument --parallel: '0' is not a positive whole number" in err
+    assert "argument --timeout: '0' is not a positive number of seconds" in err
+
+
+class Scripted:
+    def __init__(self, **results: Result) -> None:
+        self.results = results
+        self.calls: list[tuple[list[str], bytes | None, float]] = []
+
+    def __call__(self, argv: list[str], stdin: bytes | None, timeout: float) -> Result:
+        self.calls.append((argv, stdin, timeout))
+        return self.results.get(argv[-1], Result(0))
+
+
+NAMED = {step: step for step in STEPS}
+WEB = "services:\n  web:\n    image: x\n"
+UNIT = "backups/systemd/ayeops-box-backup-db"
+WEB_UP = Result(0, json.dumps([{"Service": "web", "State": "running", "Health": "healthy"}]))
+WEB_TABLE = "SERVICE  STATE    HEALTH   CONFIG CHANGED\nweb      running  healthy\n"
+TIMERS_HINT = (
+    f"box: --helper needs the timers step of {HELPER}; "
+    "run the aye host-init script of this host again if it predates backup timers\n"
+)
+PULL_HINT = (
+    f"box: --helper needs the pull step of {HELPER}; "
+    "run the aye host-init script of this host again if it predates the pull step\n"
+)
+
+
+def test_finish_swaps_starts_installs_timers_lists_and_reports_to_its_own_streams() -> None:
+    files = {"compose.yaml": WEB, f"{UNIT}.timer": "t", f"{UNIT}.service": "s"}
+    runner = Scripted(
+        swap=Result(0, "changed compose.yaml\nremoved old.yml\n"),
+        timers=Result(0, "changed a.timer\nremoved b.timer\nremoved b.service\n"),
+        ps=WEB_UP,
+    )
+    out, err = io.StringIO(), io.StringIO()
+    assert finish(files, "box", "/srv/x", NAMED, runner, 9.5, out, err) == 0
+    assert runner.calls == [
+        (["ssh", "box", "swap"], tarball(files), 9.5),
+        (["ssh", "box", "up"], None, 9.5),
+        (["ssh", "box", "timers"], None, 9.5),
+        (["ssh", "box", "ps"], None, 9.5),
+    ]
+    assert out.getvalue() == (
+        "box:/srv/x: 1 file(s) changed, 1 removed\n"
+        "box: 1 backup timer(s), 1 unit file(s) changed, 2 removed\n"
+        f"{WEB_TABLE}"
+    )
+    assert err.getvalue() == ""
+
+
+@pytest.mark.parametrize(
+    ("results", "code", "calls", "out", "err"),
+    [
+        (
+            {"swap": Result(TIMED_OUT, "changed a\n", " late \n")},
+            1,
+            1,
+            "",
+            "late\nbox: swap timed out, docker compose did not run, deploy again to finish\n",
+        ),
+        (
+            {"swap": Result(3, "changed a\n", " bad \n")},
+            1,
+            1,
+            "",
+            "bad\nbox: files not swapped, the running stack is untouched\n",
+        ),
+        (
+            {"swap": Result(0, "changed a\nchanged b\n"), "up": Result(1, "", " boom \n")},
+            1,
+            2,
+            "box:/srv/x: 2 file(s) changed, 0 removed\n",
+            "boom\nbox: docker compose up failed\n",
+        ),
+        (
+            {"ps": Result(1, "", " no ps \n")},
+            1,
+            3,
+            "box:/srv/x: 0 file(s) changed, 0 removed\n",
+            "no ps\n",
+        ),
+        (
+            {"ps": Result(0, "")},
+            1,
+            3,
+            "box:/srv/x: 0 file(s) changed, 0 removed\nSERVICE  STATE  HEALTH  CONFIG CHANGED\n",
+            "web: declared but has no container\n",
+        ),
+        (
+            {"ps": Result(0, json.dumps([{"Service": "web", "State": "exited"}]))},
+            1,
+            3,
+            "box:/srv/x: 0 file(s) changed, 0 removed\n"
+            "SERVICE  STATE   HEALTH  CONFIG CHANGED\nweb      exited\n",
+            "",
+        ),
+        (
+            {"ps": WEB_UP},
+            0,
+            3,
+            f"box:/srv/x: 0 file(s) changed, 0 removed\n{WEB_TABLE}",
+            "",
+        ),
+    ],
+)
+def test_finish_stops_at_the_first_failed_step_and_says_which_on_its_error_stream(
+    results: dict[str, Result], code: int, calls: int, out: str, err: str
+) -> None:
+    runner = Scripted(**results)
+    said, failed = io.StringIO(), io.StringIO()
+    assert finish({"compose.yaml": WEB}, "box", "/srv/x", NAMED, runner, 5, said, failed) == code
+    assert [argv[-1] for argv, _, _ in runner.calls] == ["swap", "up", "ps"][:calls]
+    assert said.getvalue() == out
+    assert failed.getvalue() == err
+
+
+def test_finish_fails_when_the_timers_step_fails_though_every_container_runs() -> None:
+    files = {"compose.yaml": WEB, f"{UNIT}.timer": "t"}
+    runner = Scripted(timers=Result(1, "", "refused\n"), ps=WEB_UP)
+    out, err = io.StringIO(), io.StringIO()
+    assert finish(files, "box", "/srv/x", NAMED, runner, 5, out, err) == 1
+    assert [argv[-1] for argv, _, _ in runner.calls] == ["swap", "up", "timers", "ps"]
+    assert out.getvalue() == f"box:/srv/x: 0 file(s) changed, 0 removed\n{WEB_TABLE}"
+    assert err.getvalue() == "refused\nbox: backup timers not installed\n"
+
+
+def test_finish_runs_the_timers_step_for_units_the_swap_removed_or_found_installed() -> None:
+    gone = Scripted(swap=Result(0, f"removed {UNIT}.timer\n"), ps=WEB_UP)
+    out, err = io.StringIO(), io.StringIO()
+    assert finish({"compose.yaml": WEB}, "box", "/srv/x", NAMED, gone, 5, out, err) == 0
+    assert [argv[-1] for argv, _, _ in gone.calls] == ["swap", "up", "timers", "ps"]
+    left = Scripted(swap=Result(0, "installed ayeops-box-backup-db.timer\n"), ps=WEB_UP)
+    assert finish({"compose.yaml": WEB}, "box", "/srv/x", NAMED, left, 5, out, err) == 0
+    assert [argv[-1] for argv, _, _ in left.calls] == ["swap", "up", "timers", "ps"]
+    assert err.getvalue() == ""
+
+
+@pytest.mark.parametrize(
+    ("files", "removed", "installed"),
+    [
+        ([f"{UNIT}.timer"], [], []),
+        ([], [f"{UNIT}.service"], []),
+        ([], [], ["ayeops-box-backup-db.timer"]),
+    ],
+)
+def test_the_timers_step_runs_for_a_rendered_a_removed_or_an_installed_unit(
+    files: list[str], removed: list[str], installed: list[str]
+) -> None:
+    runner = Scripted(timers=Result(0, "changed x\nchanged y\nremoved z\n"))
+    out, err = io.StringIO(), io.StringIO()
+    rendered = dict.fromkeys(["compose.yaml", *files], "")
+    done = install_timers(rendered, removed, installed, "box", NAMED, runner, 7, out, err)
+    assert done is True
+    assert runner.calls == [(["ssh", "box", "timers"], None, 7)]
+    timers = len(files)
+    assert out.getvalue() == f"box: {timers} backup timer(s), 2 unit file(s) changed, 1 removed\n"
+    assert err.getvalue() == ""
+
+
+def test_the_timers_step_is_skipped_without_units_and_counts_only_timer_units() -> None:
+    out, err = io.StringIO(), io.StringIO()
+    idle = Scripted()
+    files = {"compose.yaml": "", "backups/jobs/db.sh": "", "other/systemd/x.timer": ""}
+    assert install_timers(files, ["old.yml"], [], "box", NAMED, idle, 7, out, err) is True
+    assert idle.calls == []
+    assert out.getvalue() == ""
+    units = {f"{UNIT}.timer": "", f"{UNIT}.service": "", f"{UNIT}-2.timer": "", "a.timer": ""}
+    assert install_timers(units, [], [], "box", NAMED, Scripted(), 7, out, err) is True
+    assert out.getvalue() == "box: 2 backup timer(s), 0 unit file(s) changed, 0 removed\n"
+    assert err.getvalue() == ""
+
+
+@pytest.mark.parametrize(
+    ("step", "code", "hint"),
+    [
+        (f"sudo -n {HELPER} /opt/ayeops/box timers", 64, TIMERS_HINT),
+        (f"sudo -n {HELPER} /opt/ayeops/box timers", 1, TIMERS_HINT),
+        (f"sudo -n {HELPER} /opt/ayeops/box timers", TIMED_OUT, ""),
+        (f"sudo sh -c 'sudo -n {HELPER} x'", 64, ""),
+        ("timers", 64, ""),
+    ],
+)
+def test_a_failed_timers_step_hints_at_host_init_only_for_a_helper_that_did_not_time_out(
+    step: str, code: int, hint: str
+) -> None:
+    runner = Scripted(**{step: Result(code, "changed x\n", " refused \n")})
+    out, err = io.StringIO(), io.StringIO()
+    files = {f"{UNIT}.timer": ""}
+    steps = {**NAMED, "timers": step}
+    assert install_timers(files, [], [], "box", steps, runner, 7, out, err) is False
+    assert runner.calls == [(["ssh", "box", step], None, 7)]
+    assert out.getvalue() == ""
+    assert err.getvalue() == f"refused\nbox: backup timers not installed\n{hint}"
+
+
+def test_prepare_pulls_on_the_rendered_compose_and_reads_rules_only_when_rendered() -> None:
+    runner = Scripted()
+    out, err = io.StringIO(), io.StringIO()
+    assert prepare({"compose.yaml": WEB}, "box", NAMED, runner, 8, out, err) is True
+    assert runner.calls == [(["ssh", "box", "pull"], WEB.encode(), 8)]
+    assert out.getvalue() == err.getvalue() == ""
+    unreadable = Scripted(rules=Result(1, "", " no access \n"))
+    files = {"compose.yaml": WEB, RULES: "apiVersion: 1\ngroups: []\n"}
+    assert prepare(files, "box", NAMED, unreadable, 8, out, err) is False
+    assert unreadable.calls == [(["ssh", "box", "rules"], None, 8)]
+    assert out.getvalue() == ""
+    assert err.getvalue() == (
+        "no access\nbox: live alert rules unreadable, the running stack is untouched\n"
+    )
+
+
+def test_prepare_tells_of_a_retired_rule_on_its_output_stream() -> None:
+    live = "groups:\n  - rules:\n      - uid: kept\n      - uid: gone-rule\n"
+    runner = Scripted(rules=Result(0, live))
+    out, err = io.StringIO(), io.StringIO()
+    files = {"compose.yaml": WEB, RULES: "groups:\n  - rules:\n      - uid: kept\n"}
+    assert prepare(files, "box", NAMED, runner, 8, out, err) is True
+    assert [argv[-1] for argv, _, _ in runner.calls] == ["rules", "pull"]
+    assert out.getvalue() == (
+        "box: alert rule gone-rule left the manifest, Grafana deletes it on start\n"
+    )
+    assert err.getvalue() == ""
+    assert yaml.safe_load(files[RULES])["deleteRules"] == [{"orgId": 1, "uid": "gone-rule"}]
+
+
+def test_prepare_and_ship_hint_at_host_init_only_when_told_the_helper_is_in_use() -> None:
+    untouched = "box: images not pulled, the running stack is untouched\n"
+    for helper, hint in ((None, ""), (False, ""), (True, PULL_HINT)):
+        mode = () if helper is None else (helper,)
+        runner = Scripted(pull=Result(1, "", " denied \n"))
+        out, err = io.StringIO(), io.StringIO()
+        assert prepare({"compose.yaml": WEB}, "box", NAMED, runner, 8, out, err, *mode) is False
+        assert err.getvalue() == f"denied\n{untouched}{hint}"
+        shipped = Scripted(pull=Result(1, "", " denied \n"))
+        out, err = io.StringIO(), io.StringIO()
+        assert ship({"compose.yaml": WEB}, "box", "/srv/x", NAMED, shipped, 8, out, err, *mode) == 1
+        assert [argv[-1] for argv, _, _ in shipped.calls] == ["pull"]
+        assert out.getvalue() == ""
+        assert err.getvalue() == f"denied\n{untouched}{hint}"
+
+
+def test_ship_pulls_then_finishes_with_the_same_host_directory_timeout_and_streams() -> None:
+    runner = Scripted(ps=WEB_UP)
+    out, err = io.StringIO(), io.StringIO()
+    files = {"compose.yaml": WEB}
+    assert ship(files, "box", "/srv/x", NAMED, runner, 8, out, err) == 0
+    assert runner.calls == [
+        (["ssh", "box", "pull"], WEB.encode(), 8),
+        (["ssh", "box", "swap"], tarball(files), 8),
+        (["ssh", "box", "up"], None, 8),
+        (["ssh", "box", "ps"], None, 8),
+    ]
+    assert out.getvalue() == f"box:/srv/x: 0 file(s) changed, 0 removed\n{WEB_TABLE}"
+    assert err.getvalue() == ""
+    down = Scripted(ps=Result(0, json.dumps([{"Service": "web", "State": "exited"}])))
+    assert ship(files, "box", "/srv/x", NAMED, down, 8, out, err) == 1
+
+
+def test_deploy_stamps_the_render_with_the_given_build_time_and_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked: list[tuple[Any, ...]] = []
+    rendered: list[Stamp | None] = []
+
+    def stamp(*args: Any) -> Stamp:
+        asked.append(args)
+        return EXAMPLE_STAMP
+
+    def render(manifest: Manifest, modules: Any, given: Stamp | None = None) -> dict[str, str]:
+        rendered.append(given)
+        return render_once(manifest, modules, given)
+
+    monkeypatch.setattr(deploy_module, "current_stamp", stamp)
+    monkeypatch.setattr(deploy_module, "render_tree", render)
+    runner = FakeSsh(Result(0), Result(0))
+    assert deploy(EXAMPLE, "central", runner=runner, time="T", commit="C") == 0
+    assert asked == [(EXAMPLE, "T", "C")]
+    assert rendered == [EXAMPLE_STAMP]
+    assert runner.calls[1][1] == (RENDERED / "central" / "compose.yaml").read_bytes()

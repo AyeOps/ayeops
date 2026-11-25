@@ -892,3 +892,365 @@ def test_the_alerts_are_warnings_with_the_thresholds_of_the_docs(
     assert "> bool 259200" in alerts["eol-data-stale"]["expr"]
     assert 3 * agent.DAY == 259200
     assert agent.SOON == 90
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("00:00", (0, 0)), ("23:59", (23, 59)), ("19:07", (19, 7)), ("\t05:30\n", (5, 30))],
+)
+def test_parse_schedule_reads_the_hour_and_the_minute(text: str, expected: tuple[int, int]) -> None:
+    assert agent.parse_schedule(text) == expected
+
+
+@pytest.mark.parametrize("text", ["24:00", "5:30", "05:60", "05:30:00", "0530", ""])
+def test_parse_schedule_names_the_text_it_refuses(text: str) -> None:
+    with pytest.raises(ValueError) as refused:
+        agent.parse_schedule(text)
+    assert str(refused.value) == f"not an HH:MM time: {text!r}"
+
+
+def test_next_run_moves_to_tomorrow_only_once_the_minute_is_reached() -> None:
+    tomorrow = time.mktime((2026, 11, 6, 5, 30, 0, 0, 0, -1))
+    assert agent.next_run(at(5, 30) - 1, 5, 30) == at(5, 30)
+    assert agent.next_run(at(5, 30) + 1, 5, 30) == tomorrow
+    assert agent.next_run(at(23, 59), 0, 0) == time.mktime((2026, 11, 6, 0, 0, 0, 0, 0, -1))
+    assert agent.next_run(at(0, 0), 23, 59) == at(23, 59)
+    assert tomorrow - at(5, 30) == agent.DAY
+
+
+def test_parse_os_release_unquotes_only_a_matching_pair_of_quotes() -> None:
+    text = '#OFF=1\n  A=  b  \nB=\'c d\'\nC=XaX\nD="e\'\nE=\'\nF=aba\nG=""x""\nH=a=b\nI=\n'
+    assert agent.parse_os_release(text) == {
+        "A": "b",
+        "B": "c d",
+        "C": "XaX",
+        "D": "\"e'",
+        "E": "'",
+        "F": "aba",
+        "G": '"x"',
+        "H": "a=b",
+        "I": "",
+    }
+    assert agent.parse_os_release("") == {}
+    assert agent.parse_os_release("A=1\nA=2\n") == {"A": "2"}
+
+
+def test_a_cached_validator_that_is_not_text_is_dropped_and_a_text_one_kept(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "p.json"
+    path.write_text(
+        json.dumps({"fetched": "2.5", "body": body(), "etag": "e", "modified": 5}),
+        encoding="utf-8",
+    )
+    assert agent.read_cached(path) == agent.Cached(2.5, body(), "e", None)
+    path.write_text(
+        json.dumps({"fetched": 2, "body": body(), "etag": ["e"], "modified": "m"}),
+        encoding="utf-8",
+    )
+    assert agent.read_cached(path) == agent.Cached(2.0, body(), None, "m")
+
+
+def test_write_atomic_goes_through_the_tmp_file_next_to_the_target(tmp_path: Path) -> None:
+    path = tmp_path / "eol.prom"
+    path.write_text("old", encoding="utf-8")
+    accented = b"caf\xc3\xa9 \xe2\x9c\x93"
+    agent.write_atomic(path, accented.decode("utf-8"))
+    assert path.read_bytes() == accented
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == ["eol.prom"]
+    (tmp_path / "eol.prom.tmp").mkdir()
+    with pytest.raises(OSError):
+        agent.write_atomic(path, "new")
+    assert path.read_bytes() == accented
+
+
+def test_the_cache_and_the_state_are_written_as_json_with_sorted_keys(tmp_path: Path) -> None:
+    path = tmp_path / "p.json"
+    agent.write_cached(path, agent.Cached(5.0, {"result": {"releases": []}}, "e", None))
+    assert path.read_text(encoding="utf-8") == (
+        '{"body": {"result": {"releases": []}}, "etag": "e", "fetched": 5.0, "modified": null}'
+    )
+    agent.write_cached(path, agent.Cached(6.5, {"z": 1, "result": {"releases": []}}, None, "m"))
+    assert path.read_text(encoding="utf-8") == (
+        '{"body": {"result": {"releases": []}, "z": 1}, "etag": null, "fetched": 6.5,'
+        ' "modified": "m"}'
+    )
+    state = tmp_path / "state.json"
+    agent.write_state(state, agent.State(1.0, 2.0, {"b": False, "a": True}))
+    assert state.read_text(encoding="utf-8") == (
+        '{"last_attempt": 2.0, "last_success": 1.0, "results": {"a": true, "b": false}}'
+    )
+    agent.write_state(state, agent.State(3.0))
+    assert state.read_text(encoding="utf-8") == (
+        '{"last_attempt": null, "last_success": 3.0, "results": {}}'
+    )
+
+
+def test_the_default_opener_opens_the_request_with_the_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def fake(*args: Any, **kwargs: Any) -> str:
+        seen.append((args, kwargs))
+        return "answer"
+
+    monkeypatch.setattr(agent.urllib.request, "urlopen", fake)
+    request = urllib.request.Request("https://e.test/products/p")
+    assert agent.default_opener(request, 4.5) == "answer"
+    assert seen == [((request,), {"timeout": 4.5})]
+
+
+@pytest.mark.parametrize(
+    ("previous", "validators"),
+    [
+        (None, {}),
+        ((None, None), {}),
+        (("", ""), {}),
+        (('"e"', None), {"If-None-Match": '"e"'}),
+        ((None, "Sat, 31 Oct 2026"), {"If-Modified-Since": "Sat, 31 Oct 2026"}),
+        (('"e"', "m"), {"If-None-Match": '"e"', "If-Modified-Since": "m"}),
+    ],
+)
+def test_the_request_names_its_headers_as_http_spells_them(
+    previous: tuple[str | None, str | None] | None,
+    validators: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    built: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def fake(*args: Any, **kwargs: Any) -> str:
+        built.append((args, kwargs))
+        return "request"
+
+    monkeypatch.setattr(agent.urllib.request, "Request", fake)
+    cached = None if previous is None else agent.Cached(1.0, body(), *previous)
+    assert agent.request_for("https://e.test/api/v1", "redis", cached) == "request"
+    headers = {
+        "User-Agent": "ayeops-eol/1 (+https://github.com/AyeOps/ayeops)",
+        "Accept": "application/json",
+        **validators,
+    }
+    assert built == [(("https://e.test/api/v1/products/redis",), {"headers": headers})]
+    assert list(built[0][1]["headers"]) == list(headers)
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("{}", "AYE_EOL_COMPONENTS must be a JSON list"),
+        ('"redis"', "AYE_EOL_COMPONENTS must be a JSON list"),
+        ("[1]", "a component needs name, product and cycle: 1"),
+        (
+            '[{"name": "a", "product": "p"}]',
+            "a component needs name, product and cycle: {'name': 'a', 'product': 'p'}",
+        ),
+        (
+            '[{"name": "a", "product": "p", "cycle": ""}]',
+            "a component needs name, product and cycle: {'name': 'a', 'product': 'p', 'cycle': ''}",
+        ),
+        (
+            '[{"name": "a", "product": "../etc", "cycle": "1"}]',
+            "not an endoflife.date product: '../etc'",
+        ),
+        (
+            '[{"name": "a", "product": "Redis", "cycle": "1"}]',
+            "not an endoflife.date product: 'Redis'",
+        ),
+    ],
+)
+def test_a_malformed_component_list_is_refused_with_the_reason(text: str, message: str) -> None:
+    with pytest.raises(ValueError) as refused:
+        agent.components_from(text)
+    assert str(refused.value) == message
+
+
+def test_components_keep_their_order_and_take_name_product_and_cycle_by_key() -> None:
+    text = json.dumps(
+        [
+            {"cycle": "7.4", "product": "redis", "name": "cache:7.4", "extra": 1},
+            {"name": "db", "product": "postgresql", "cycle": "18"},
+        ]
+    )
+    assert agent.components_from(text) == (
+        agent.Component("cache:7.4", "redis", "7.4"),
+        agent.Component("db", "postgresql", "18"),
+    )
+    assert agent.components_from("[]") == ()
+
+
+@pytest.mark.parametrize("text", ['"a"', "{}", '[""]', "[1]", '["a", null]', '["a", ""]'])
+def test_a_malformed_unmapped_list_is_refused_with_the_reason(text: str) -> None:
+    with pytest.raises(ValueError) as refused:
+        agent.unmapped_from(text)
+    assert str(refused.value) == "AYE_EOL_UNMAPPED must be a JSON list of image references"
+
+
+def test_unmapped_images_are_kept_in_their_order() -> None:
+    assert agent.unmapped_from('["z/app:1", "a:2"]') == ("z/app:1", "a:2")
+    assert agent.unmapped_from("[]") == ()
+
+
+def test_settings_strip_only_the_slashes_at_the_end_of_the_api() -> None:
+    parsed = agent.settings_from({"AYE_EOL_API": "https://mirror.test/apiX//"})
+    assert parsed.api == "https://mirror.test/apiX"
+    assert agent.settings_from({"AYE_EOL_OS_RELEASE": "/etc/os-release"}).os_release == Path(
+        "/etc/os-release"
+    )
+    assert agent.Settings() == agent.Settings(
+        (5, 30),
+        "https://endoflife.date/api/v1",
+        Path("/cache"),
+        Path("/textfile/ayeops_eol.prom"),
+        Path("/host/os-release"),
+        (),
+        (),
+    )
+
+
+tzset = getattr(time, "tzset", None)
+
+
+@pytest.mark.skipif(tzset is None, reason="needs time.tzset to move the local zone")
+def test_today_is_the_utc_date_in_a_zone_far_from_utc(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert tzset is not None
+    monkeypatch.setenv("TZ", "AYE-14")
+    tzset()
+    try:
+        assert time.localtime(CAPTURED).tm_mday == 6
+        assert agent.today_of(CAPTURED) == TODAY
+    finally:
+        monkeypatch.undo()
+        tzset()
+
+
+def test_the_summary_lists_what_ends_within_ninety_days_what_ended_and_what_is_unknown() -> None:
+    def status(name: str, known: bool, days: int | None = None, ended: bool = False) -> Any:
+        security = None if days is None else date.fromordinal(TODAY.toordinal() + days)
+        return agent.Status(agent.Component(name, "p", "1"), known, security, None, ended)
+
+    found = [
+        status("z-ended", True, -1, True),
+        status("soon", True, 89),
+        status("today", True, 0),
+        status("later", True, 90),
+        status("open", True),
+        status("z-unknown", False),
+        status("a-unknown", False, 5),
+        status("a-ended", True, None, True),
+    ]
+    failed = agent.State(1.0, 2.0, {"p": False})
+    assert agent.summary(found, failed, {"p": "HTTP 500"}, TODAY) == {
+        "event": "eol-fetch",
+        "success": False,
+        "failed": {"p": "HTTP 500"},
+        "soon": {"p 1 (soon)": 89, "p 1 (today)": 0},
+        "ended": ["p 1 (a-ended)", "p 1 (z-ended)"],
+        "unknown": ["p 1 (a-unknown)", "p 1 (z-unknown)"],
+    }
+    assert agent.summary([], agent.State(1.0), {}, TODAY) == {
+        "event": "eol-fetch",
+        "success": True,
+        "failed": {},
+        "soon": {},
+        "ended": [],
+        "unknown": [],
+    }
+
+
+EMPTY_LINE = '{"ended": [], "event": "eol-fetch", "failed": {}, "soon": {}, "success": true, '
+EMPTY_LINE += '"unknown": []}\n'
+
+
+def test_serve_fetches_at_the_scheduled_second_and_prints_one_sorted_json_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = settings(tmp_path, schedule=(5, 30))
+    clock = Clock(at(5, 30) - 10)
+    state = agent.prepare(target, clock.now)
+    agent.serve(target, state, clock.wall, clock.sleep, loops(2), tmp_path / "alive", Opener())
+    assert clock.slept == [10, agent.NAP]
+    assert capsys.readouterr().out == EMPTY_LINE
+    assert agent.read_state(target.state) == agent.State(at(5, 30), at(5, 30), {})
+
+
+def test_serve_never_sleeps_less_than_a_second_or_more_than_a_nap(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = settings(tmp_path, schedule=(5, 30))
+    clock = Clock(at(5, 30) - 30.25)
+    state = agent.prepare(target, clock.now)
+    agent.serve(target, state, clock.wall, clock.sleep, loops(2), tmp_path / "alive", Opener())
+    assert clock.slept == [30, 1.0]
+    assert capsys.readouterr().out == ""
+    assert target.textfile.exists()
+    again = Clock(at(5, 30) - 30.25)
+    agent.serve(target, state, again.wall, again.sleep, loops(3), tmp_path / "alive", Opener())
+    assert again.slept == [30, 1.0, 30]
+    assert capsys.readouterr().out == EMPTY_LINE
+
+
+def main_environ(tmp_path: Path, **extra: str) -> dict[str, str]:
+    return {
+        "AYE_EOL_CACHE": str(tmp_path / "cache"),
+        "AYE_EOL_TEXTFILE": str(tmp_path / "eol.prom"),
+        "AYE_EOL_OS_RELEASE": "",
+        **extra,
+    }
+
+
+@pytest.mark.parametrize("ok", [True, False])
+def test_main_once_runs_one_fetch_prints_its_line_and_exits_by_its_success(
+    ok: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[Any, ...]] = []
+    after = agent.State(1.0, 2.0, {"p": ok})
+
+    def once(*args: Any) -> tuple[Any, dict[str, Any]]:
+        calls.append(args)
+        return after, {"b": 1, "a": [2]}
+
+    def never(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("served")
+
+    monkeypatch.setattr(agent, "run_once", once)
+    monkeypatch.setattr(agent, "serve", never)
+    environ = main_environ(tmp_path, AYE_EOL_ONCE="1")
+    assert agent.main(environ) == (0 if ok else 1)
+    assert capsys.readouterr().out == '{"a": [2], "b": 1}\n'
+    assert len(calls) == 1
+    target, state, wall, opener = calls[0]
+    assert target == agent.settings_from(environ)
+    assert state == agent.read_state(target.state)
+    assert isinstance(state.last_success, float) and state.last_attempt is None
+    assert wall is time.time
+    assert opener is agent.default_opener
+
+
+@pytest.mark.parametrize("once", [None, "", "0", "11", "true", " 1"])
+def test_main_serves_for_ever_unless_once_is_exactly_one(
+    once: str | None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    served: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def serve(*args: Any, **kwargs: Any) -> None:
+        served.append((args, kwargs))
+
+    def never(*args: Any) -> None:
+        raise AssertionError("fetched once")
+
+    monkeypatch.setattr(agent, "serve", serve)
+    monkeypatch.setattr(agent, "run_once", never)
+    environ = main_environ(tmp_path) if once is None else main_environ(tmp_path, AYE_EOL_ONCE=once)
+    assert agent.main(environ) == 0
+    target = agent.settings_from(environ)
+    state = agent.read_state(target.state)
+    assert isinstance(state, agent.State) and isinstance(state.last_success, float)
+    assert served == [((target, state), {})]
+    assert capsys.readouterr().out == ""
