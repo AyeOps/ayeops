@@ -1017,6 +1017,6 @@ def test_only_hosts_with_the_metrics_module_are_looked_at(data: dict[str, Any]) 
     data["hosts"]["bare"] = {"arch": "amd64", "modules": {"node": {}}}
     found = metrics_settings(manifest_from(data))
     assert [host for host, _, _ in found] == ["central", "edge"]
-    host, modules, settings = found[0]
+    _, modules, settings = found[0]
     assert "backups" in modules
     assert (settings["role"], settings["backup"], settings["backup_hour"]) == ("server", True, 2)

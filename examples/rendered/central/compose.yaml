@@ -804,7 +804,7 @@ services:
       timeout: 5s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: f7fe654664d6e1ec
+      io.ayeops.config-hash: eea878fa337816a6
       io.ayeops.module: mcp
       io.ayeops.service: mcp-catalog
     logging:
@@ -1440,7 +1440,7 @@ services:
     image: victoriametrics/victoria-metrics:v1.153.0@sha256:5eff7af5341e401471002f58d106d399e614a62f3d240f2dbc21901e49eed5dd
     init: true
     labels:
-      io.ayeops.config-hash: 1c84a563b3a1af01
+      io.ayeops.config-hash: f2d028a59d44e66e
       io.ayeops.module: metrics
       io.ayeops.service: victoriametrics-backup
     logging:
