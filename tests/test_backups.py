@@ -303,8 +303,6 @@ def test_the_declaration_service_writes_into_the_host_textfile_directory_without
 def test_the_wrapper_and_the_declaration_ship_next_to_the_compose_file(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
-    del data["hosts"]["central"]["modules"]["backups"]
-    data["hosts"]["central"]["modules"]["metrics"]["backup"] = False
     tree = render_tree(manifest_from(data), modules)
     assert tree["edge/backups/backup_run.sh"] == RUN.read_text(encoding="utf-8")
     assert tree["edge/backups/backup_jobs.sh"] == JOBS.read_text(encoding="utf-8")
@@ -351,7 +349,6 @@ def test_without_the_module_no_backup_rule_is_rendered(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
     del data["hosts"]["edge"]["modules"]["backups"]
-    del data["hosts"]["central"]["modules"]["backups"]
     assert backup_rules(data, modules) == {}
 
 
@@ -932,14 +929,15 @@ def test_a_built_in_dump_with_when_exists_only_while_its_setting_is_true() -> No
     assert job_ages([METRICS_JOB]) == {"metrics": 26 * HOUR}
 
 
-def central_modules(data: dict[str, Any]) -> dict[str, Any]:
-    modules: dict[str, Any] = data["hosts"]["central"]["modules"]
+def modules_of(data: dict[str, Any], host: str) -> dict[str, Any]:
+    modules: dict[str, Any] = data["hosts"][host]["modules"]
     return modules
 
 
-def metrics_of(data: dict[str, Any], host: str) -> dict[str, Any]:
-    settings: dict[str, Any] = data["hosts"][host]["modules"]["metrics"]
-    return settings
+def with_metrics_backup(data: dict[str, Any]) -> dict[str, Any]:
+    modules_of(data, "central")["metrics"]["backup"] = True
+    modules_of(data, "central")["backups"] = {}
+    return data
 
 
 AGENT_BACKUP = "only role server keeps a store to back up; an agent ships its samples away"
@@ -948,22 +946,26 @@ BACKUPS_NEEDED = (
     " module: add backups: {} to this host"
 )
 NO_BACKUP = (
-    "the fleet backs up its dumps but not the metrics store of this host: set backup: true for"
-    " a daily snapshot archive and a weekly restore test of it"
+    "this host backs up its dumps but not its metrics store: set backup: true for a daily"
+    " snapshot archive and a weekly restore test of it"
 )
 
 
-def test_the_example_backs_up_its_metrics_store_without_a_finding(data: dict[str, Any]) -> None:
-    assert metrics_of(data, "central")["backup"] is True
-    manifest = manifest_from(data)
-    assert metrics_backup_problems(manifest) == []
-    assert metrics_backup_warnings(manifest) == []
+def test_the_example_has_no_metrics_backup_finding_with_or_without_the_backup(
+    data: dict[str, Any],
+) -> None:
+    assert "backup" not in modules_of(data, "central")["metrics"]
+    assert metrics_backup_problems(manifest_from(data)) == []
+    assert metrics_backup_warnings(manifest_from(data)) == []
+    with_metrics_backup(data)
+    assert metrics_backup_problems(manifest_from(data)) == []
+    assert metrics_backup_warnings(manifest_from(data)) == []
     assert "metrics-backup" not in rules_hit(data)
     assert "metrics-backup" not in warnings_hit(data)
 
 
 def test_the_metrics_backup_needs_the_backups_module_on_its_host(data: dict[str, Any]) -> None:
-    del data["hosts"]["central"]["modules"]["backups"]
+    modules_of(data, "central")["metrics"]["backup"] = True
     assert metrics_backup_problems(manifest_from(data)) == [
         ("hosts.central.modules.metrics.backup", "metrics-backup", BACKUPS_NEEDED)
     ]
@@ -971,52 +973,48 @@ def test_the_metrics_backup_needs_the_backups_module_on_its_host(data: dict[str,
 
 
 def test_an_agent_has_no_store_to_back_up(data: dict[str, Any]) -> None:
-    metrics_of(data, "edge")["backup"] = True
+    modules_of(data, "edge")["metrics"]["backup"] = True
     assert metrics_backup_problems(manifest_from(data)) == [
         ("hosts.edge.modules.metrics.backup", "metrics-backup", AGENT_BACKUP)
     ]
-    metrics_of(data, "central")["backup"] = False
-    assert metrics_backup_problems(manifest_from(data)) == [
-        ("hosts.edge.modules.metrics.backup", "metrics-backup", AGENT_BACKUP)
-    ]
-    del data["hosts"]["edge"]["modules"]["backups"]
-    del data["hosts"]["edge"]["modules"]["offsite"]
+    with_metrics_backup(data)
+    del modules_of(data, "edge")["backups"]
+    del modules_of(data, "edge")["offsite"]
     assert metrics_backup_problems(manifest_from(data)) == [
         ("hosts.edge.modules.metrics.backup", "metrics-backup", AGENT_BACKUP),
         ("hosts.edge.modules.metrics.backup", "metrics-backup", BACKUPS_NEEDED),
     ]
 
 
-def test_a_server_without_a_backup_warns_and_an_agent_does_not(data: dict[str, Any]) -> None:
-    del metrics_of(data, "central")["backup"]
+def test_a_server_that_backs_up_its_dumps_but_not_its_store_warns(data: dict[str, Any]) -> None:
+    modules_of(data, "central")["backups"] = {}
     assert metrics_backup_problems(manifest_from(data)) == []
     assert metrics_backup_warnings(manifest_from(data)) == [
         ("hosts.central.modules.metrics", "metrics-backup", NO_BACKUP)
     ]
     assert "metrics-backup" in warnings_hit(data)
     assert "metrics-backup" not in rules_hit(data)
-    metrics_of(data, "central")["backup"] = False
-    metrics_of(data, "edge")["role"] = "server"
-    del metrics_of(data, "edge")["remote_write"]
+    modules_of(data, "central")["metrics"]["backup"] = False
+    assert len(metrics_backup_warnings(manifest_from(data))) == 1
+    edge = modules_of(data, "edge")["metrics"]
+    edge["role"] = "server"
+    del edge["remote_write"]
     assert [path for path, _, _ in metrics_backup_warnings(manifest_from(data))] == [
         "hosts.central.modules.metrics",
         "hosts.edge.modules.metrics",
     ]
-    del data["hosts"]["edge"]["modules"]["backups"]
-    del data["hosts"]["edge"]["modules"]["offsite"]
-    del central_modules(data)["backups"]
-    assert metrics_backup_warnings(manifest_from(data)) == []
-    central_modules(data)["backups"] = {}
+    del modules_of(data, "central")["backups"]
     assert [path for path, _, _ in metrics_backup_warnings(manifest_from(data))] == [
-        "hosts.central.modules.metrics",
-        "hosts.edge.modules.metrics",
+        "hosts.edge.modules.metrics"
     ]
 
 
 def test_only_hosts_with_the_metrics_module_are_looked_at(data: dict[str, Any]) -> None:
+    with_metrics_backup(data)
     data["hosts"]["bare"] = {"arch": "amd64", "modules": {"node": {}}}
     found = metrics_settings(manifest_from(data))
     assert [host for host, _, _ in found] == ["central", "edge"]
     _, modules, settings = found[0]
     assert "backups" in modules
     assert (settings["role"], settings["backup"], settings["backup_hour"]) == ("server", True, 2)
+    assert found[1][2]["backup"] is False

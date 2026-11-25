@@ -451,16 +451,13 @@ def metrics_backup_problems(manifest: Manifest) -> list[tuple[str, str, str]]:
 
 
 def metrics_backup_warnings(manifest: Manifest) -> list[tuple[str, str, str]]:
-    found = metrics_settings(manifest)
-    if not any(MODULE in modules for _, modules, _ in found):
-        return []
     return [
         (
             f"hosts.{host}.modules.{METRICS}",
             "metrics-backup",
-            "the fleet backs up its dumps but not the metrics store of this host: set backup:"
-            " true for a daily snapshot archive and a weekly restore test of it",
+            "this host backs up its dumps but not its metrics store: set backup: true for a daily"
+            " snapshot archive and a weekly restore test of it",
         )
-        for host, _, settings in found
-        if settings["role"] == SERVER and not settings["backup"]
+        for host, modules, settings in metrics_settings(manifest)
+        if settings["role"] == SERVER and not settings["backup"] and MODULE in modules
     ]

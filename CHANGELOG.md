@@ -26,8 +26,9 @@ and was never tagged.
   (`7`) it opens the newest archive in a scratch VictoriaMetrics and checks that it holds samples
   of `up`; the alert `metrics-restore-test` fires when that fails or is overdue. Archives older
   than `backup_keep_days` (`2`) are deleted. It runs on the pinned VictoriaMetrics image, so no
-  new image. Off by default, since every archive is a full copy of the store on the same disk;
-  `aye check` warns (rule `metrics-backup`) for a `role: server` without it.
+  new image. Off by default, since every archive is a full copy of the store on the same disk
+  and the container counts 512 MiB towards the memory budget; `aye check` warns (rule
+  `metrics-backup`) for a `role: server` that runs `backups` without it.
 - Module `backup_jobs` take `when`, a setting the job exists only with.
 
 ### Changed

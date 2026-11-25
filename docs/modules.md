@@ -161,8 +161,9 @@ plain copy can miss files or hold a mix of two moments. With `backup: true` the 
 the copy the way VictoriaMetrics supports, from an instant snapshot, and proves weekly that the
 copy opens. It is off by default because it costs disk, not a surprise: every archive is a
 full copy of the store on the host's disk, `backup_keep_days` of them plus one during the
-restore test. `aye check` warns (rule `metrics-backup`) for every `role: server` host without
-it, and fails when `backup` is set on an `agent` or on a host without `backups`.
+restore test, and 512 MiB more in the host's [memory budget](rules.md). `aye check` warns
+(rule `metrics-backup`) for a `role: server` host that runs `backups` for its other dumps but
+not this one, and fails when `backup` is set on an `agent` or on a host without `backups`.
 
 ```yaml
 metrics:

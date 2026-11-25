@@ -682,17 +682,6 @@
       "summary": "{{ .Labels.host }} has less than 10 % memory available",
       "title": "Memory available below 10 %"
     },
-    "metrics-restore-test": {
-      "expr": "max by (host, project, group, backup) ((time() > bool ayeops_backup_restore_test_deadline_timestamp_seconds) + ((ayeops_backup_restore_test_ok == bool 0) or (ayeops_backup_restore_test_deadline_timestamp_seconds * 0)))",
-      "for": "10m",
-      "module": "metrics",
-      "name": "metrics-restore-test",
-      "runbook": "metrics-restore-test",
-      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-restore-test.md",
-      "severity": "warning",
-      "summary": "The restore test of the metrics store backup on {{ .Labels.host }} failed, or none passed within restore_test_days plus one",
-      "title": "Metrics store restore test failed or overdue"
-    },
     "metrics-shipping-backlog": {
       "expr": "(sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool 1800 * sum by (host, project, group) (rate(vmagent_remotewrite_block_size_bytes_sum[1h]))) + (sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool sum by (host, project, group) (vm_persistentqueue_free_disk_space_bytes))",
       "for": "15m",
@@ -1108,7 +1097,6 @@
         "ai-usage",
         "auth",
         "autopilot",
-        "backups",
         "cloudflare",
         "containers",
         "delivery",
@@ -1433,11 +1421,6 @@
       "text": "# Memory available below 10 %\n\nMemAvailable stayed below 10 % of MemTotal for 10 minutes.\n\n## What to do\n\n1. `docker stats --no-stream` to find the container using memory.\n2. Compare with the `mem_limit` values in the rendered compose file; `aye check` keeps their sum within the host `memory`.\n3. Processes outside docker: `ps aux --sort=-rss | head`.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/memory-low.md"
     },
-    "metrics-restore-test": {
-      "name": "metrics-restore-test",
-      "text": "# Metrics store restore test failing\n\nThe last restore test of the metrics store backup failed, or none has passed within\n`restore_test_days` plus one day. The test is the proof that the daily archive of\nVictoriaMetrics opens as a store and holds the fleet's samples; without it, an archive can be\nwritten every night and still be useless the day the store's disk dies. Setup and design:\n[metrics, backup](../modules.md#backup-of-the-store).\n\nThe test runs in `victoriametrics-backup` on the metrics host. Commands run in the rendered\ndirectory of that host; `<backup_dir>` is the module's `backup_dir`,\n`/var/backups/ayeops/metrics` by default.\n\n## What to do\n\n1. Read the cause. Every test is one log line:\n\n   ```sh\n   docker compose logs victoriametrics-backup | grep 'restore test'\n   ```\n\n   - `cannot extract victoriametrics-<stamp>.tar`: the archive is truncated or the disk of\n     `<backup_dir>` is full; the test needs room for one more copy of the store while it runs\n     (`df -h <backup_dir>`, and [disk-full](disk-full.md)). A truncated archive also failed its\n     dump: see [backup-failed](backup-failed.md).\n   - `VictoriaMetrics did not start on ...`: the lines before it are the scratch instance's\n     own log. `cannot open` or `missing parts.json` means the archive misses files of the\n     snapshot: check that the `victoriametrics-data` volume is mounted at `/storage` in\n     `victoriametrics-backup` and that nothing else deletes snapshots while the archive is\n     written. Memory errors mean the container limit: raise\n     `metrics.resources.victoriametrics-backup.memory` (and keep `aye check` clean).\n   - `no series of up in the hour before ...`: the store opened, but it held no samples of\n     `up` in the hour before the archive was taken. Either vmagent wrote nothing to the store\n     then (look for [target-down](target-down.md) and\n     [metrics-shipping-backlog](metrics-shipping-backlog.md) at that time), or the archive\n     holds old data only, which points at the same missing files as above.\n   - `cannot read the time of ...`: an archive was renamed by hand; the name carries the time\n     the test queries.\n   - no `restore test` line at all, and the alert says overdue: no archive exists yet, see\n     [backup-missing](backup-missing.md).\n\n2. After a fix, run the test now instead of waiting for the retry six hours later:\n\n   ```sh\n   docker compose stop victoriametrics-backup\n   docker compose run --rm --no-deps --entrypoint rm victoriametrics-backup \\\n     -f /textfile/ayeops_backup_restore_metrics.prom\n   docker compose up -d victoriametrics-backup\n   docker compose logs -f victoriametrics-backup\n   ```\n\n   Without the textfile the test counts as never run and starts two minutes after the\n   container, on the newest archive. `restore test passed` is the line to see.\n\nThe alert clears when a test passes.\n\n## Restore the store from an archive\n\nThe same steps as the test, on the real store. The archive is a copy of one VictoriaMetrics\nsnapshot with its links resolved, so it unpacks into a directory that VictoriaMetrics opens as\nits `-storageDataPath`.\n\n1. Pick the archive: the newest file in `<backup_dir>`, or one restored from the off-site copy\n   (`restic restore latest --target /tmp/metrics` on a host with the repository's password,\n   see [offsite](offsite.md)).\n2. Stop the store and its backup: `docker compose stop victoriametrics-backup victoriametrics`.\n   vmagent on every host keeps buffering on disk meanwhile, up to `queue_max`.\n3. Empty the volume and unpack the archive into it:\n\n   ```sh\n   docker compose run --rm --no-deps --entrypoint sh \\\n     -v <backup_dir>/victoriametrics-<stamp>.tar:/restore.tar:ro victoriametrics \\\n     -c 'rm -rf /storage/* && tar -xf /restore.tar -C /storage'\n   ```\n\n4. Start it again: `docker compose up -d victoriametrics victoriametrics-backup`. The samples\n   between the archive and the restore that vmagent still buffered arrive on their own; the\n   rest of that gap is lost.\n",
-      "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-restore-test.md"
-    },
     "metrics-shipping-backlog": {
       "name": "metrics-shipping-backlog",
       "text": "# vmagent falls behind shipping metrics\n\nFor 15 minutes vmagent on `host` has held more unshipped data than it collects in 30 minutes,\nor more than half of the room its queue has: `queue_max` of the\n[metrics](../modules.md#metrics) module, or the free disk under the queue when that is less.\nNothing is lost yet. When the queue is full, vmagent drops its oldest blocks and\n[metrics-shipping-dropped](metrics-shipping-dropped.md) fires.\n\nvmagent sends fresh samples ahead of the backlog, so the host keeps reporting while the queue\ndrains and this alert sees the queue grow. While storage is out of reach entirely, nothing\narrives from the host: [host-down](host-down.md) fires and holds this alert back until the host\nreports again.\n\n## What to do\n\n1. How fast does the queue grow and how much room is left? In Grafana Explore:\n   `sum by (host) (vmagent_remotewrite_pending_data_bytes{host=\"<host>\"})` and\n   `sum by (host) (vm_persistentqueue_free_disk_space_bytes{host=\"<host>\"})`. The room divided by\n   the growth per second, `deriv(vmagent_remotewrite_pending_data_bytes{host=\"<host>\"}[30m])`,\n   is the time left before data loss. The health dashboard draws the queue of every host in\n   \"Metrics waiting to be shipped\".\n2. On the host: `docker compose logs --tail 100 vmagent`. Timeouts or `connection refused`\n   point at the network or the central VictoriaMetrics; `429` or `5xx` answers mean storage\n   cannot keep up.\n3. From the host, `curl -s http://<central address>:8428/health` should print `OK`. On the\n   central host: is VictoriaMetrics up, is its disk full ([disk-full](disk-full.md))?\n4. A queue that shrinks after an outage needs nothing; the alert resolves once the backlog is\n   under 30 minutes of traffic. A link that never catches up needs less traffic (a longer\n   `scrape_interval`, fewer scrape targets) or a faster link; a larger `queue_max` only buys time.\n",
@@ -1705,31 +1688,6 @@
       "state": "live",
       "status": {
         "internal": "an operator tool that diagnoses alerts, users never see it"
-      }
-    },
-    "central/backup-jobs": {
-      "alerts": [
-        "backup-missing",
-        "backup-failed"
-      ],
-      "description": "Writes the declared dump jobs with the age after which each counts as missing into the node textfile directory, so a job that never ran is missed as well as one that stopped.",
-      "host": "central",
-      "id": "central/backup-jobs",
-      "logs": "docker",
-      "metrics": [
-        "ayeops_backup_max_age_seconds",
-        "ayeops_backup_rpo_seconds",
-        "ayeops_backup_declared_timestamp_seconds",
-        "ayeops_backup_last_success_timestamp_seconds",
-        "ayeops_backup_last_run_success",
-        "ayeops_backup_last_size_bytes",
-        "ayeops_backup_last_duration_seconds"
-      ],
-      "name": "backup-jobs",
-      "source": "module backups",
-      "state": "live",
-      "status": {
-        "internal": "users never see a dump until a restore needs it"
       }
     },
     "central/blackbox": {
@@ -2324,30 +2282,6 @@
       "state": "live",
       "status": {
         "internal": "storage behind dashboards and alerts, not a user-facing component"
-      }
-    },
-    "central/victoriametrics-backup": {
-      "alerts": [
-        "backup-missing",
-        "backup-failed",
-        "metrics-restore-test"
-      ],
-      "description": "With backup on, takes a snapshot of the store once a day through its snapshot API, archives it into backup_dir through backups/backup_run.sh under the backup label metrics and deletes the snapshot; once a week opens the newest archive in a scratch VictoriaMetrics and checks that it holds samples of up.",
-      "host": "central",
-      "id": "central/victoriametrics-backup",
-      "logs": "docker",
-      "metrics": [
-        "ayeops_backup_last_success_timestamp_seconds",
-        "ayeops_backup_last_run_success",
-        "ayeops_backup_last_size_bytes",
-        "ayeops_backup_restore_test_ok",
-        "ayeops_backup_restore_test_deadline_timestamp_seconds"
-      ],
-      "name": "victoriametrics-backup",
-      "source": "module metrics",
-      "state": "live",
-      "status": {
-        "internal": "backup of the metrics store; users never see it until a restore needs it"
       }
     },
     "central/vmagent": {

@@ -49,6 +49,12 @@ def central(data: dict[str, Any]) -> dict[str, Any]:
     return modules
 
 
+def with_backup(data: dict[str, Any]) -> dict[str, Any]:
+    central(data)["metrics"]["backup"] = True
+    central(data)["backups"] = {}
+    return data
+
+
 def services(data: dict[str, Any], modules: dict[str, Module]) -> dict[str, Any]:
     found: dict[str, Any] = host_compose(manifest_from(data), "central", modules)["services"]
     return found
@@ -58,7 +64,7 @@ def test_the_backup_is_off_by_default_and_renders_nothing(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
     assert modules["metrics"].defaults["backup"] is False
-    del central(data)["metrics"]["backup"]
+    central(data)["backups"] = {}
     assert SERVICE not in services(data, modules)
     tree = render_once(manifest_from(data), modules, EXAMPLE_STAMP)
     assert "central/metrics/backup.sh" not in tree
@@ -75,6 +81,7 @@ def test_the_backup_is_off_by_default_and_renders_nothing(
 def test_the_backup_runs_on_the_pinned_store_image_without_privileges(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
+    with_backup(data)
     found = services(data, modules)
     backup = found[SERVICE]
     assert backup["image"] == found["victoriametrics"]["image"]
@@ -114,6 +121,7 @@ def test_the_backup_runs_on_the_pinned_store_image_without_privileges(
 def test_the_settings_reach_the_container_and_the_host_textfile_directory(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
+    with_backup(data)
     central(data)["metrics"].update(
         backup_hour=5, backup_keep_days=9, backup_dir="/srv/metrics-archives", restore_test_days=3
     )
@@ -133,6 +141,7 @@ def test_the_settings_reach_the_container_and_the_host_textfile_directory(
 def test_the_archive_is_the_built_in_backup_job_metrics(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
+    with_backup(data)
     jobs = services(data, modules)["backup-jobs"]["environment"]["AYE_BACKUP_JOBS"]
     assert jobs == f"metrics={DAY + 2 * 3600}"
     tree = render_once(manifest_from(data), modules, EXAMPLE_STAMP)
@@ -148,6 +157,7 @@ def test_the_archive_is_the_built_in_backup_job_metrics(
 def test_an_agent_renders_no_backup_and_fails_the_rule(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
+    with_backup(data)
     data["hosts"]["edge"]["modules"]["metrics"]["backup"] = True
     edge = host_compose(manifest_from(data), "edge", modules)
     assert SERVICE not in edge["services"]
@@ -159,6 +169,7 @@ def test_an_agent_renders_no_backup_and_fails_the_rule(
 def test_the_restore_test_alert_fires_on_a_failure_or_a_passed_deadline_also_on_silence(
     modules: dict[str, Module], data: dict[str, Any]
 ) -> None:
+    with_backup(data)
     (alert,) = [a for a in modules["metrics"].alerts if a["name"] == "metrics-restore-test"]
     assert alert["expr"] == EXPR
     assert (alert["for"], alert["severity"], alert["no_data"]) == ("10m", "warning", "alerting")
