@@ -12,6 +12,19 @@ and was never tagged.
 
 ## [Unreleased]
 
+### Added
+
+- `metrics`: the alerts `metrics-shipping-backlog` (warning), when for 15 minutes a host's
+  vmagent queue holds more than 30 minutes of its own traffic or more than half of its room, and
+  `metrics-shipping-dropped` (critical), when in the last hour the full queue dropped blocks or
+  storage rejected one.
+
+### Changed
+
+- `metrics`: vmagent runs with `-remoteWrite.inmemoryQueues=1` and sends fresh samples ahead of
+  its on-disk backlog, so a host that reconnects after an outage reports at once and its backlog
+  fills in behind it.
+
 ## [0.3.0] - 2026-11-15
 
 ### Added

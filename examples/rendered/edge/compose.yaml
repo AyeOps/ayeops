@@ -900,6 +900,7 @@ services:
     - -remoteWrite.label=project=acme
     - -remoteWrite.tmpDataPath=/vmagent-data
     - -remoteWrite.maxDiskUsagePerURL=1GB
+    - -remoteWrite.inmemoryQueues=1
     - -httpListenAddr=:8429
     cpus: 0.5
     healthcheck:

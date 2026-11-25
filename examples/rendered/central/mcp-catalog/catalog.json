@@ -682,6 +682,28 @@
       "summary": "{{ .Labels.host }} has less than 10 % memory available",
       "title": "Memory available below 10 %"
     },
+    "metrics-shipping-backlog": {
+      "expr": "(sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool 1800 * sum by (host, project, group) (rate(vmagent_remotewrite_block_size_bytes_sum[1h]))) + (sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool sum by (host, project, group) (vm_persistentqueue_free_disk_space_bytes))",
+      "for": "15m",
+      "module": "metrics",
+      "name": "metrics-shipping-backlog",
+      "runbook": "metrics-shipping-backlog",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-shipping-backlog.md",
+      "severity": "warning",
+      "summary": "vmagent on {{ .Labels.host }} holds more than 30 minutes of its samples or half its queue room unshipped",
+      "title": "vmagent falls behind shipping metrics"
+    },
+    "metrics-shipping-dropped": {
+      "expr": "sum by (host, project, group) (increase(vm_persistentqueue_blocks_dropped_total[1h])) + sum by (host, project, group) (increase(vmagent_remotewrite_packets_dropped_total[1h])) > bool 0",
+      "for": "0m",
+      "module": "metrics",
+      "name": "metrics-shipping-dropped",
+      "runbook": "metrics-shipping-dropped",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-shipping-dropped.md",
+      "severity": "critical",
+      "summary": "vmagent on {{ .Labels.host }} dropped metrics: its full queue discarded the oldest, or storage rejected a block",
+      "title": "vmagent drops metrics"
+    },
     "mutation-score-dropped": {
       "expr": "aye:mutation_score_percent:median30d - aye:mutation_score_percent:last > bool 3",
       "for": "1m",
@@ -1321,7 +1343,7 @@
     },
     "host-down": {
       "name": "host-down",
-      "text": "# Host down\n\nNo fresh node metrics from the host for three minutes: the machine is off or asleep, vmagent cannot reach storage, or node-exporter is down.\n\n## What to do\n\n1. Is the host reachable at all (ping, ssh)? A laptop that sleeps fires this by design; silence it for the night rather than deleting the rule.\n2. On the host: `docker compose ps`; vmagent buffers to disk while storage is unreachable and replays when it is back.\n3. On the central host: is VictoriaMetrics up and is port 8428 reachable from the edge over the private address?\n4. While the host is down its other alerts are held back (value 0 in Grafana, see `docs/modules.md`, grafana). Once `host-down` resolves, look at what fires on the host in the next minutes: that is what was hidden.\n",
+      "text": "# Host down\n\nNo fresh node metrics from the host for three minutes: the machine is off or asleep, vmagent cannot reach storage, or node-exporter is down.\n\n## What to do\n\n1. Is the host reachable at all (ping, ssh)? A laptop that sleeps fires this by design; silence it for the night rather than deleting the rule.\n2. On the host: `docker compose ps`; vmagent buffers to disk while storage is unreachable and replays when it is back. The buffer lasts until `queue_max` is full, then [metrics-shipping-dropped](metrics-shipping-dropped.md) follows; `curl -s http://127.0.0.1:8429/metrics | grep pending_data_bytes` on the host shows its size in bytes.\n3. On the central host: is VictoriaMetrics up and is port 8428 reachable from the edge over the private address?\n4. While the host is down its other alerts are held back (value 0 in Grafana, see `docs/modules.md`, grafana). Once `host-down` resolves, look at what fires on the host in the next minutes: that is what was hidden.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/host-down.md"
     },
     "host-drift": {
@@ -1398,6 +1420,16 @@
       "name": "memory-low",
       "text": "# Memory available below 10 %\n\nMemAvailable stayed below 10 % of MemTotal for 10 minutes.\n\n## What to do\n\n1. `docker stats --no-stream` to find the container using memory.\n2. Compare with the `mem_limit` values in the rendered compose file; `aye check` keeps their sum within the host `memory`.\n3. Processes outside docker: `ps aux --sort=-rss | head`.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/memory-low.md"
+    },
+    "metrics-shipping-backlog": {
+      "name": "metrics-shipping-backlog",
+      "text": "# vmagent falls behind shipping metrics\n\nFor 15 minutes vmagent on `host` has held more unshipped data than it collects in 30 minutes,\nor more than half of the room its queue has: `queue_max` of the\n[metrics](../modules.md#metrics) module, or the free disk under the queue when that is less.\nNothing is lost yet. When the queue is full, vmagent drops its oldest blocks and\n[metrics-shipping-dropped](metrics-shipping-dropped.md) fires.\n\nvmagent sends fresh samples ahead of the backlog, so the host keeps reporting while the queue\ndrains and this alert sees the queue grow. While storage is out of reach entirely, nothing\narrives from the host: [host-down](host-down.md) fires and holds this alert back until the host\nreports again.\n\n## What to do\n\n1. How fast does the queue grow and how much room is left? In Grafana Explore:\n   `sum by (host) (vmagent_remotewrite_pending_data_bytes{host=\"<host>\"})` and\n   `sum by (host) (vm_persistentqueue_free_disk_space_bytes{host=\"<host>\"})`. The room divided by\n   the growth per second, `deriv(vmagent_remotewrite_pending_data_bytes{host=\"<host>\"}[30m])`,\n   is the time left before data loss. The health dashboard draws the queue of every host in\n   \"Metrics waiting to be shipped\".\n2. On the host: `docker compose logs --tail 100 vmagent`. Timeouts or `connection refused`\n   point at the network or the central VictoriaMetrics; `429` or `5xx` answers mean storage\n   cannot keep up.\n3. From the host, `curl -s http://<central address>:8428/health` should print `OK`. On the\n   central host: is VictoriaMetrics up, is its disk full ([disk-full](disk-full.md))?\n4. A queue that shrinks after an outage needs nothing; the alert resolves once the backlog is\n   under 30 minutes of traffic. A link that never catches up needs less traffic (a longer\n   `scrape_interval`, fewer scrape targets) or a faster link; a larger `queue_max` only buys time.\n",
+      "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-shipping-backlog.md"
+    },
+    "metrics-shipping-dropped": {
+      "name": "metrics-shipping-dropped",
+      "text": "# vmagent drops metrics\n\nvmagent on `host` threw away metric data in the last hour. Those samples are not in\nVictoriaMetrics and do not come back; dashboards and reports show a gap for that host. There are\ntwo causes, one counter each:\n\n- `vm_persistentqueue_blocks_dropped_total`: the queue reached its maximum, `queue_max` of the\n  [metrics](../modules.md#metrics) module or the free disk under it, and vmagent dropped its\n  oldest blocks to make room for new ones. Storage was out of reach or too slow for hours;\n  [host-down](host-down.md) or [metrics-shipping-backlog](metrics-shipping-backlog.md) fired\n  first.\n- `vmagent_remotewrite_packets_dropped_total`: storage answered `400` or `409` to a block, and\n  vmagent does not retry a rejected block.\n\nThe alert counts drops over one hour, so it stays firing for an hour after the last one. After\na long outage it fires once the host reports again, since the counters travel with the samples.\n\n## What to do\n\n1. Which counter grew? In Grafana Explore:\n   `increase(vm_persistentqueue_blocks_dropped_total{host=\"<host>\"}[1h])` and\n   `increase(vmagent_remotewrite_packets_dropped_total{host=\"<host>\"}[1h])`.\n2. Queue full: restore the path to storage as in\n   [metrics-shipping-backlog](metrics-shipping-backlog.md), then check `df -h` on the host for\n   the volume `vmagent-data`. To bridge a longer outage next time, raise `queue_max`: the queue\n   lasts `queue_max` divided by `rate(vmagent_remotewrite_block_size_bytes_sum{host=\"<host>\"}[1d])`\n   seconds of outage.\n3. Rejected blocks: `docker compose logs vmagent | grep \"was rejected\"` on the host prints the\n   status code and the answer of storage; `docker compose logs --tail 200 victoriametrics` on the\n   central host says why it refused, for example a label longer than its limit. Fix the scrape\n   target or relabeling that produces such series.\n",
+      "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-shipping-dropped.md"
     },
     "mutation-score-dropped": {
       "name": "mutation-score-dropped",
@@ -2254,7 +2286,9 @@
     },
     "central/vmagent": {
       "alerts": [
-        "target-down"
+        "target-down",
+        "metrics-shipping-backlog",
+        "metrics-shipping-dropped"
       ],
       "description": "Scrapes the exporters of its host and ships samples to storage, buffering on disk while offline.",
       "host": "central",
@@ -2262,13 +2296,15 @@
       "logs": "docker",
       "metrics": [
         "vmagent_remotewrite_pending_data_bytes",
+        "vm_persistentqueue_blocks_dropped_total",
+        "vmagent_remotewrite_packets_dropped_total",
         "vm_promscrape_targets"
       ],
       "name": "vmagent",
       "source": "module metrics",
       "state": "live",
       "status": {
-        "internal": "collection pipeline, failures surface as target-down and host-down"
+        "internal": "collection pipeline, failures surface as target-down, host-down and the metrics-shipping alerts"
       }
     },
     "central/vmalert": {
@@ -2796,7 +2832,9 @@
     },
     "edge/vmagent": {
       "alerts": [
-        "target-down"
+        "target-down",
+        "metrics-shipping-backlog",
+        "metrics-shipping-dropped"
       ],
       "description": "Scrapes the exporters of its host and ships samples to storage, buffering on disk while offline.",
       "host": "edge",
@@ -2804,13 +2842,15 @@
       "logs": "docker",
       "metrics": [
         "vmagent_remotewrite_pending_data_bytes",
+        "vm_persistentqueue_blocks_dropped_total",
+        "vmagent_remotewrite_packets_dropped_total",
         "vm_promscrape_targets"
       ],
       "name": "vmagent",
       "source": "module metrics",
       "state": "live",
       "status": {
-        "internal": "collection pipeline, failures surface as target-down and host-down"
+        "internal": "collection pipeline, failures surface as target-down, host-down and the metrics-shipping alerts"
       }
     },
     "edge/vulns": {

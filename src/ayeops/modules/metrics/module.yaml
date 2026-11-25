@@ -66,11 +66,11 @@ services:
     description: Scrapes the exporters of its host and ships samples to storage, buffering on disk while offline.
     memory: 256m
     cpus: 0.5
-    metrics: [vmagent_remotewrite_pending_data_bytes, vm_promscrape_targets]
-    alerts: [target-down]
+    metrics: [vmagent_remotewrite_pending_data_bytes, vm_persistentqueue_blocks_dropped_total, vmagent_remotewrite_packets_dropped_total, vm_promscrape_targets]
+    alerts: [target-down, metrics-shipping-backlog, metrics-shipping-dropped]
     logs: docker
     status:
-      internal: collection pipeline, failures surface as target-down and host-down
+      internal: collection pipeline, failures surface as target-down, host-down and the metrics-shipping alerts
 alerts:
   - name: target-down
     title: Scrape target down
@@ -80,5 +80,27 @@ alerts:
     summary: "{{ .Labels.job }} on {{ .Labels.host }} does not answer scrapes"
     runbook: target-down
     no_data: alerting
+  - name: metrics-shipping-backlog
+    title: vmagent falls behind shipping metrics
+    expr: >-
+      (sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes)
+      > bool 1800 * sum by (host, project, group) (rate(vmagent_remotewrite_block_size_bytes_sum[1h])))
+      + (sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes)
+      > bool sum by (host, project, group) (vm_persistentqueue_free_disk_space_bytes))
+    for: 15m
+    severity: warning
+    summary: "vmagent on {{ .Labels.host }} holds more than 30 minutes of its samples or half its queue room unshipped"
+    runbook: metrics-shipping-backlog
+  - name: metrics-shipping-dropped
+    title: vmagent drops metrics
+    expr: >-
+      sum by (host, project, group) (increase(vm_persistentqueue_blocks_dropped_total[1h]))
+      + sum by (host, project, group) (increase(vmagent_remotewrite_packets_dropped_total[1h]))
+      > bool 0
+    for: 0m
+    severity: critical
+    summary: "vmagent on {{ .Labels.host }} dropped metrics: its full queue discarded the oldest, or storage rejected a block"
+    runbook: metrics-shipping-dropped
+    dashboard: {uid: ayeops-health, panel: 12}
 dashboards: []
 files: []
