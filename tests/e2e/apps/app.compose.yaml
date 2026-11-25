@@ -1,0 +1,41 @@
+name: e2e-apps
+services:
+  web:
+    image: nginx:1.29.2-alpine
+    ports:
+      - "10.213.0.1:8080:80"
+    labels:
+      io.ayeops.service: web
+    configs:
+      - source: page
+        target: /usr/share/nginx/html/index.html
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  db:
+    image: postgres:18.6-alpine3.24
+    ports:
+      - "10.213.0.1:5432:5432"
+    labels:
+      io.ayeops.service: db
+    environment:
+      POSTGRES_USER: grafana_ro
+      POSTGRES_PASSWORD: ${AYE_GRAFANA_PG_PASSWORD:?set AYE_GRAFANA_PG_PASSWORD}
+      POSTGRES_DB: e2e
+    configs:
+      - source: schema
+        target: /docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "grafana_ro", "-d", "e2e"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+configs:
+  page:
+    content: "<!doctype html><title>aye-e2e</title><p>aye-e2e</p>\n"
+  schema:
+    content: |
+      create table orders (id serial primary key, placed timestamptz not null default now());
+      insert into orders default values;

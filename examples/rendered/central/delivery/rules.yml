@@ -1,0 +1,53 @@
+groups:
+- interval: 1m
+  name: delivery
+  rules:
+  - expr: max without (result) (median_over_time(aye_step_duration_seconds{result="ok",branch=~"main|"}[30d]))
+    record: aye:step_duration_seconds:median30d
+  - expr: max without (result) (median_over_time(aye_step_duration_seconds{result="ok",branch=~"main|"}[3d]))
+    record: aye:step_duration_seconds:median3d
+  - expr: max without (result) (last_over_time(aye_step_duration_seconds{result="ok",branch=~"main|"}[7d]))
+    record: aye:step_duration_seconds:last
+  - expr: max without (result) (count_over_time(aye_step_duration_seconds{result="ok",branch=~"main|"}[30d]))
+    record: aye:step_ok_runs:30d
+  - expr: sum without (result) (count_over_time(aye_step_duration_seconds{branch=~"main|"}[1d]))
+    record: aye:step_runs:1d
+  - expr: 1 - avg_over_time(aye_step_success{branch=~"main|"}[7d])
+    record: aye:step_failure_ratio:7d
+  - expr: last_over_time(aye_step_success{branch=~"main|"}[7d])
+    record: aye:step_success:last
+  - expr: last_over_time(aye_coverage_lines_percent{branch=~"main|"}[30d])
+    record: aye:coverage_lines_percent:last
+  - expr: median_over_time(aye_coverage_lines_percent{branch=~"main|"}[30d])
+    record: aye:coverage_lines_percent:median30d
+  - expr: last_over_time(aye_mutation_score_percent{branch=~"main|"}[30d])
+    record: aye:mutation_score_percent:last
+  - expr: median_over_time(aye_mutation_score_percent{branch=~"main|"}[30d])
+    record: aye:mutation_score_percent:median30d
+  - expr: median_over_time(aye_pr_lead_time_seconds{branch=~"main|"}[30d])
+    record: aye:pr_lead_time_seconds:median30d
+- interval: 1m
+  name: delivery-expected
+  rules:
+  - expr: time() - max(last_over_time(aye_step_finished_timestamp_seconds{project="acme",step="deploy",branch=~"main|"}[90d]))
+    labels:
+      project: acme
+      step: deploy
+    record: aye:delivery_last_report_age_seconds
+  - expr: (time() - max(last_over_time(aye_step_finished_timestamp_seconds{project="acme",step="deploy",branch=~"main|"}[90d]))) > bool 604800 or vector(1)
+    labels:
+      expected: 7d
+      project: acme
+      step: deploy
+    record: aye:delivery_overdue
+  - expr: time() - max(last_over_time(aye_step_finished_timestamp_seconds{project="acme",step="ci",branch=~"main|"}[90d]))
+    labels:
+      project: acme
+      step: ci
+    record: aye:delivery_last_report_age_seconds
+  - expr: (time() - max(last_over_time(aye_step_finished_timestamp_seconds{project="acme",step="ci",branch=~"main|"}[90d]))) > bool 172800 or vector(1)
+    labels:
+      expected: 2d
+      project: acme
+      step: ci
+    record: aye:delivery_overdue

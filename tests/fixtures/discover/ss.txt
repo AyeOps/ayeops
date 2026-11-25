@@ -1,0 +1,7 @@
+LISTEN 0      4096   127.0.0.53%lo:53         0.0.0.0:*    users:(("systemd-resolve",pid=812,fd=14))
+LISTEN 0      244        127.0.0.1:5432       0.0.0.0:*    users:(("postgres",pid=1201,fd=6))
+LISTEN 0      511          0.0.0.0:80         0.0.0.0:*    users:(("nginx",pid=1450,fd=6),("nginx",pid=1449,fd=6))
+LISTEN 0      511             [::]:80            [::]:*    users:(("nginx",pid=1450,fd=7))
+LISTEN 0      4096            [::]:22            [::]:*    users:(("sshd",pid=990,fd=4))
+LISTEN 0      4096               *:9100             *:*
+LISTEN 0      151        127.0.0.1:3306       0.0.0.0:*    users:(("mysqld",pid=1234,fd=23))

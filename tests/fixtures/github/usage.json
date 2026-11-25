@@ -1,0 +1,82 @@
+{
+  "usageItems": [
+    {
+      "date": "2026-10-23T12:26:38Z",
+      "product": "actions",
+      "sku": "Actions Linux",
+      "quantity": 81.0,
+      "unitType": "Minutes",
+      "pricePerUnit": 0.006,
+      "grossAmount": 0.486,
+      "discountAmount": 0.486,
+      "netAmount": 0.0,
+      "organizationName": "acme",
+      "repositoryName": "shop"
+    },
+    {
+      "date": "2026-10-24T00:01:40Z",
+      "product": "actions",
+      "sku": "Actions Linux",
+      "quantity": 52.0,
+      "unitType": "Minutes",
+      "pricePerUnit": 0.006,
+      "grossAmount": 0.312,
+      "discountAmount": 0.312,
+      "netAmount": 0.0,
+      "organizationName": "acme",
+      "repositoryName": "shop"
+    },
+    {
+      "date": "2026-10-22T08:00:00Z",
+      "product": "actions",
+      "sku": "Actions Windows",
+      "quantity": 10.0,
+      "unitType": "Minutes",
+      "pricePerUnit": 0.01,
+      "grossAmount": 0.1,
+      "discountAmount": 0.1,
+      "netAmount": 0.0,
+      "organizationName": "acme",
+      "repositoryName": "shop"
+    },
+    {
+      "date": "2026-10-22T09:00:00Z",
+      "product": "actions",
+      "sku": "Actions Linux",
+      "quantity": 500.0,
+      "unitType": "Minutes",
+      "pricePerUnit": 0.006,
+      "grossAmount": 3.0,
+      "discountAmount": 3.0,
+      "netAmount": 0.0,
+      "organizationName": "acme",
+      "repositoryName": "site"
+    },
+    {
+      "date": "2026-10-22T10:00:00Z",
+      "product": "actions",
+      "sku": "Actions Linux 4-core",
+      "quantity": 20.0,
+      "unitType": "Minutes",
+      "pricePerUnit": 0.016,
+      "grossAmount": 0.32,
+      "discountAmount": 0.0,
+      "netAmount": 0.32,
+      "organizationName": "acme",
+      "repositoryName": "shop"
+    },
+    {
+      "date": "2026-10-22T11:00:00Z",
+      "product": "actions",
+      "sku": "Actions storage",
+      "quantity": 1.5,
+      "unitType": "GigabyteHours",
+      "pricePerUnit": 0.0003,
+      "grossAmount": 0.00045,
+      "discountAmount": 0.00045,
+      "netAmount": 0.0,
+      "organizationName": "acme",
+      "repositoryName": "shop"
+    }
+  ]
+}

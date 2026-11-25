@@ -1,0 +1,9 @@
+{
+   "blockdevices": [
+      {"name": "vda", "type": "disk", "size": "53687091200", "rota": "1", "model": null, "tran": null, "fstype": null, "mountpoint": null,
+         "children": [
+            {"name": "vda1", "type": "part", "size": "53686042624", "rota": "1", "model": null, "tran": null, "fstype": "ext4", "mountpoint": "/"}
+         ]
+      }
+   ]
+}

@@ -1,0 +1,30 @@
+{
+   "blockdevices": [
+      {
+         "name": "nvme0n1", "type": "disk", "size": 1000204886016, "rota": false,
+         "model": "Samsung SSD 980 PRO 1TB", "tran": "nvme", "fstype": null, "mountpoints": [null],
+         "children": [
+            {
+               "name": "nvme0n1p1", "type": "part", "size": 1073741824, "rota": false,
+               "model": null, "tran": "nvme", "fstype": "vfat", "mountpoints": ["/boot/efi"]
+            },
+            {
+               "name": "nvme0n1p2", "type": "part", "size": 999129251840, "rota": false,
+               "model": null, "tran": "nvme", "fstype": "ext4", "mountpoints": ["/", "/var/lib/docker"]
+            }
+         ]
+      },
+      {
+         "name": "sda", "type": "disk", "size": 4000787030016, "rota": true,
+         "model": "WDC WD40EFRX-68N32N0", "tran": "sata", "fstype": "xfs", "mountpoints": ["/srv/data"]
+      },
+      {
+         "name": "loop0", "type": "loop", "size": 67108864, "rota": false,
+         "model": null, "tran": null, "fstype": "squashfs", "mountpoints": ["/snap/core22/1380"]
+      },
+      {
+         "name": "zram0", "type": "disk", "size": 8589934592, "rota": false,
+         "model": null, "tran": null, "fstype": null, "mountpoints": ["[SWAP]"]
+      }
+   ]
+}

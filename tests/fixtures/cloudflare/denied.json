@@ -1,0 +1,14 @@
+{
+  "data": null,
+  "errors": [
+    {
+      "extensions": {
+        "code": "authz",
+        "ray_id": "0000000000000000-KBP",
+        "timestamp": "2026-10-23T21:16:14.749375854Z"
+      },
+      "message": "Actor 'com.cloudflare.api.token.0000' does not have permission 'com.cloudflare.api.account.zone.analytics.read' for zone 00000000000000000000000000000000",
+      "path": null
+    }
+  ]
+}

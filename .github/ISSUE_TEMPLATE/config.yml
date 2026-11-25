@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/AyeOps/ayeops/security/policy
+    about: Never in a public issue. Report it privately as SECURITY.md says.
+  - name: Documentation
+    url: https://github.com/AyeOps/ayeops/blob/main/docs/index.md
+    about: The manifest reference, the modules, deploy and the runbooks.

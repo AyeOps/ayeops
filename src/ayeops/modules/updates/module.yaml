@@ -1,0 +1,106 @@
+name: updates
+summary: Watches the project's repositories for new versions of images, libraries and actions with a self-hosted Renovate run once a day, which opens the update pull requests, and writes what is pending for node-exporter.
+requires:
+  node: {}
+defaults:
+  provider: renovate
+  repositories: []
+  platform: github
+  endpoint: null
+  schedule: "06:00"
+  timezone: UTC
+  timeout_minutes: 120
+  dry_run: null
+  git_author: null
+  platform_commit: enabled
+  allowed_commands: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  required: [repositories]
+  properties:
+    provider:
+      enum: [renovate]
+    repositories:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        type: string
+        pattern: '^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+$'
+    platform:
+      enum: [github, gitlab, gitea, forgejo, bitbucket]
+    endpoint:
+      type: [string, "null"]
+      pattern: '^https://\S+$'
+    schedule:
+      type: string
+      pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+    timezone:
+      type: string
+      pattern: '^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$'
+    timeout_minutes:
+      type: integer
+      minimum: 10
+      maximum: 720
+    dry_run:
+      enum: [null, extract, lookup, full]
+    git_author:
+      type: [string, "null"]
+      pattern: '^[^<>]+ <[^<>@\s]+@[^<>\s]+>$'
+    platform_commit:
+      enum: [auto, enabled, disabled]
+    allowed_commands:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        pattern: '^\^[^\n]+\$$'
+services:
+  updates:
+    description: Renovate in a loop that waits for a request from updates-agent, then checks every listed repository for new versions older than each repository's minimumReleaseAge and opens or refreshes the update pull requests, and writes a JSON report of what it found.
+    memory: 1g
+    cpus: 1.0
+    metrics: [ayeops_updates_last_success_timestamp_seconds, ayeops_updates_last_run_exit_code]
+    alerts: [updates-stale]
+    logs: docker
+    status:
+      internal: maintenance of the project's code, users never see it
+  updates-agent:
+    description: Asks for a Renovate run at schedule and turns each run's report into textfile metrics, without a network.
+    memory: 64m
+    cpus: 0.1
+    metrics: [ayeops_updates_last_success_timestamp_seconds, ayeops_updates_open_prs, ayeops_updates_pending_updates, ayeops_updates_oldest_pending_release_timestamp_seconds, ayeops_updates_repository_ok]
+    alerts: [updates-stale, updates-pending-old]
+    logs: docker
+    status:
+      internal: tool of the updates module
+alerts:
+  - name: updates-stale
+    title: No successful dependency update run for 2 days
+    expr: time() - max by (host, project, group) (ayeops_updates_last_success_timestamp_seconds) > bool 172800
+    for: 30m
+    severity: warning
+    summary: "Renovate on {{ .Labels.host }} has not finished a clean run over every repository for more than 2 days"
+    runbook: updates-stale
+  - name: updates-pending-old
+    title: An update has waited for more than 30 days
+    expr: time() - min by (host, project, group, repository) (ayeops_updates_oldest_pending_release_timestamp_seconds) > bool 2592000
+    for: 1h
+    severity: warning
+    summary: "{{ .Labels.repository }} has a dependency update released more than 30 days ago that is still not merged"
+    runbook: updates-pending-old
+dashboards: []
+files:
+  - src: files/updates_agent.py
+    dest: updates/updates_agent.py
+  - src: files/updates_loop.sh
+    dest: updates/updates_loop.sh
+permissions:
+  - issuer: "{{ 'GitHub' if settings.platform == 'github' else settings.platform ~ ' at ' ~ (settings.endpoint or 'its default endpoint') }}"
+    credential: "{{ 'fine-grained personal access token' if settings.platform == 'github' else 'token of a bot user' }}"
+    env: [AYE_UPDATES_TOKEN]
+    grants:
+      - "repositories {{ settings.repositories | join(', ') }} only"
+      - "{% if settings.platform == 'github' %}Contents, Pull requests, Issues, Commit statuses and Workflows read and write; Metadata read; Dependabot alerts read is optional{% else %}write access to those repositories, nothing else{% endif %}"

@@ -1,0 +1,23 @@
+modules:
+  dns:
+    dns:
+      ip_protocol_fallback: false
+      preferred_ip_protocol: ip4
+      query_name: example.com
+      query_type: A
+      valid_rcodes:
+      - NOERROR
+    prober: dns
+    timeout: 5s
+  http_2xx:
+    http:
+      follow_redirects: true
+      preferred_ip_protocol: ip4
+    prober: http
+    timeout: 10s
+  icmp:
+    icmp:
+      ip_protocol_fallback: false
+      preferred_ip_protocol: ip4
+    prober: icmp
+    timeout: 5s

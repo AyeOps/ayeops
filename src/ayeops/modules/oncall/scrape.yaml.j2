@@ -1,0 +1,6 @@
+- job_name: goalert
+  static_configs:
+    - targets: ["goalert:9105"]
+- job_name: oncall-bridge
+  static_configs:
+    - targets: ["oncall-bridge:8080"]

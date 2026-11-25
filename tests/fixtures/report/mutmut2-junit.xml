@@ -1,0 +1,139 @@
+<testsuites disabled="0" errors="0" failures="6" tests="26" time="0.0">
+	<testsuite disabled="0" errors="0" failures="6" name="mutmut" skipped="0" tests="26" time="0">
+		<testcase name="Mutant #1" file="src/ayeops/report.py" line="56">
+			</testcase>
+		<testcase name="Mutant #2" file="src/ayeops/report.py" line="56">
+			</testcase>
+		<testcase name="Mutant #3" file="src/ayeops/report.py" line="56">
+			</testcase>
+		<testcase name="Mutant #4" file="src/ayeops/report.py" line="56">
+			</testcase>
+		<testcase name="Mutant #5" file="src/ayeops/report.py" line="56">
+			</testcase>
+		<testcase name="Mutant #6" file="src/ayeops/report.py" line="56">
+			</testcase>
+		<testcase name="Mutant #7" file="src/ayeops/report.py" line="60">
+			</testcase>
+		<testcase name="Mutant #8" file="src/ayeops/report.py" line="60">
+			</testcase>
+		<testcase name="Mutant #9" file="src/ayeops/report.py" line="60">
+			</testcase>
+		<testcase name="Mutant #10" file="src/ayeops/report.py" line="60">
+			</testcase>
+		<testcase name="Mutant #11" file="src/ayeops/report.py" line="62">
+			</testcase>
+		<testcase name="Mutant #12" file="src/ayeops/report.py" line="66">
+			</testcase>
+		<testcase name="Mutant #13" file="src/ayeops/report.py" line="69">
+			</testcase>
+		<testcase name="Mutant #14" file="src/ayeops/report.py" line="71">
+			</testcase>
+		<testcase name="Mutant #15" file="src/ayeops/report.py" line="71">
+			</testcase>
+		<testcase name="Mutant #16" file="src/ayeops/report.py" line="72">
+			</testcase>
+		<testcase name="Mutant #17" file="src/ayeops/report.py" line="73">
+			</testcase>
+		<testcase name="Mutant #18" file="src/ayeops/report.py" line="73">
+			</testcase>
+		<testcase name="Mutant #19" file="src/ayeops/report.py" line="73">
+			</testcase>
+		<testcase name="Mutant #20" file="src/ayeops/report.py" line="74">
+			</testcase>
+		<testcase name="Mutant #471" file="src/ayeops/report.py" line="671">
+			<failure type="failure" message="bad_survived">--- src\ayeops\report.py
++++ src\ayeops\report.py
+@@ -657,18 +657,7 @@
+     "ignoredCount": "ignored",
+ }
+ 
+-MUTMUT_STATS = {
+-    "killed": "killed",
+-    "survived": "survived",
+-    "timeout": "timeout",
+-    "no_tests": "no_coverage",
+-    "segfault": "error",
+-    "caught_by_type_check": "killed",
+-    "suspicious": "ignored",
+-    "skipped": "ignored",
+-    "not_checked": "ignored",
+-    "check_was_interrupted_by_user": "ignored",
+-}
++MUTMUT_STATS = None
+ 
+ MUTMUT_RESULTS = {key.replace("_", " "): status for key, status in MUTMUT_STATS.items()}
+ 
+</failure>
+			</testcase>
+		<testcase name="Mutant #474" file="src/ayeops/report.py" line="673">
+			<failure type="failure" message="bad_survived">--- src\ayeops\report.py
++++ src\ayeops\report.py
+@@ -670,7 +670,7 @@
+     "check_was_interrupted_by_user": "ignored",
+ }
+ 
+-MUTMUT_RESULTS = {key.replace("_", " "): status for key, status in MUTMUT_STATS.items()}
++MUTMUT_RESULTS = None
+ 
+ 
+ def mutants_from_json(path: Path, data: object) -&gt; Mutants:
+</failure>
+			</testcase>
+		<testcase name="Mutant #599" file="src/ayeops/report.py" line="770">
+			<failure type="failure" message="bad_survived">--- src\ayeops\report.py
++++ src\ayeops\report.py
+@@ -767,7 +767,7 @@
+ 
+ MUTMUT_LINE = re.compile(
+     r"^\s*(\S+):\s+("
+-    + "|".join(sorted(map(re.escape, MUTMUT_RESULTS), key=len, reverse=True))
++    - "|".join(sorted(map(re.escape, MUTMUT_RESULTS), key=len, reverse=True))
+     + r")\s*$"
+ )
+ MUTMUT_HEADER = re.compile(
+</failure>
+			</testcase>
+		<testcase name="Mutant #602" file="src/ayeops/report.py" line="771">
+			<failure type="failure" message="bad_survived">--- src\ayeops\report.py
++++ src\ayeops\report.py
+@@ -768,7 +768,7 @@
+ MUTMUT_LINE = re.compile(
+     r"^\s*(\S+):\s+("
+     + "|".join(sorted(map(re.escape, MUTMUT_RESULTS), key=len, reverse=True))
+-    + r")\s*$"
++    - r")\s*$"
+ )
+ MUTMUT_HEADER = re.compile(
+     r"^(Killed|Survived|Timed out|Suspicious|Untested/skipped)\b.*\((\d+)\)\s*$"
+</failure>
+			</testcase>
+		<testcase name="Mutant #731" file="src/ayeops/report.py" line="899">
+			<failure type="failure" message="bad_survived">--- src\ayeops\report.py
++++ src\ayeops\report.py
+@@ -896,7 +896,7 @@
+     if not sum(mutants.counts.values()):
+         raise ReportError(f"the {mutants.tool} report holds no mutants")
+     samples = [
+-        Sample("aye_mutants", float(mutants.counts[status]), {**labels, "status": status})
++        Sample("aye_mutants", float(mutants.counts[status]), {*labels, "status": status})
+         for status in MUTANT_STATUSES
+     ]
+     if mutants.score is not None:
+</failure>
+			</testcase>
+		<testcase name="Mutant #743" file="src/ayeops/report.py" line="907">
+			<failure type="failure" message="bad_survived">--- src\ayeops\report.py
++++ src\ayeops\report.py
+@@ -904,7 +904,7 @@
+     ranked = sorted(mutants.survivors.items(), key=lambda item: (-item[1], item[0]))
+     for module, count in ranked[:MODULE_LIMIT]:
+         samples.append(
+-            Sample("aye_mutants_survived", float(count), {**labels, "module": module[:200]})
++            Sample("aye_mutants_survived", float(count), {*labels, "module": module[:200]})
+         )
+     return samples
+ 
+</failure>
+			</testcase>
+		</testsuite>
+</testsuites>

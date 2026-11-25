@@ -1,0 +1,123 @@
+name: node
+summary: node-exporter for CPU, memory, disk and filesystems, plus textfile collectors for laptop batteries and pending reboots.
+requires:
+  metrics: {}
+defaults:
+  battery: false
+  battery_interval: 60
+  reboot: false
+  reboot_interval: 600
+  expose: []
+  resources: {}
+  textfile_dir: null
+  rslave: true
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    battery:
+      type: boolean
+    battery_interval:
+      type: integer
+      minimum: 10
+    reboot:
+      type: boolean
+    reboot_interval:
+      type: integer
+      minimum: 60
+    expose:
+      type: array
+      items:
+        enum: [9100]
+    textfile_dir:
+      type: [string, "null"]
+      pattern: "^/[^:]*$"
+    rslave:
+      type: boolean
+services:
+  node-exporter:
+    description: Exposes CPU, memory, disk and filesystem metrics of the host and the battery textfile.
+    memory: 64m
+    cpus: 0.25
+    metrics: [node_memory_MemAvailable_bytes, node_filesystem_avail_bytes, node_cpu_seconds_total]
+    alerts: [host-down, disk-full, memory-low, swap-out-sustained]
+    logs: docker
+    status:
+      internal: host telemetry, not a user-facing component
+  battery:
+    description: Writes battery capacity, charging status and AC presence from /sys/class/power_supply as textfile metrics.
+    memory: 16m
+    cpus: 0.05
+    metrics: [ayeops_battery_capacity_percent, ayeops_battery_status, ayeops_power_on_ac]
+    alerts: [battery-low]
+    logs: docker
+    status:
+      internal: laptop telemetry, not a user-facing component
+  reboot:
+    description: Writes whether the host waits for a reboot, by the distribution's flag file or a newer installed kernel, as textfile metrics.
+    memory: 16m
+    cpus: 0.05
+    metrics: [ayeops_reboot_required]
+    alerts: [reboot-pending]
+    logs: docker
+    status:
+      internal: host maintenance telemetry, not a user-facing component
+alerts:
+  - name: host-down
+    title: Host down
+    expr: >-
+      1 - (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180))
+      + on (host) group_right () (0 * last_over_time(up{job="node"}[1d])))
+    for: 2m
+    severity: critical
+    summary: "{{ .Labels.host }} stopped reporting node metrics"
+    runbook: host-down
+    no_data: alerting
+  - name: disk-full
+    title: Disk above 80 %
+    expr: (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"}) * 100 > bool 80
+    for: 15m
+    severity: warning
+    summary: "{{ .Labels.mountpoint }} on {{ .Labels.host }} is more than 80 % full"
+    runbook: disk-full
+  - name: memory-low
+    title: Memory available below 10 %
+    expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < bool 10
+    for: 10m
+    severity: warning
+    summary: "{{ .Labels.host }} has less than 10 % memory available"
+    runbook: memory-low
+  - name: swap-out-sustained
+    title: Sustained swap-out
+    expr: rate(node_vmstat_pswpout[5m]) > bool 256
+    for: 10m
+    severity: warning
+    summary: "{{ .Labels.host }} has been writing more than 256 pages per second to swap for 10 minutes"
+    runbook: swap-out-sustained
+  - name: battery-low
+    title: Battery below 20 % and not on AC
+    expr: max by (host, project, group) (ayeops_battery_capacity_percent < bool 20) * on (host) max by (host, project, group) (ayeops_power_on_ac == bool 0)
+    for: 2m
+    severity: warning
+    summary: "{{ .Labels.host }} runs on battery below 20 %"
+    runbook: battery-low
+  - name: reboot-pending
+    title: Reboot pending for a week
+    expr: max by (host, project, group) (ayeops_reboot_required) == bool 1
+    for: 7d
+    severity: info
+    summary: "{{ .Labels.host }} has waited a week for a reboot into its updated kernel or libraries"
+    runbook: reboot-pending
+dashboards: [host.json]
+files:
+  - src: files/battery.sh
+    dest: node/battery.sh
+    when: battery
+  - src: files/reboot.sh
+    dest: node/reboot.sh
+    when: reboot
+host_directories:
+  - setting: textfile_dir
+    owner: "0:0"
+    mode: "0755"
+    for: the textfile collectors, which write as root in their containers, and node-exporter, which reads

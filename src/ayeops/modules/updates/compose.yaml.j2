@@ -1,0 +1,79 @@
+services:
+  updates:
+    image: ghcr.io/renovatebot/renovate:44.149.0@sha256:33e1ce773404122fd3bcf1dca6ce9b5638a080da68a8972ad942d4d991cec464
+    command: ["sh", "/app/updates_loop.sh"]
+    init: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      RENOVATE_PLATFORM: {{ settings.platform | tojson }}
+{% if settings.endpoint %}
+      RENOVATE_ENDPOINT: {{ settings.endpoint | tojson }}
+{% endif %}
+      RENOVATE_TOKEN: "${AYE_UPDATES_TOKEN:?set AYE_UPDATES_TOKEN}"
+      RENOVATE_REPOSITORIES: {{ settings.repositories | tojson | tojson }}
+      RENOVATE_REPORT_TYPE: file
+      RENOVATE_REPORT_PATH: /state/report.json
+      RENOVATE_BASE_DIR: /tmp/renovate
+{% if settings.dry_run %}
+      RENOVATE_DRY_RUN: {{ settings.dry_run | tojson }}
+{% endif %}
+{% if settings.git_author %}
+      RENOVATE_GIT_AUTHOR: {{ settings.git_author | tojson }}
+{% endif %}
+{% if settings.platform == "github" %}
+      RENOVATE_PLATFORM_COMMIT: {{ settings.platform_commit | tojson }}
+{% endif %}
+{% if settings.allowed_commands %}
+      RENOVATE_ALLOWED_COMMANDS: {{ settings.allowed_commands | tojson | tojson }}
+{% endif %}
+      LOG_LEVEL: info
+      LOG_FORMAT: json
+      TZ: {{ settings.timezone | tojson }}
+      AYE_UPDATES_STATE: /state
+      AYE_UPDATES_TIMEOUT: {{ (settings.timeout_minutes * 60) | string | tojson }}
+    volumes:
+      - "./updates/updates_loop.sh:/app/updates_loop.sh:ro"
+      - "updates-state:/state"
+      - "updates-cache:/tmp"
+    depends_on:
+      updates-agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "find /state/loop.alive -mmin -{{ settings.timeout_minutes + 30 }} | grep -q ."]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 1m
+  updates-agent:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/updates_agent.py"]
+    init: true
+    network_mode: none
+    read_only: true
+    tmpfs: ["/tmp:size=4m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 32
+    environment:
+      AYE_UPDATES_SCHEDULE: {{ settings.schedule | tojson }}
+      AYE_UPDATES_REPOSITORIES: {{ settings.repositories | tojson | tojson }}
+      AYE_UPDATES_STATE: /state
+      AYE_UPDATES_TEXTFILE: /textfile/ayeops_updates.prom
+      TZ: {{ settings.timezone | tojson }}
+    volumes:
+      - "./updates/updates_agent.py:/app/updates_agent.py:ro"
+      - "updates-state:/state"
+      - {{ (textfile ~ ":/textfile") | tojson }}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/updates.alive') > 300)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+volumes:
+  updates-state: {}
+  updates-cache: {}
+{% if textfile == "node-textfile" %}
+  node-textfile: {}
+{% endif %}

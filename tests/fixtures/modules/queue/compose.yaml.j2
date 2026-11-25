@@ -1,0 +1,12 @@
+services:
+  queue-exporter:
+    image: prom/statsd-exporter:v0.28.0
+    environment:
+      ACME_QUEUE_URL: {{ settings.queue_url | tojson }}
+    ports: [9140]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9140/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes: {}

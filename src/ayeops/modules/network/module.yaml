@@ -1,0 +1,89 @@
+name: network
+summary: A second node-exporter that reads the host network namespace for link state, speed and errors of the declared interfaces, plus Wi-Fi signal, bitrate and network from nl80211.
+requires:
+  metrics: {}
+defaults:
+  wifi: false
+  wifi_interval: 30
+  wifi_port: 19102
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  required: [interfaces]
+  properties:
+    interfaces:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        type: string
+        pattern: "^[a-zA-Z0-9_.@-]{1,15}$"
+    wifi:
+      type: boolean
+    wifi_interval:
+      type: integer
+      minimum: 10
+    wifi_port:
+      type: integer
+      minimum: 1024
+      maximum: 65535
+    expose:
+      type: array
+      items:
+        enum: [9101]
+services:
+  net-exporter:
+    description: Exposes link state, speed, traffic, errors and drops of the declared host interfaces and the Wi-Fi textfile.
+    memory: 64m
+    cpus: 0.1
+    metrics: [node_network_info, node_network_speed_bytes, node_network_receive_errs_total, node_network_receive_packets_total]
+    alerts: [target-down, interface-down, network-errors, link-speed-degraded]
+    logs: docker
+    status:
+      internal: network telemetry, not a user-facing component
+  wifi:
+    description: Runs node-exporter's nl80211 wifi collector in the host network namespace on 127.0.0.1 and copies its signal, bitrate and network into the textfile that net-exporter serves.
+    memory: 48m
+    cpus: 0.05
+    metrics: [ayeops_wifi_signal_dbm, node_wifi_station_signal_dbm, node_wifi_station_receive_bits_per_second, node_wifi_station_transmit_bits_per_second, node_wifi_station_info, node_wifi_interface_frequency_hertz]
+    alerts: [wifi-signal-weak]
+    logs: docker
+    status:
+      internal: Wi-Fi telemetry, not a user-facing component
+alerts:
+  - name: interface-down
+    title: Network interface down
+    expr: max by (host, project, group, device) (node_network_info{job="network", operstate=~"down|lowerlayerdown|dormant|notpresent"} or 0 * node_network_info{job="network"})
+    for: 5m
+    severity: warning
+    summary: "{{ .Labels.device }} on {{ .Labels.host }} has been down for 5 minutes"
+    runbook: interface-down
+    dashboard: {uid: ayeops-internet, panel: 15}
+  - name: wifi-signal-weak
+    title: Wi-Fi signal below -75 dBm
+    expr: ayeops_wifi_signal_dbm < bool -75
+    for: 15m
+    severity: warning
+    summary: "{{ .Labels.device }} on {{ .Labels.host }} has had a Wi-Fi signal below -75 dBm for 15 minutes"
+    runbook: wifi-signal-weak
+  - name: network-errors
+    title: Packet errors or drops above 1 %
+    expr: (rate(node_network_receive_errs_total{job="network"}[5m]) + rate(node_network_transmit_errs_total{job="network"}[5m]) + rate(node_network_receive_drop_total{job="network"}[5m]) + rate(node_network_transmit_drop_total{job="network"}[5m])) / (rate(node_network_receive_packets_total{job="network"}[5m]) + rate(node_network_transmit_packets_total{job="network"}[5m])) > bool 0.01
+    for: 15m
+    severity: warning
+    summary: "{{ .Labels.device }} on {{ .Labels.host }} loses more than 1 % of its packets to errors or drops"
+    runbook: network-errors
+  - name: link-speed-degraded
+    title: Link speed below its weekly maximum
+    expr: (node_network_speed_bytes{job="network"} > 0) < bool max_over_time(node_network_speed_bytes{job="network"}[7d])
+    for: 10m
+    severity: warning
+    summary: "{{ .Labels.device }} on {{ .Labels.host }} negotiated a slower link than it had this week"
+    runbook: link-speed-degraded
+dashboards: []
+files:
+  - src: files/wifi.sh
+    dest: network/wifi.sh
+    when: wifi

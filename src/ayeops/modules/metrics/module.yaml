@@ -1,0 +1,84 @@
+name: metrics
+summary: VictoriaMetrics single-node storage and vmagent scraping, with remote_write for light hosts.
+requires: {}
+defaults:
+  role: server
+  retention: 30d
+  scrape_interval: 30s
+  queue_max: 1GB
+  remote_write: null
+  networks: []
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    role:
+      enum: [server, agent]
+    retention:
+      type: string
+      pattern: "^[0-9]+[hdwy]$"
+    scrape_interval:
+      type: string
+      pattern: "^[0-9]+[sm]$"
+    queue_max:
+      type: string
+      pattern: "^[0-9]+(KB|MB|GB)$"
+    remote_write:
+      oneOf:
+        - type: "null"
+        - type: object
+          additionalProperties: false
+          required: [host]
+          properties:
+            host:
+              type: string
+        - type: object
+          additionalProperties: false
+          required: [url]
+          properties:
+            url:
+              type: string
+              pattern: "^https?://"
+    networks:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        pattern: "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+        not: {const: default}
+    expose:
+      type: array
+      items:
+        enum: [8428, 8429]
+services:
+  victoriametrics:
+    description: Stores every metric of the fleet and answers dashboard and alert queries.
+    memory: 1g
+    cpus: 1.0
+    metrics: [vm_rows, vm_free_disk_space_bytes, vm_http_requests_total]
+    alerts: [target-down]
+    logs: docker
+    status:
+      internal: storage behind dashboards and alerts, not a user-facing component
+  vmagent:
+    description: Scrapes the exporters of its host and ships samples to storage, buffering on disk while offline.
+    memory: 256m
+    cpus: 0.5
+    metrics: [vmagent_remotewrite_pending_data_bytes, vm_promscrape_targets]
+    alerts: [target-down]
+    logs: docker
+    status:
+      internal: collection pipeline, failures surface as target-down and host-down
+alerts:
+  - name: target-down
+    title: Scrape target down
+    expr: up == bool 0
+    for: 5m
+    severity: warning
+    summary: "{{ .Labels.job }} on {{ .Labels.host }} does not answer scrapes"
+    runbook: target-down
+    no_data: alerting
+dashboards: []
+files: []

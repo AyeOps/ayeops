@@ -1,0 +1,14 @@
+apiVersion: 1
+providers:
+- allowUiUpdates: false
+  folder: AyeOps
+  name: ayeops
+  options:
+    path: /etc/grafana/dashboards
+  type: file
+- allowUiUpdates: false
+  folder: acme
+  name: project
+  options:
+    path: /etc/grafana/project-dashboards
+  type: file

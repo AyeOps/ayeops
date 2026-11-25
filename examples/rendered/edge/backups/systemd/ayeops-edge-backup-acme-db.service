@@ -1,0 +1,10 @@
+[Unit]
+Description=AyeOps backup job acme-db of edge
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/ayeops/edge/backups/jobs/acme-db.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

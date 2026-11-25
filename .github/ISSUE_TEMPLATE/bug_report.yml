@@ -1,0 +1,81 @@
+name: Bug report
+description: aye, a module, a rendered file or the status page does something it should not.
+title: "Bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. A vulnerability goes to a private report instead, as SECURITY.md says.
+        Replace every secret, token, key, address and host name you do not want public with EXAMPLE before you paste.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `aye --version`, or the commit of main you installed from.
+      placeholder: aye 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - aye check or the catalog rules
+        - aye render or a rendered file
+        - aye deploy, diff, doctor or host-init
+        - aye secrets, permissions or dns
+        - aye discover
+        - aye report or the CI helpers
+        - a module while it runs
+        - the portal pages
+        - the status page Worker
+        - something else
+    validations:
+      required: true
+  - type: input
+    id: module
+    attributes:
+      label: Module
+      description: The module or modules involved, if any.
+      placeholder: metrics, probes
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: What you ran and what it did. Paste error messages as text.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: manifest
+    attributes:
+      label: Smallest manifest that shows it
+      description: The part of the manifest that matters, with secrets replaced.
+      render: yaml
+  - type: textarea
+    id: output
+    attributes:
+      label: Command and output
+      description: The exact command and its full output, or the log lines of the container.
+      render: shell
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS and architecture of the machine running aye and of the host, Docker and compose versions.
+      placeholder: Ubuntu 24.04 arm64, Docker 29.0, compose 2.40
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send
+      options:
+        - label: I searched the open and closed issues for the same problem.
+          required: true
+        - label: The text above contains no real secret, token or key.
+          required: true

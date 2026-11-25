@@ -1,0 +1,5 @@
+- job_name: smartctl
+  scrape_interval: 60s
+  scrape_timeout: 50s
+  static_configs:
+    - targets: ["smartctl-exporter:9633"]

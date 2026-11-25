@@ -1,0 +1,1 @@
+{"message_type":"exit_error","code":10,"message":"Fatal: repository does not exist: unable to open config file: Stat: The specified key does not exist.\nIs there a repository at the following location?\ns3:http://10.8.0.1:3900/acme-offsite/edge"}

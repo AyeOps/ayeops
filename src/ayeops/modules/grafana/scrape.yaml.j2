@@ -1,0 +1,8 @@
+- job_name: grafana
+  static_configs:
+    - targets: ["grafana:3000"]
+{% if grafana_reader.enabled %}
+- job_name: grafana-reader
+  static_configs:
+    - targets: ["grafana-reader:9137"]
+{% endif %}

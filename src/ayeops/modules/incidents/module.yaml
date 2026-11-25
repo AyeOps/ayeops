@@ -1,0 +1,124 @@
+name: incidents
+summary: The incident journal. Reads the alert state history Grafana keeps, turns each firing alert into one incident record from first Alerting to Normal, appends the records as JSON lines on the central host and exports incidents, time to restore, night incidents, downtime weighted by service criticality and degraded minutes for the Incidents dashboard.
+requires:
+  grafana: {}
+  metrics:
+    role: server
+defaults:
+  refresh_seconds: 60
+  backfill_days: 30
+  downtime_severities: [critical, page]
+  degraded_severities: [warning]
+  host_alerts: [host-down, {alert: target-down, job: node}]
+  night: null
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    refresh_seconds:
+      type: integer
+      minimum: 15
+      maximum: 3600
+    backfill_days:
+      type: integer
+      minimum: 0
+      maximum: 365
+    downtime_severities:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        enum: [page, critical, warning, info]
+    degraded_severities:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        enum: [page, critical, warning, info]
+    host_alerts:
+      type: array
+      uniqueItems: true
+      items:
+        oneOf:
+          - type: string
+            pattern: '^[a-z0-9][a-z0-9-]*$'
+          - type: object
+            required: [alert]
+            minProperties: 2
+            properties:
+              alert:
+                type: string
+                pattern: '^[a-z0-9][a-z0-9-]*$'
+            propertyNames:
+              pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+            additionalProperties:
+              type: string
+    night:
+      type: [object, "null"]
+      additionalProperties: false
+      required: [start, end]
+      properties:
+        start:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+        end:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+        timezone:
+          type: string
+          pattern: '^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$'
+    expose:
+      type: array
+      items:
+        enum: [9136]
+services:
+  incidents-agent:
+    description: Reads the alert state history of Grafana every minute, keeps the incident journal on the central host and serves incident, time to restore and downtime metrics.
+    memory: 64m
+    cpus: 0.1
+    metrics:
+      - ayeops_incidents_total
+      - ayeops_incident_downtime_minutes_total
+      - ayeops_incident_degraded_minutes_total
+      - ayeops_incident_lost_requests_total
+      - ayeops_incident_affected_module_minutes_total
+      - ayeops_incident_acknowledge_seconds
+      - ayeops_incidents_step_success
+      - ayeops_incidents_last_round_timestamp_seconds
+    alerts:
+      - target-down
+      - incidents-failing
+      - incidents-stale
+    logs: docker
+    grafana_reader: true
+    status:
+      internal: measures incidents for the team, not a user-facing component
+alerts:
+  - name: incidents-failing
+    title: Incident journal not updated
+    expr: min by (host, project, group, step) (ayeops_incidents_step_success) == bool 0
+    for: 10m
+    severity: warning
+    summary: "The incident journal on {{ .Labels.host }} has failed to {{ .Labels.step }} for 10 minutes, so incidents are not recorded"
+    runbook: incidents-failing
+    dashboard: {uid: ayeops-incidents, panel: 17}
+  - name: incidents-stale
+    title: Incident journal agent stopped
+    expr: time() - max by (host, project, group) (ayeops_incidents_last_round_timestamp_seconds) > bool 600
+    for: 5m
+    severity: warning
+    summary: "The incident journal agent on {{ .Labels.host }} has not finished a round for 10 minutes"
+    runbook: incidents-stale
+    no_data: alerting
+    dashboard: {uid: ayeops-incidents, panel: 18}
+dashboards: [incidents.json]
+generated:
+  - env: [AYE_ONCALL_ACKS_SECRET]
+    when: "modules.oncall"
+    format: hex
+    bytes: 32
+files:
+  - src: files/incidents_agent.py
+    dest: incidents/incidents_agent.py

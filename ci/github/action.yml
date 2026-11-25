@@ -1,0 +1,105 @@
+name: AyeOps report
+description: Time a step and push its duration, result, tests, coverage and mutation score to VictoriaMetrics with aye report, or keep them as an artifact for the AyeOps importer when no metrics URL is set.
+inputs:
+  name:
+    description: Step name, e.g. ci, tests, build, lint, migrate, smoke or deploy.
+    required: true
+  run:
+    description: Command to time with bash; leave empty to only upload reports.
+    required: false
+    default: ""
+  junit:
+    description: JUnit XML files, separated by spaces; globs are expanded.
+    required: false
+    default: ""
+  coverage:
+    description: coverage.xml, lcov.info, coverage.json or coverage-summary.json.
+    required: false
+    default: ""
+  mutants:
+    description: mutmut, Stryker or Infection report.
+    required: false
+    default: ""
+  suite:
+    description: Suite label for the test, coverage and mutation samples.
+    required: false
+    default: ""
+  pr:
+    description: Also report the lead time of the merged pull request, true or false.
+    required: false
+    default: "false"
+  project:
+    description: Project label; defaults to AYE_PROJECT or the repository name.
+    required: false
+    default: ""
+  labels:
+    description: Extra labels on every sample, k=v,k2=v2.
+    required: false
+    default: ""
+  metrics-url:
+    description: VictoriaMetrics URL; defaults to the AYE_METRICS_URL environment variable.
+    required: false
+    default: ""
+  metrics-token:
+    description: Bearer token; defaults to the AYE_METRICS_TOKEN environment variable.
+    required: false
+    default: ""
+  strict:
+    description: Fail the step when the report cannot be made or pushed, true or false.
+    required: false
+    default: "false"
+  working-directory:
+    description: Directory the command runs in and report paths are relative to.
+    required: false
+    default: "."
+runs:
+  using: composite
+  steps:
+    - name: Prepare the report of ${{ inputs.name }}
+      id: prepare
+      shell: bash
+      env:
+        AYE_STEP: ${{ inputs.name }}
+      run: |
+        id="${GITHUB_JOB}-${AYE_STEP}-${GITHUB_RUN_ATTEMPT}-$(od -An -N4 -tx4 /dev/urandom | tr -d ' ')"
+        echo "artifact=aye-report-${id}" >> "$GITHUB_OUTPUT"
+        echo "dir=${RUNNER_TEMP}/aye-report-${id}" >> "$GITHUB_OUTPUT"
+    - name: Run and report ${{ inputs.name }}
+      if: inputs.run != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        AYE_STEP: ${{ inputs.name }}
+        AYE_RUN: ${{ inputs.run }}
+        AYE_INPUT_PROJECT: ${{ inputs.project }}
+        AYE_INPUT_LABELS: ${{ inputs.labels }}
+        AYE_INPUT_URL: ${{ inputs.metrics-url }}
+        AYE_INPUT_TOKEN: ${{ inputs.metrics-token }}
+        AYE_INPUT_STRICT: ${{ inputs.strict }}
+        AYE_OUT_DIR: ${{ steps.prepare.outputs.dir }}
+      run: sh "$GITHUB_ACTION_PATH/aye.sh" run
+    - name: Upload reports of ${{ inputs.name }}
+      if: always() && (inputs.junit != '' || inputs.coverage != '' || inputs.mutants != '' || inputs.pr == 'true')
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        AYE_JUNIT: ${{ inputs.junit }}
+        AYE_COVERAGE: ${{ inputs.coverage }}
+        AYE_MUTANTS: ${{ inputs.mutants }}
+        AYE_SUITE: ${{ inputs.suite }}
+        AYE_PR: ${{ inputs.pr }}
+        AYE_INPUT_PROJECT: ${{ inputs.project }}
+        AYE_INPUT_LABELS: ${{ inputs.labels }}
+        AYE_INPUT_URL: ${{ inputs.metrics-url }}
+        AYE_INPUT_TOKEN: ${{ inputs.metrics-token }}
+        AYE_INPUT_STRICT: ${{ inputs.strict }}
+        AYE_OUT_DIR: ${{ steps.prepare.outputs.dir }}
+      run: sh "$GITHUB_ACTION_PATH/aye.sh" uploads
+    - name: Keep the report of ${{ inputs.name }} for the AyeOps importer
+      if: always() && inputs.metrics-url == '' && env.AYE_METRICS_URL == ''
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: ${{ steps.prepare.outputs.artifact }}
+        path: ${{ steps.prepare.outputs.dir }}
+        retention-days: 3
+        if-no-files-found: ignore

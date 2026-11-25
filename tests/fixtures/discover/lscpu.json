@@ -1,0 +1,14 @@
+{
+   "lscpu": [
+      {"field": "Architecture:", "data": "aarch64", "children": [
+         {"field": "CPU op-mode(s):", "data": "32-bit, 64-bit"},
+         {"field": "Byte Order:", "data": "Little Endian"}
+      ]},
+      {"field": "Vendor ID:", "data": "ARM", "children": [
+         {"field": "Model name:", "data": "Neoverse-N1", "children": [
+            {"field": "Model:", "data": "1"},
+            {"field": "Thread(s) per core:", "data": "1"}
+         ]}
+      ]}
+   ]
+}

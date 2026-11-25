@@ -1,0 +1,80 @@
+[
+  {
+    "data": {
+      "alerts": {
+        "nodes": [
+          {
+            "alertID": 41,
+            "status": "StatusClosed",
+            "summary": "Website down: https://acme.example does not answer",
+            "details": "| Label | Value |\n| ----- | ----- |\n| alertname | Website down |\n| grafana_folder | AyeOps |\n| host | central |\n| instance | https://acme.example |\n| service | web |\n| severity | critical |\n\n| Annotation | Value |\n| ---------- | ----- |\n| fingerprint | 6b1f0c2e9a7d4e33a0c5b8f1d2e3a4b5 |\n| host | not-a-label |\n| summary | Website down: https://acme.example does not answer |\n\nSource: https://grafana.ops.acme.example/alerting/grafana/aye-website-down/view\n\n```\n[ var='A' labels={host=central} value=0 ]\n```",
+            "createdAt": "2026-01-01T08:10:31.204518Z",
+            "recentEvents": {
+              "nodes": [
+                {"timestamp": "2026-01-01T08:22:31.880112Z", "message": "Closed via Grafana integration"},
+                {"timestamp": "2026-01-01T08:13:10.482915Z", "message": "Acknowledged"},
+                {"timestamp": "2026-01-01T08:10:32.001377Z", "message": "Notification sent to Acme On-call (Telegram oncall bridge)"},
+                {"timestamp": "2026-01-01T08:10:31.911204Z", "message": "Escalated to step #1"},
+                {"timestamp": "2026-01-01T08:10:31.204518Z", "message": "Created via Grafana integration"}
+              ]
+            }
+          },
+          {
+            "alertID": 42,
+            "status": "StatusClosed",
+            "summary": "Disk on edge is full",
+            "details": "| Label | Value |\n| ----- | ----- |\n| alertname | Disk full |\n| grafana_folder | AyeOps |\n| host | edge |\n| severity | critical |\n\n| Annotation | Value |\n| ---------- | ----- |\n| summary | Disk on edge is full |",
+            "createdAt": "2026-01-01T05:00:30.5Z",
+            "recentEvents": {
+              "nodes": [
+                {"timestamp": "2026-01-01T06:40:02.1Z", "message": "Closed via Grafana integration"},
+                {"timestamp": "2026-01-01T05:31:47.9Z", "message": "Acknowledged by Acme On-call (Web)"},
+                {"timestamp": "2026-01-01T05:20:31Z", "message": "Escalated to step #2"},
+                {"timestamp": "2026-01-01T05:00:31Z", "message": "Notification sent to Acme On-call (Email)"},
+                {"timestamp": "2026-01-01T05:00:30.5Z", "message": "Created via Grafana integration"}
+              ]
+            }
+          }
+        ],
+        "pageInfo": {"endCursor": "eyJpZCI6NDJ9", "hasNextPage": true}
+      }
+    }
+  },
+  {
+    "data": {
+      "alerts": {
+        "nodes": [
+          {
+            "alertID": 43,
+            "status": "StatusClosed",
+            "summary": "3 x Host down in workers: worker-01, worker-02, worker-03",
+            "details": "| Label | Value |\n| ----- | ----- |\n| alertname | Host down |\n| grafana_folder | AyeOps |\n| severity | critical |\n\n| Annotation | Value |\n| ---------- | ----- |\n| summary | 3 x Host down in workers: worker-01, worker-02, worker-03 |",
+            "createdAt": "2026-01-01T07:00:30Z",
+            "recentEvents": {
+              "nodes": [
+                {"timestamp": "2026-01-01T07:04:40Z", "message": "Closed via Grafana integration"},
+                {"timestamp": "2026-01-01T07:00:31Z", "message": "Notification sent to Acme On-call (Telegram oncall bridge)"},
+                {"timestamp": "2026-01-01T07:00:30Z", "message": "Created via Grafana integration"}
+              ]
+            }
+          },
+          {
+            "alertID": 44,
+            "status": "StatusAcknowledged",
+            "summary": "Backups failing on central",
+            "details": "| Label | Value |\n| ----- | ----- |\n| alertname | Backups failing |\n| host | central |\n| severity | page |",
+            "createdAt": "2026-01-01T08:40:00Z",
+            "recentEvents": {
+              "nodes": [
+                {"timestamp": "2026-01-01T08:52:00Z", "message": "Acknowledged by Acme On-call (Web)"},
+                {"timestamp": "2026-01-01T08:41:00Z", "message": "Acknowledged"},
+                {"timestamp": "2026-01-01T08:40:00Z", "message": "Created via Grafana integration"}
+              ]
+            }
+          }
+        ],
+        "pageInfo": {"endCursor": "eyJpZCI6NDR9", "hasNextPage": false}
+      }
+    }
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "data": {
+    "viewer": {
+      "zones": [
+        {
+          "httpRequests1dGroups": [
+            {
+              "sum": {
+                "bytes": 800000000,
+                "cachedBytes": 600000000,
+                "cachedRequests": 15000,
+                "requests": 25000,
+                "threats": 12
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "errors": null
+}

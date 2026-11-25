@@ -1,0 +1,1036 @@
+{
+  "ayeopsRequires": [
+    "probes.internet"
+  ],
+  "editable": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "panels": [],
+      "title": {
+        "en": "Now",
+        "uk": "Зараз"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "probes.gateway"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": {
+                    "en": "Down",
+                    "uk": "Лежить"
+                  }
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": {
+                    "en": "Up",
+                    "uk": "Працює"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "min(probe_success{job=\"blackbox-icmp\",layer=\"gateway\",host=\"$host\"})",
+          "legendFormat": "gateway",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Gateway",
+        "uk": "Роутер"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": {
+                    "en": "Down",
+                    "uk": "Лежить"
+                  }
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": {
+                    "en": "Up",
+                    "uk": "Працює"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max(probe_success{job=\"blackbox-icmp\",layer=\"internet\",host=\"$host\"})",
+          "legendFormat": "internet",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Internet",
+        "uk": "Інтернет"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": {
+                    "en": "Down",
+                    "uk": "Лежить"
+                  }
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": {
+                    "en": "Up",
+                    "uk": "Працює"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max(probe_success{job=\"blackbox-dns\",host=\"$host\"})",
+          "legendFormat": "dns",
+          "refId": "A"
+        }
+      ],
+      "title": "DNS",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          },
+          "unit": "m"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum_over_time((1 - max(probe_success{job=\"blackbox-icmp\",layer=\"internet\",host=\"$host\"}))[1d:15s]) * 15 / 60",
+          "legendFormat": {
+            "en": "minutes",
+            "uk": "хвилин"
+          },
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Minutes offline, 24 h",
+        "uk": "Хвилин без інтернету, 24 год"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "count_over_time((max(probe_success{job=\"blackbox-icmp\",layer=\"internet\",host=\"$host\"} offset 15s) - max(probe_success{job=\"blackbox-icmp\",layer=\"internet\",host=\"$host\"}) == 1)[1d:15s]) or vector(0)",
+          "legendFormat": {
+            "en": "outages",
+            "uk": "обривів"
+          },
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Outages, 24 h",
+        "uk": "Обривів, 24 год"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "avg(probe_icmp_duration_seconds{job=\"blackbox-icmp\",layer=\"internet\",phase=\"rtt\",host=\"$host\"})",
+          "legendFormat": "rtt",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Ping now",
+        "uk": "Пінг зараз"
+      },
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 8,
+      "panels": [],
+      "title": {
+        "en": "History",
+        "uk": "Історія"
+      },
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": {
+                    "en": "Down",
+                    "uk": "Лежить"
+                  }
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": {
+                    "en": "Up",
+                    "uk": "Працює"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 9,
+      "options": {
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "showValue": "never"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "min(probe_success{job=\"blackbox-icmp\",layer=\"gateway\",host=\"$host\"})",
+          "legendFormat": {
+            "en": "gateway",
+            "uk": "роутер"
+          },
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max(probe_success{job=\"blackbox-icmp\",layer=\"internet\",host=\"$host\"})",
+          "legendFormat": {
+            "en": "internet",
+            "uk": "інтернет"
+          },
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max(probe_success{job=\"blackbox-dns\",host=\"$host\"})",
+          "legendFormat": "DNS",
+          "refId": "C"
+        }
+      ],
+      "title": {
+        "en": "Reachable",
+        "uk": "Досяжність"
+      },
+      "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "id": 10,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "probe_icmp_duration_seconds{job=\"blackbox-icmp\",phase=\"rtt\",host=\"$host\"}",
+          "legendFormat": "{{layer}} {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Ping to the gateway and the internet",
+        "uk": "Пінг до роутера й інтернету"
+      },
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 11,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * (1 - avg_over_time(probe_success{job=\"blackbox-icmp\",host=\"$host\"}[1h]))",
+          "legendFormat": "{{layer}} {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Lost pings over the last hour, %",
+        "uk": "Втрачені пінги за останню годину, %"
+      },
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "id": 12,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "probe_duration_seconds{job=\"blackbox-dns\",host=\"$host\"}",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "DNS answer time",
+        "uk": "Час відповіді DNS"
+      },
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60
+          },
+          "min": 0,
+          "unit": "m"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "id": 13,
+      "interval": "1d",
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum_over_time((1 - max(probe_success{job=\"blackbox-icmp\",layer=\"internet\",host=\"$host\"}))[1d:15s]) * 15 / 60",
+          "legendFormat": {
+            "en": "minutes offline",
+            "uk": "хвилин без інтернету"
+          },
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Minutes offline per day",
+        "uk": "Хвилин без інтернету по днях"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "network"
+      ],
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 14,
+      "panels": [],
+      "title": {
+        "en": "Link",
+        "uk": "Лінк"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "network"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": {
+                    "en": "Down",
+                    "uk": "Лежить"
+                  }
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": {
+                    "en": "Up",
+                    "uk": "Працює"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 29
+      },
+      "id": 15,
+      "options": {
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "showValue": "never"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_network_carrier{job=\"network\",host=\"$host\"}",
+          "legendFormat": "{{device}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Carrier",
+        "uk": "Лінк є"
+      },
+      "type": "state-timeline"
+    },
+    {
+      "ayeopsRequires": [
+        "network.wifi"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "max": -30,
+          "min": -90,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": -75
+              },
+              {
+                "color": "green",
+                "value": -67
+              }
+            ]
+          },
+          "unit": "dBm"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 29
+      },
+      "id": 16,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "ayeops_wifi_signal_dbm{host=\"$host\"}",
+          "legendFormat": "{{device}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Wi-Fi signal",
+        "uk": "Сигнал Wi-Fi"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "network"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "id": 17,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_network_speed_bytes{job=\"network\",host=\"$host\"} * 8",
+          "legendFormat": "{{device}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Link speed",
+        "uk": "Швидкість лінку"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "network"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "id": 18,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "8 * rate(node_network_receive_bytes_total{job=\"network\",host=\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "{{device}} in",
+            "uk": "{{device}} вхідний"
+          },
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "8 * rate(node_network_transmit_bytes_total{job=\"network\",host=\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "{{device}} out",
+            "uk": "{{device}} вихідний"
+          },
+          "refId": "B"
+        }
+      ],
+      "title": {
+        "en": "Traffic",
+        "uk": "Трафік"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "network.wifi"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 43
+      },
+      "id": 19,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_wifi_station_receive_bits_per_second{host=\"$host\"}",
+          "legendFormat": {
+            "en": "{{device}} receive",
+            "uk": "{{device}} прийом"
+          },
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_wifi_station_transmit_bits_per_second{host=\"$host\"} > 0",
+          "legendFormat": {
+            "en": "{{device}} send",
+            "uk": "{{device}} передача"
+          },
+          "refId": "B"
+        }
+      ],
+      "title": {
+        "en": "Wi-Fi bitrate",
+        "uk": "Швидкість Wi-Fi"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "network.wifi"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "hertz"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 43
+      },
+      "id": 20,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_wifi_interface_frequency_hertz{host=\"$host\"} * on (host, device) group_left (ssid) max by (host, device, ssid) (node_wifi_station_info{host=\"$host\"})",
+          "legendFormat": "{{device}} · {{ssid}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Wi-Fi network",
+        "uk": "Мережа Wi-Fi"
+      },
+      "type": "stat"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "ayeops"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "victoriametrics"
+        },
+        "definition": "label_values(probe_success{job=\"blackbox-icmp\"}, group)",
+        "includeAll": true,
+        "label": {
+          "en": "Group",
+          "uk": "Група"
+        },
+        "multi": false,
+        "name": "group",
+        "query": {
+          "query": "label_values(probe_success{job=\"blackbox-icmp\"}, group)",
+          "refId": "group"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "victoriametrics"
+        },
+        "definition": "label_values(probe_success{job=\"blackbox-icmp\", group=~\"$group\"}, host)",
+        "includeAll": false,
+        "label": {
+          "en": "Host",
+          "uk": "Хост"
+        },
+        "multi": false,
+        "name": "host",
+        "query": {
+          "query": "label_values(probe_success{job=\"blackbox-icmp\", group=~\"$group\"}, host)",
+          "refId": "host"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": {
+    "en": "AyeOps / Internet",
+    "uk": "AyeOps / Інтернет"
+  },
+  "uid": "ayeops-internet",
+  "version": 1
+}
