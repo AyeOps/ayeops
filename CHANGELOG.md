@@ -18,6 +18,12 @@ and was never tagged.
   vmagent queue holds more than 30 minutes of its own traffic or more than half of its room, and
   `metrics-shipping-dropped` (critical), when in the last hour the full queue dropped blocks or
   storage rejected one.
+- Tests read every built-in alert expression with a small PromQL reader (`ayeops.promql.parse`)
+  and fail when a metric is in no captured exporter list, no module script and no recording rule
+  (or the reviewed list of exporters not captured yet), when a `job` matcher names no scrape job
+  or a label of an AyeOps series is not in its script, and when a threshold of one metric
+  against a constant does not separate the reviewed healthy and failing values of
+  `tests/fixtures/alerts/thresholds.yaml` ([adding an alert](CONTRIBUTING.md#adding-an-alert)).
 
 ### Changed
 
