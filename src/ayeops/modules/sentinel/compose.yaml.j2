@@ -4,8 +4,12 @@ services:
     command: ["python", "-I", "/app/sentinel.py"]
     user: "65534:65534"
     environment:
+{% if contact == "slack" %}
+      AYE_SLACK_WEBHOOK_URL: "${AYE_SLACK_WEBHOOK_URL:?set AYE_SLACK_WEBHOOK_URL}"
+{% else %}
       AYE_TELEGRAM_BOT_TOKEN: "${AYE_TELEGRAM_BOT_TOKEN:?set AYE_TELEGRAM_BOT_TOKEN}"
       AYE_TELEGRAM_CHAT_ID: "${AYE_TELEGRAM_CHAT_ID:?set AYE_TELEGRAM_CHAT_ID}"
+{% endif %}
       AYE_SENTINEL_PING_URL: "${AYE_SENTINEL_PING_URL:-}"
       AYE_SENTINEL_PROJECT: {{ project | tojson }}
       AYE_SENTINEL_HOST: {{ host.name | tojson }}

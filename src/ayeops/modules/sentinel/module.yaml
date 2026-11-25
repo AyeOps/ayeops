@@ -1,5 +1,5 @@
 name: sentinel
-summary: Watches the central host from another host and sends one Telegram message when it stops answering, plus a dead-man ping while it answers.
+summary: Watches the central host from another host and sends one message to Telegram, or to Slack with contact slack, when it stops answering, plus a dead-man ping while it answers.
 requires: {}
 defaults:
   checks: []
@@ -71,7 +71,7 @@ settings_schema:
         enum: [9134]
 services:
   sentinel:
-    description: Checks Grafana, VictoriaMetrics and the freshness of up on the watched host every minute and tells Telegram when they stop answering.
+    description: Checks Grafana, VictoriaMetrics and the freshness of up on the watched host every minute and tells Telegram, or Slack with contact slack, when they stop answering.
     memory: 48m
     cpus: 0.05
     metrics:
@@ -90,7 +90,7 @@ services:
       internal: watches the monitoring itself, not a user-facing component
 alerts:
   - name: sentinel-notify-failing
-    title: Sentinel cannot reach Telegram
+    title: Sentinel cannot deliver its messages
     expr: ayeops_sentinel_last_notice_ok == bool 0
     for: 1m
     severity: critical
@@ -117,8 +117,15 @@ permissions:
   - issuer: Telegram
     credential: bot token and chat id
     env: [AYE_TELEGRAM_BOT_TOKEN, AYE_TELEGRAM_CHAT_ID]
+    when: "contact != 'slack'"
     grants:
       - "the bot of the Grafana contact point, a member of the alert chat that may post there; no admin rights"
+  - issuer: Slack
+    credential: incoming webhook URL
+    env: [AYE_SLACK_WEBHOOK_URL]
+    when: "contact == 'slack'"
+    grants:
+      - "the incoming webhook of the Grafana contact point, which posts into the alert channel only"
   - issuer: healthchecks.io or another dead-man service
     credential: ping URL of one check
     env: [AYE_SENTINEL_PING_URL]

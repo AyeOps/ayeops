@@ -1,5 +1,5 @@
 name: grafana
-summary: Grafana with the VictoriaMetrics datasource, the dashboards and alert rules of every enabled module a Telegram or email contact point and SMTP through the manifest mail relay.
+summary: Grafana with the VictoriaMetrics datasource, the dashboards and alert rules of every enabled module a Telegram, Slack or email contact point and SMTP through the manifest mail relay.
 requires:
   metrics:
     role: server
@@ -121,6 +121,12 @@ permissions:
     when: "contact == 'telegram'"
     grants:
       - "a bot made with BotFather that is a member of the alert chat and may post there; no admin rights in the chat"
+  - issuer: Slack
+    credential: incoming webhook URL
+    env: [AYE_SLACK_WEBHOOK_URL]
+    when: "contact == 'slack'"
+    grants:
+      - "an incoming webhook of a Slack app that posts into the alert channel only; no bot token and no other scope"
   - issuer: "{{ 'Google' if modules.auth.provider == 'google' else 'OIDC provider' }}"
     credential: the OAuth client of the auth module
     env: [AYE_AUTH_CLIENT_ID, AYE_AUTH_CLIENT_SECRET]
