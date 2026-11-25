@@ -226,7 +226,7 @@
         },
         "provider": {"type": "string", "minLength": 1},
         "setting": {"type": "string", "minLength": 1},
-        "only_with": {"enum": ["grafana_reader"]},
+        "only_with": {"enum": ["grafana_reader", "volatile_hosts"]},
         "no_data": {"enum": ["alerting", "ok"]}
       }
     }
