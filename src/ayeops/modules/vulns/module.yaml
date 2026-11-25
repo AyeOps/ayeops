@@ -1,0 +1,86 @@
+name: vulns
+summary: Scans every image the host's compose projects run with Trivy once a day, from the local docker images through a read-only socket proxy, and writes the known vulnerabilities per image, severity and fix as textfile metrics.
+requires:
+  node: {}
+defaults:
+  schedule: "05:00"
+  timezone: UTC
+  timeout_minutes: 15
+  exclude: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    schedule:
+      type: string
+      pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+    timezone:
+      type: string
+      pattern: '^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$'
+    timeout_minutes:
+      type: integer
+      minimum: 1
+      maximum: 120
+    exclude:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        pattern: '^[^\s$]+$'
+services:
+  vulns-proxy:
+    description: A docker socket proxy that answers only image inspect and image export, read-only, on an internal network that only the Trivy container shares.
+    memory: 32m
+    cpus: 0.1
+    metrics: [ayeops_vulns_image_scan_success]
+    alerts: [vulns-scan-failed]
+    logs: docker
+    status:
+      internal: tool of the vulns module
+  vulns:
+    description: Trivy in a loop that waits for a request from vulns-agent, refreshes its vulnerability database in a cached volume, scans each listed image from the local docker images and writes one JSON report per image.
+    memory: 1g
+    cpus: 1.0
+    metrics: [ayeops_vulns_image_scan_success, ayeops_vulns_db_update_success, ayeops_vulns_last_run_timestamp_seconds]
+    alerts: [vulns-scan-failed, vulns-scan-stale]
+    logs: docker
+    status:
+      internal: host security telemetry, users never see it
+  vulns-agent:
+    description: Asks for a Trivy run at schedule, and at once when the images changed, and turns the reports into textfile metrics, without a network.
+    memory: 48m
+    cpus: 0.1
+    metrics: [ayeops_vulns_vulnerabilities, ayeops_vulns_image_scan_success, ayeops_vulns_last_run_timestamp_seconds, ayeops_vulns_last_success_timestamp_seconds]
+    alerts: [vulns-critical-fixable, vulns-scan-failed, vulns-scan-stale]
+    logs: docker
+    status:
+      internal: tool of the vulns module
+alerts:
+  - name: vulns-critical-fixable
+    title: A running image has a critical vulnerability with a fix
+    expr: max by (host, project, group, image) (ayeops_vulns_vulnerabilities{severity="critical", fixed="true"}) > bool 0
+    for: 1h
+    severity: warning
+    summary: "{{ .Labels.image }} on {{ .Labels.host }} has a critical vulnerability that a newer package or image fixes"
+    runbook: vulns-critical-fixable
+  - name: vulns-scan-failed
+    title: The vulnerability scan of an image failed
+    expr: max by (host, project, group, image) (ayeops_vulns_image_scan_success) == bool 0
+    for: 30m
+    severity: warning
+    summary: "Trivy on {{ .Labels.host }} could not scan {{ .Labels.image }} in its last run, so its vulnerabilities are unknown"
+    runbook: vulns-scan-failed
+  - name: vulns-scan-stale
+    title: No vulnerability scan finished for 2 days
+    expr: time() - max by (host, project, group) (ayeops_vulns_last_run_timestamp_seconds) > bool 180000
+    for: 1h
+    severity: warning
+    summary: "Trivy on {{ .Labels.host }} has not finished a vulnerability scan for more than 2 days"
+    runbook: vulns-scan-stale
+dashboards: []
+files:
+  - src: files/vulns_agent.py
+    dest: vulns/vulns_agent.py
+  - src: files/vulns_loop.sh
+    dest: vulns/vulns_loop.sh

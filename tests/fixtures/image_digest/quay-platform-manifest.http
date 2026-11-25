@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+Date: Thu, 05 Nov 2026 20:22:04 GMT
+Content-Type: application/vnd.oci.image.manifest.v1+json
+Content-Length: 862
+Connection: keep-alive
+Server: nginx
+Docker-Content-Digest: sha256:bb6d68c3a5f4bf7480223dce600fa837693b635b2f10a0f873590ae77cc8dbad
+Vary: Cookie
+X-Frame-Options: DENY
+Strict-Transport-Security: max-age=63072000; preload

@@ -1,0 +1,201 @@
+{
+  "editable": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 340541,
+      "panels": [],
+      "title": "mcp-calls-flow",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.3
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 0,
+        "y": 1
+      },
+      "id": 340542,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h])) or (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 1w)), \"aye_week\", \"1\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 2w)), \"aye_week\", \"2\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 3w)), \"aye_week\", \"3\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 4w)), \"aye_week\", \"4\", \"\", \"\"))) * 0)) / quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 1w)), \"aye_week\", \"1\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 2w)), \"aye_week\", \"2\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 3w)), \"aye_week\", \"3\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 4w)), \"aye_week\", \"4\", \"\", \"\")))",
+          "legendFormat": "{{tool}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Share of the usual level",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*usual$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 10,
+        "y": 1
+      },
+      "id": 340543,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h])) or (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 1w)), \"aye_week\", \"1\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 2w)), \"aye_week\", \"2\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 3w)), \"aye_week\", \"3\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 4w)), \"aye_week\", \"4\", \"\", \"\"))) * 0))",
+          "legendFormat": "{{tool}} actual",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 1w)), \"aye_week\", \"1\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 2w)), \"aye_week\", \"2\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 3w)), \"aye_week\", \"3\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 4w)), \"aye_week\", \"4\", \"\", \"\")))",
+          "legendFormat": "{{tool}} usual",
+          "refId": "B"
+        }
+      ],
+      "title": "Actual and usual",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 4,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 340544,
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "count by (tool) ((label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 1w)), \"aye_week\", \"1\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 2w)), \"aye_week\", \"2\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 3w)), \"aye_week\", \"3\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 4w)), \"aye_week\", \"4\", \"\", \"\")))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "{{tool}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Weeks of history, under 2 learning",
+      "type": "bargauge"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "ayeops"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Flow baselines",
+  "uid": "ayeops-baseline",
+  "version": 1
+}

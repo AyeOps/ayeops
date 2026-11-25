@@ -1,0 +1,2 @@
+ :Neighbour\:Net:40:2412 MHz
+*:Home\:Net 5G:72:5180 MHz

@@ -1,0 +1,11 @@
+backup-agent.service               loaded active running Nightly backup agent
+containerd.service                 loaded active running containerd container runtime
+cron.service                       loaded active running Regular background program processing daemon
+dbus.service                       loaded active running D-Bus System Message Bus
+docker.service                     loaded active running Docker Application Container Engine
+getty@tty1.service                 loaded active running Getty on tty1
+mysql.service                      loaded active running MySQL Community Server
+php8.3-fpm.service                 loaded active running The PHP 8.3 FastCGI Process Manager
+smartd.service                     loaded active running Self Monitoring and Reporting Technology (SMART) Daemon
+ssh.service                        loaded active running OpenBSD Secure Shell server
+systemd-journald.service           loaded active running Journal Service

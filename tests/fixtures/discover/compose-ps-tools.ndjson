@@ -1,0 +1,2 @@
+{"Command":"\"redis-server --requirepass hunter2\"","Health":"","Image":"valkey/valkey:8.1.4","Name":"tools-cache-1","Project":"tools","Publishers":[],"Service":"cache","State":"exited"}
+{"Command":"\"/bin/sh\"","Health":"","Image":"busybox:1.37.0","Name":"tools-db-1","Project":"tools","Publishers":[],"Service":"db","State":"exited"}

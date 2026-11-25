@@ -1,0 +1,116 @@
+name: ai-usage
+summary: AI provider exporter for the spend, token usage and limits of Anthropic and OpenAI organizations, read from their admin usage and cost APIs.
+requires:
+  metrics: {}
+defaults:
+  providers: []
+  monthly_budget_usd: {}
+  spike_floor_usd: 1
+  refresh_seconds: 900
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  required: [providers]
+  properties:
+    providers:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        enum: [anthropic, openai]
+    monthly_budget_usd:
+      type: object
+      additionalProperties: false
+      properties:
+        anthropic: {type: number, exclusiveMinimum: 0}
+        openai: {type: number, exclusiveMinimum: 0}
+    spike_floor_usd:
+      type: number
+      minimum: 0
+    refresh_seconds:
+      type: integer
+      minimum: 300
+    expose:
+      type: array
+      items:
+        enum: [9147]
+services:
+  ai-usage-exporter:
+    description: Polls the usage, cost, rate limit and API key reports of the configured AI providers and serves the numbers to vmagent.
+    memory: 64m
+    cpus: 0.1
+    metrics:
+      - ayeops_ai_cost_month_usd
+      - ayeops_ai_cost_day_usd
+      - ayeops_ai_tokens_month
+      - ayeops_ai_query_success
+    alerts:
+      - target-down
+      - ai-budget-80
+      - ai-budget-exceeded
+      - ai-spend-spike
+      - ai-query-failing
+      - ai-key-expiring
+    logs: docker
+    status:
+      internal: spend and limits of the AI providers for the team, not a user-facing component
+alerts:
+  - name: ai-budget-80
+    title: AI provider budget 80% used
+    expr: sum by (provider) (ayeops_ai_cost_month_usd) / on (provider) ayeops_ai_budget_usd > bool 0.8
+    for: 15m
+    severity: warning
+    summary: "{{ .Labels.provider }} spent more than 80% of its monthly budget"
+    runbook: ai-budget
+  - name: ai-budget-exceeded
+    title: AI provider budget exceeded
+    expr: sum by (provider) (ayeops_ai_cost_month_usd) / on (provider) ayeops_ai_budget_usd > bool 1
+    for: 15m
+    severity: critical
+    summary: "{{ .Labels.provider }} spent more than its monthly budget"
+    runbook: ai-budget
+  - name: ai-spend-spike
+    title: AI spend today far above the usual day
+    expr: >-
+      sum by (provider) (ayeops_ai_cost_day_usd)
+      > bool 3 * on (provider) ayeops_ai_cost_daily_median_7d_usd
+      and sum by (provider) (ayeops_ai_cost_day_usd) > on (provider) ayeops_ai_spike_floor_usd
+    for: 30m
+    severity: warning
+    summary: "{{ .Labels.provider }} spent today more than three times its median day of the last week"
+    runbook: ai-spend-spike
+  - name: ai-query-failing
+    title: AI provider report query failing
+    expr: ayeops_ai_query_success == bool 0
+    for: 3h
+    severity: warning
+    summary: "The {{ .Labels.dataset }} report of {{ .Labels.provider }} has failed for 3 hours"
+    runbook: ai-query-failing
+  - name: ai-key-expiring
+    title: AI provider API key expires soon
+    expr: (ayeops_ai_api_key_expiry_timestamp_seconds - time()) / 86400 < bool 14
+    for: 1h
+    severity: warning
+    summary: "The {{ .Labels.provider }} API key {{ .Labels.key }} expires in less than 14 days"
+    runbook: ai-key-expiring
+dashboards: [ai.json]
+files:
+  - src: files/ai_usage_exporter.py
+    dest: ai-usage/ai_usage_exporter.py
+permissions:
+  - issuer: Anthropic
+    credential: Admin API key
+    env: [AYE_ANTHROPIC_ADMIN_KEY]
+    when: "'anthropic' in settings.providers"
+    grants:
+      - "an Admin API key of the organization; Admin keys have no narrower scope, so keep it on this host only"
+      - "AyeOps only reads: cost_report, usage_report/messages, rate_limits, api_keys"
+  - issuer: OpenAI
+    credential: Admin key
+    env: [AYE_OPENAI_ADMIN_KEY]
+    when: "'openai' in settings.providers"
+    grants:
+      - "an Admin key of the organization, created by an owner"
+      - "AyeOps only reads: organization/costs, organization/usage/completions"

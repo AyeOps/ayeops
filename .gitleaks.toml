@@ -1,0 +1,31 @@
+title = "AyeOps gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Image references such as valkey/valkey:9.1.2-alpine3.24, valkey:8.1-alpine3.22 and oauth2-proxy:v7.15.5-alpine, also inside a Python string that ends in a newline: the generic rule reads the version tag after a name containing key or auth as a secret"
+targetRules = ["generic-api-key"]
+regexTarget = "match"
+regexes = ['^(?:valkey|oauth2-proxy):v?\d+(?:\.\d+){1,2}-alpine(?:\d+\.\d+)?(?:\\n)?"?$']
+
+[[allowlists]]
+description = "Fake Grafana password the portal test writes to .env to prove no secret reaches the rendered pages"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['^tests/test_portal\.py$']
+regexes = ['^hunter2-grafana-secret$']
+
+[[allowlists]]
+description = "Fake authorization token the autopilot mask test proves is masked before a dossier leaves the host"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['^tests/test_autopilot_mask\.py$']
+regexes = ['^0a1b2c3d4e5f$']
+
+[[allowlists]]
+description = "Cache keys of the mutation workflow, mutants-<version>-<module>-<hash>, that the mutants tests expect in GITHUB_OUTPUT as key=..."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['^tests/test_mutants\.py$']
+regexes = ['^mutants-\d+-[a-z0-9_.]+-[0-9a-f]+$']

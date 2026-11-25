@@ -1,0 +1,59 @@
+services:
+{% if settings.role == "server" %}
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.153.0@sha256:5eff7af5341e401471002f58d106d399e614a62f3d240f2dbc21901e49eed5dd
+    command:
+      - {{ ("-retentionPeriod=" ~ settings.retention) | tojson }}
+      - "-storageDataPath=/storage"
+      - "-httpListenAddr=:8428"
+    volumes:
+      - "victoriametrics-data:/storage"
+    ports: [8428]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8428/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+{% endif %}
+  vmagent:
+    image: victoriametrics/vmagent:v1.153.0@sha256:474135388ae700b842007d3e186a8ae60ccf7de3dfd776fb6ed27cf8522d8331
+    command:
+      - "-promscrape.config=/etc/vmagent/scrape.yaml"
+      - {{ ("-remoteWrite.url=" ~ remote_write_url) | tojson }}
+      - {{ ("-remoteWrite.label=host=" ~ host.name) | tojson }}
+      - {{ ("-remoteWrite.label=project=" ~ project) | tojson }}
+{% if host.group %}
+      - {{ ("-remoteWrite.label=group=" ~ host.group) | tojson }}
+{% endif %}
+      - "-remoteWrite.tmpDataPath=/vmagent-data"
+      - {{ ("-remoteWrite.maxDiskUsagePerURL=" ~ settings.queue_max) | tojson }}
+      - "-httpListenAddr=:8429"
+    volumes:
+      - "./vmagent/scrape.yaml:/etc/vmagent/scrape.yaml:ro"
+      - "vmagent-data:/vmagent-data"
+    ports: [8429]
+{% if settings.networks %}
+    networks:
+      - default
+{% for network in settings.networks %}
+      - {{ network | tojson }}
+{% endfor %}
+{% endif %}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8429/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+{% if settings.role == "server" %}
+  victoriametrics-data: {}
+{% endif %}
+  vmagent-data: {}
+{% if settings.networks %}
+networks:
+  default: {}
+{% for network in settings.networks %}
+  {{ network | tojson }}:
+    external: true
+{% endfor %}
+{% endif %}

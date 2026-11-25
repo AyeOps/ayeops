@@ -1,0 +1,76 @@
+name: hygiene
+summary: A nightly prune of unused docker images, build cache and stopped containers, with before and after textfile metrics so a host does not fill up with leftovers.
+requires:
+  node: {}
+defaults:
+  schedule: "03:30"
+  images_until: 168h
+  containers_until: 24h
+  build_cache_keep: 10g
+  volumes: false
+  dry_run: false
+  disk_path: /var/lib/docker
+  journal_dir: /var/log/journal
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    schedule:
+      type: string
+      pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+    images_until:
+      type: string
+      pattern: "^[0-9]+[mh]$"
+    containers_until:
+      type: string
+      pattern: "^[0-9]+[mh]$"
+    build_cache_keep:
+      type: string
+      pattern: "^[0-9]+[mgt]$"
+    volumes:
+      type: boolean
+    dry_run:
+      type: boolean
+    disk_path:
+      type: string
+      pattern: "^/[^:]*$"
+    journal_dir:
+      type: [string, "null"]
+      pattern: "^/[^:]*$"
+services:
+  hygiene:
+    description: Prunes stopped containers, unused images and build cache above a kept size once a day through the docker socket, and writes what it reclaimed for node-exporter.
+    memory: 64m
+    cpus: 0.25
+    metrics: [ayeops_hygiene_last_success_timestamp_seconds, ayeops_hygiene_reclaimed_bytes, ayeops_hygiene_build_cache_bytes, ayeops_hygiene_disk_used_percent]
+    alerts: [hygiene-stale, build-cache-oversized, disk-critical]
+    logs: docker
+    status:
+      internal: host housekeeping, not a user-facing component
+alerts:
+  - name: hygiene-stale
+    title: Docker prune has not succeeded for 2 days
+    expr: time() - ayeops_hygiene_last_success_timestamp_seconds > bool 172800
+    for: 30m
+    severity: warning
+    summary: "The nightly docker prune on {{ .Labels.host }} has not succeeded for more than 2 days"
+    runbook: hygiene-stale
+  - name: build-cache-oversized
+    title: Build cache above twice the kept size
+    expr: max by (host, project, group) (ayeops_hygiene_build_cache_bytes{phase="after"}) > bool 2 * max by (host, project, group) (ayeops_hygiene_build_cache_keep_bytes)
+    for: 1h
+    severity: warning
+    summary: "The docker build cache on {{ .Labels.host }} stayed above twice build_cache_keep after the nightly prune"
+    runbook: build-cache-oversized
+  - name: disk-critical
+    title: Disk above 90 %
+    expr: (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"}) * 100 > bool 90
+    for: 5m
+    severity: critical
+    summary: "{{ .Labels.mountpoint }} on {{ .Labels.host }} is more than 90 % full"
+    runbook: disk-critical
+dashboards: []
+files:
+  - src: files/hygiene_runner.py
+    dest: hygiene/hygiene_runner.py

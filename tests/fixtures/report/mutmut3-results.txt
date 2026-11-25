@@ -1,0 +1,7 @@
+    shop.normalize.x_storage__mutmut_2: survived
+    shop.normalize.xǁParserǁparse__mutmut_1: survived
+    shop.risk.x_score__mutmut_1: no tests
+    shop.risk.x_score__mutmut_2: timeout
+    shop.risk.x_score__mutmut_3: caught by type check
+    shop.risk.x_score__mutmut_5: suspicious
+    shop.risk.x_score__mutmut_6: skipped

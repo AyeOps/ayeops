@@ -1,0 +1,223 @@
+name: oncall
+summary: On-call escalation for critical alerts. GoAlert keeps each alert, who acknowledged it and when, and the escalation steps; a bridge messages the person on call in Telegram with an acknowledge button, repeats until someone acknowledges and keeps quiet at night.
+requires:
+  containers: {}
+  grafana: {}
+  metrics: {}
+defaults:
+  provider: goalert
+  url: null
+  person: null
+  language: en
+  repeat_minutes: 5
+  max_repeats: 12
+  quiet_hours:
+    start: "23:00"
+    end: "08:00"
+    timezone: UTC
+  escalation:
+    - delay_minutes: 0
+      notify: person
+  email: true
+  twilio: false
+  voice_after_minutes: 10
+  ops_chat_id: null
+  topics: false
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  required: [url, person]
+  properties:
+    provider:
+      enum: [goalert]
+    url:
+      type: string
+      pattern: '^https://[^/\s]+$'
+    person:
+      type: object
+      additionalProperties: false
+      required: [username, name, email, telegram_chat_id]
+      properties:
+        username:
+          type: string
+          pattern: '^[a-z][a-z0-9_.-]{2,30}$'
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          pattern: '^[^@\s''"\\]+@[^@\s''"\\]+$'
+        telegram_chat_id:
+          type: string
+          pattern: '^-?[0-9]{3,20}$'
+        phone:
+          type: string
+          pattern: '^\+[1-9][0-9]{6,14}$'
+    language:
+      enum: [en, uk]
+    repeat_minutes:
+      type: integer
+      minimum: 1
+      maximum: 120
+    max_repeats:
+      type: integer
+      minimum: 0
+      maximum: 100
+    quiet_hours:
+      type: [object, "null"]
+      additionalProperties: false
+      required: [start, end]
+      properties:
+        start:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+        end:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+        timezone:
+          type: string
+          pattern: '^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$'
+    escalation:
+      type: array
+      minItems: 1
+      maxItems: 10
+      items:
+        oneOf:
+          - type: object
+            additionalProperties: false
+            required: [notify]
+            properties:
+              delay_minutes:
+                type: integer
+                minimum: 0
+                maximum: 1440
+              notify:
+                enum: [person]
+          - type: object
+            additionalProperties: false
+            required: [webhook]
+            properties:
+              delay_minutes:
+                type: integer
+                minimum: 0
+                maximum: 1440
+              webhook:
+                type: string
+                pattern: '^https?://[^\s]+$'
+    email:
+      type: boolean
+    twilio:
+      type: boolean
+    voice_after_minutes:
+      type: integer
+      minimum: 0
+      maximum: 240
+    ops_chat_id:
+      type: [string, "null"]
+      pattern: '^-100[0-9]{5,16}$'
+    topics:
+      type: boolean
+  if:
+    required: [topics]
+    properties:
+      topics:
+        const: true
+  then:
+    required: [ops_chat_id]
+    properties:
+      ops_chat_id:
+        type: string
+services:
+  goalert:
+    description: GoAlert keeps every critical alert Grafana sends, its acknowledgement and history, and runs the escalation steps of the manifest; it migrates its database and creates the admin before it starts.
+    memory: 256m
+    cpus: 0.5
+    metrics: [goalert_engine_cycle_total]
+    alerts: [target-down, probe-failing]
+    logs: docker
+    login: the GoAlert admin from AYE_ONCALL_ADMIN_PASSWORD behind the single sign-on of the auth module
+    status:
+      internal: operator tool, users never see it
+  goalert-db:
+    description: PostgreSQL of GoAlert; the contact methods and keys in it are encrypted with AYE_ONCALL_ENCRYPTION_KEY.
+    memory: 192m
+    cpus: 0.25
+    metrics:
+      none: only GoAlert connects to it, and GoAlert fails its healthcheck and target-down without it
+    alerts: [container-restarting]
+    logs: docker
+    status:
+      internal: storage of the on-call tool
+  oncall-bridge:
+    description: Writes the manifest into GoAlert at start, then takes critical alerts from Grafana into GoAlert and GoAlert's notifications to Telegram, with an acknowledge button, repeats and quiet hours, and with topics one forum topic per incident in the ops group; no port outside the compose network, button presses arrive by long polling.
+    memory: 96m
+    cpus: 0.25
+    metrics: [ayeops_oncall_messages_total, ayeops_oncall_failures_total, ayeops_oncall_last_poll_timestamp_seconds, ayeops_oncall_setup_ok, ayeops_oncall_topics_available]
+    alerts: [target-down, oncall-telegram-silent, oncall-failing, oncall-topics-unavailable]
+    logs: docker
+    status:
+      internal: delivery of on-call messages
+alerts:
+  - name: oncall-telegram-silent
+    title: On-call bridge has not reached Telegram for 10 minutes
+    expr: time() - max by (host, project, group) (ayeops_oncall_last_poll_timestamp_seconds) > bool 600
+    for: 5m
+    severity: warning
+    summary: "The on-call bridge on {{ .Labels.host }} has not polled Telegram for 10 minutes, so acknowledge buttons and messages may not work"
+    runbook: oncall-telegram-silent
+    no_data: alerting
+  - name: oncall-failing
+    title: On-call bridge fails to deliver
+    expr: sum by (host, project, group, op) (increase(ayeops_oncall_failures_total[15m])) > bool 2
+    for: 0m
+    severity: warning
+    summary: "The on-call bridge on {{ .Labels.host }} failed {{ .Labels.op }} more than twice in 15 minutes"
+    runbook: oncall-failing
+  - name: oncall-topics-unavailable
+    title: On-call bridge cannot open incident topics in the ops group
+    expr: max by (host, project, group) (ayeops_oncall_topics_available) == bool 0
+    for: 0m
+    severity: warning
+    summary: "The on-call bridge on {{ .Labels.host }} cannot create forum topics in the ops group, so incidents reach the person on call only in direct messages"
+    runbook: oncall-topics-unavailable
+dashboards: []
+files:
+  - src: files/goalert_init.sh
+    dest: oncall/goalert_init.sh
+  - src: files/oncall_setup.py
+    dest: oncall/oncall_setup.py
+  - src: files/oncall_bridge.py
+    dest: oncall/oncall_bridge.py
+  - src: files/oncall_texts.json
+    dest: oncall/oncall_texts.json
+permissions:
+  - issuer: Telegram
+    credential: bot token of a bot of its own
+    env: [AYE_ONCALL_TELEGRAM_TOKEN]
+    grants:
+      - "a separate bot made with BotFather, polled by the bridge only"
+      - "{% if settings.topics %}administrator of the ops group {{ settings.ops_chat_id }} with the right to manage topics only{% else %}it needs no group and no admin rights{% endif %}"
+  - issuer: Twilio
+    credential: account SID, auth token and calling number
+    env: [AYE_ONCALL_TWILIO_ACCOUNT_SID, AYE_ONCALL_TWILIO_AUTH_TOKEN, AYE_ONCALL_TWILIO_FROM_NUMBER]
+    when: "settings.twilio"
+    grants:
+      - "a subaccount that holds only the calling number, so its auth token cannot reach the main account"
+  - issuer: "{{ mail.host }}"
+    credential: SMTP login
+    env: [AYE_SMTP_USER, AYE_SMTP_PASSWORD]
+    when: "mail and settings.email"
+    grants:
+      - "may send as {{ mail.from }} only; no mailbox read access"
+generated:
+  - env: [AYE_ONCALL_DB_PASSWORD, AYE_ONCALL_ADMIN_PASSWORD]
+    format: hex
+    bytes: 24
+  - env: [AYE_ONCALL_ENCRYPTION_KEY, AYE_ONCALL_WEBHOOK_SECRET]
+    format: hex
+    bytes: 32
+  - env: [AYE_ONCALL_ACKS_SECRET]
+    when: "modules.incidents"
+    format: hex
+    bytes: 32

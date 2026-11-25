@@ -1,0 +1,26 @@
+services:
+  backup-jobs:
+    image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+    command: ["sh", "/backups/backup_jobs.sh"]
+    init: true
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      AYE_TEXTFILE_DIR: /textfile
+      AYE_BACKUP_JOBS: {{ backups.jobs | tojson }}
+      AYE_BACKUP_RPO: {{ backups.rpo | tojson }}
+      AYE_BACKUP_INTERVAL: {{ settings.interval | string | tojson }}
+    volumes:
+      - "./backups/backup_jobs.sh:/backups/backup_jobs.sh:ro"
+      - {{ (textfile ~ ":/textfile") | tojson }}
+    healthcheck:
+      test: ["CMD-SHELL", "find /textfile/ayeops_backups.prom -mmin -{{ (settings.interval // 60) * 3 + 1 }} | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+{% if textfile == "node-textfile" %}
+volumes:
+  node-textfile: {}
+{% endif %}

@@ -1,0 +1,107 @@
+name: delivery
+summary: Delivery and code-quality metrics that CI and deploy scripts push with aye report, turned into recording rules, a dashboard and alerts by vmalert and Grafana.
+requires:
+  metrics:
+    role: server
+defaults:
+  branches: [main]
+  expect: []
+  evaluation_interval: 1m
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    branches:
+      type: array
+      minItems: 1
+      items:
+        type: string
+        pattern: "^[A-Za-z0-9._/-]{1,100}$"
+    expect:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        required: [step, every]
+        properties:
+          step:
+            type: string
+            pattern: "^[a-z][a-z0-9_-]{0,39}$"
+          every:
+            type: string
+            pattern: "^[1-9][0-9]{0,2}[hd]$"
+          project:
+            type: string
+            pattern: "^[A-Za-z0-9._-]{1,100}$"
+    evaluation_interval:
+      type: string
+      pattern: "^[0-9]+[sm]$"
+    expose:
+      type: array
+      items:
+        enum: [8880]
+services:
+  vmalert:
+    description: Evaluates the delivery recording rules over the reports pushed by CI and deploy scripts and writes the results back to storage.
+    memory: 128m
+    cpus: 0.25
+    metrics: [vmalert_iteration_duration_seconds, vmalert_recording_rules_errors_total]
+    alerts: [target-down, deploy-failed, deploy-slow, ci-slower, coverage-dropped, mutation-score-dropped, delivery-silent]
+    logs: docker
+    status:
+      internal: delivery telemetry for the team, not a user-facing component
+alerts:
+  - name: deploy-failed
+    title: Deploy failed
+    expr: aye:step_success:last{step="deploy"} == bool 0
+    for: 1m
+    severity: critical
+    summary: "The latest deploy of {{ .Labels.project }} {{ .Labels.job }} failed"
+    runbook: deploy-failed
+    dashboard: {uid: ayeops-delivery, panel: 3}
+  - name: deploy-slow
+    title: Deploy slower than twice its 30-day median
+    expr: (aye:step_duration_seconds:last{step="deploy"} > bool 2 * aye:step_duration_seconds:median30d{step="deploy"}) * (aye:step_ok_runs:30d{step="deploy"} >= bool 5)
+    for: 1m
+    severity: warning
+    summary: "The latest deploy of {{ .Labels.project }} {{ .Labels.job }} took more than twice its 30-day median"
+    runbook: deploy-slow
+    dashboard: {uid: ayeops-delivery, panel: 6}
+  - name: ci-slower
+    title: CI duration up 50 %
+    expr: (aye:step_duration_seconds:median3d{step="ci"} > bool 1.5 * aye:step_duration_seconds:median30d{step="ci"}) * (aye:step_ok_runs:30d{step="ci"} >= bool 10)
+    for: 1h
+    severity: warning
+    summary: "CI job {{ .Labels.job }} of {{ .Labels.project }} runs 50 % longer than its 30-day median"
+    runbook: ci-slower
+    dashboard: {uid: ayeops-delivery, panel: 9}
+  - name: coverage-dropped
+    title: Line coverage dropped more than 2 pp
+    expr: aye:coverage_lines_percent:median30d - aye:coverage_lines_percent:last > bool 2
+    for: 1m
+    severity: warning
+    summary: "Line coverage of {{ .Labels.project }} is more than 2 points below its 30-day median"
+    runbook: coverage-dropped
+  - name: mutation-score-dropped
+    title: Mutation score dropped more than 3 pp
+    expr: aye:mutation_score_percent:median30d - aye:mutation_score_percent:last > bool 3
+    for: 1m
+    severity: warning
+    summary: "The {{ .Labels.tool }} mutation score of {{ .Labels.project }} is more than 3 points below its 30-day median"
+    runbook: mutation-score-dropped
+  - name: delivery-silent
+    title: No delivery report when one is expected
+    expr: aye:delivery_overdue == bool 1
+    for: 15m
+    severity: warning
+    summary: "No {{ .Labels.step }} report from {{ .Labels.project }} for more than {{ .Labels.expected }}"
+    runbook: delivery-silent
+    dashboard: {uid: ayeops-delivery, panel: 12}
+dashboards: [delivery.json, quality.json]
+files:
+  - src: files/rules.yml.j2
+    dest: delivery/rules.yml
+    when: branches
+    template: true

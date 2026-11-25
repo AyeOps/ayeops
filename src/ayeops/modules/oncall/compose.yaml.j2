@@ -1,0 +1,106 @@
+{% set db_url = "postgres://goalert:${AYE_ONCALL_DB_PASSWORD:?set AYE_ONCALL_DB_PASSWORD}@goalert-db:5432/goalert?sslmode=disable" %}
+services:
+  goalert-db:
+    image: postgres:18.6-alpine3.24@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b
+    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=40"]
+    environment:
+      POSTGRES_USER: goalert
+      POSTGRES_DB: goalert
+      POSTGRES_PASSWORD: "${AYE_ONCALL_DB_PASSWORD:?set AYE_ONCALL_DB_PASSWORD}"
+    volumes:
+      - "oncall-db:/var/lib/postgresql"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "goalert", "-d", "goalert"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+  goalert:
+    image: goalert/goalert:v0.35.0@sha256:f090a90538d7e61446aad245c21a7a1694d36d7b4f6c56fc55e9cc7405d9c03f
+    entrypoint: ["sh", "/app/goalert_init.sh"]
+    environment:
+      GOALERT_DB_URL: {{ db_url | tojson }}
+      GOALERT_DATA_ENCRYPTION_KEY: "${AYE_ONCALL_ENCRYPTION_KEY:?set AYE_ONCALL_ENCRYPTION_KEY}"
+      GOALERT_PUBLIC_URL: {{ settings.url | tojson }}
+      GOALERT_LISTEN: ":8081"
+      GOALERT_LISTEN_PROMETHEUS: ":9105"
+      AYE_ONCALL_ADMIN_USER: {{ settings.person.username | tojson }}
+      AYE_ONCALL_ADMIN_PASSWORD: "${AYE_ONCALL_ADMIN_PASSWORD:?set AYE_ONCALL_ADMIN_PASSWORD}"
+      AYE_ONCALL_PERSON_EMAIL: {{ settings.person.email | tojson }}
+    volumes:
+      - "./oncall/goalert_init.sh:/app/goalert_init.sh:ro"
+    depends_on:
+      goalert-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+  oncall-bridge:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/oncall_bridge.py"]
+    user: "65534:65534"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      AYE_ONCALL_TELEGRAM_TOKEN: "${AYE_ONCALL_TELEGRAM_TOKEN:?set AYE_ONCALL_TELEGRAM_TOKEN}"
+      AYE_ONCALL_WEBHOOK_SECRET: "${AYE_ONCALL_WEBHOOK_SECRET:?set AYE_ONCALL_WEBHOOK_SECRET}"
+{% if "incidents" in modules %}
+      AYE_ONCALL_ACKS_SECRET: "${AYE_ONCALL_ACKS_SECRET:?set AYE_ONCALL_ACKS_SECRET}"
+{% endif %}
+      AYE_ONCALL_CHAT_ID: {{ settings.person.telegram_chat_id | tojson }}
+      AYE_ONCALL_GOALERT: http://goalert:8081
+      AYE_ONCALL_PUBLIC_URL: {{ settings.url | tojson }}
+      AYE_ONCALL_LANGUAGE: {{ settings.language | tojson }}
+      AYE_ONCALL_REPEAT_MINUTES: {{ settings.repeat_minutes | string | tojson }}
+      AYE_ONCALL_MAX_REPEATS: {{ settings.max_repeats | string | tojson }}
+{% if settings.quiet_hours %}
+      AYE_ONCALL_QUIET_START: {{ settings.quiet_hours.start | tojson }}
+      AYE_ONCALL_QUIET_END: {{ settings.quiet_hours.end | tojson }}
+{% endif %}
+      AYE_ONCALL_TIMEZONE: {{ (settings.quiet_hours.timezone if settings.quiet_hours else timezone) | tojson }}
+{% if settings.topics %}
+      AYE_ONCALL_OPS_CHAT_ID: {{ settings.ops_chat_id | tojson }}
+      AYE_ONCALL_TOPICS: "true"
+{% endif %}
+      AYE_ONCALL_TEXTS: /app/oncall_texts.json
+      AYE_ONCALL_STATE: /tmp
+      AYE_ONCALL_BRIDGE: http://oncall-bridge:8080
+      AYE_ONCALL_ADMIN_USER: {{ settings.person.username | tojson }}
+      AYE_ONCALL_ADMIN_PASSWORD: "${AYE_ONCALL_ADMIN_PASSWORD:?set AYE_ONCALL_ADMIN_PASSWORD}"
+      AYE_ONCALL_PERSON_NAME: {{ settings.person.name | tojson }}
+      AYE_ONCALL_PERSON_EMAIL: {{ settings.person.email | tojson }}
+      AYE_ONCALL_ESCALATION: {{ settings.escalation | tojson | tojson }}
+      AYE_ONCALL_EMAIL: {{ (settings.email and mail is not none) | string | lower | tojson }}
+{% if settings.email and mail %}
+      AYE_ONCALL_SMTP_ADDRESS: {{ mail.address | tojson }}
+      AYE_ONCALL_SMTP_FROM: {{ mail.from | tojson }}
+      AYE_ONCALL_SMTP_USER: {{ mail.user | tojson }}
+      AYE_ONCALL_SMTP_PASSWORD: {{ mail.password | tojson }}
+      AYE_ONCALL_SMTP_DISABLE_TLS: {{ (mail.tls != "tls") | string | lower | tojson }}
+{% endif %}
+{% if settings.twilio %}
+      AYE_ONCALL_TWILIO_ACCOUNT_SID: "${AYE_ONCALL_TWILIO_ACCOUNT_SID:?set AYE_ONCALL_TWILIO_ACCOUNT_SID}"
+      AYE_ONCALL_TWILIO_AUTH_TOKEN: "${AYE_ONCALL_TWILIO_AUTH_TOKEN:?set AYE_ONCALL_TWILIO_AUTH_TOKEN}"
+      AYE_ONCALL_TWILIO_FROM_NUMBER: "${AYE_ONCALL_TWILIO_FROM_NUMBER:?set AYE_ONCALL_TWILIO_FROM_NUMBER}"
+      AYE_ONCALL_PERSON_PHONE: {{ settings.person.get("phone", "") | tojson }}
+      AYE_ONCALL_VOICE_AFTER_MINUTES: {{ settings.voice_after_minutes | string | tojson }}
+{% endif %}
+    volumes:
+      - "./oncall/oncall_bridge.py:/app/oncall_bridge.py:ro"
+      - "./oncall/oncall_setup.py:/app/oncall_setup.py:ro"
+      - "./oncall/oncall_texts.json:/app/oncall_texts.json:ro"
+      - "/usr/share/zoneinfo:/usr/share/zoneinfo:ro"
+      - "oncall-state:/tmp"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+volumes:
+  oncall-db: {}
+  oncall-state: {}

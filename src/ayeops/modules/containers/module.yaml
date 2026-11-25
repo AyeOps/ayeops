@@ -1,0 +1,55 @@
+name: containers
+summary: cAdvisor for per-container CPU, memory, restarts and filesystem usage.
+requires:
+  metrics: {}
+defaults:
+  housekeeping_interval: 30s
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    housekeeping_interval:
+      type: string
+      pattern: "^[0-9]+[sm]$"
+    expose:
+      type: array
+      items:
+        enum: [8080]
+services:
+  cadvisor:
+    description: Exposes resource usage and start times of every container on the host.
+    memory: 256m
+    cpus: 0.5
+    metrics:
+      - container_memory_working_set_bytes
+      - container_cpu_usage_seconds_total
+      - container_start_time_seconds
+      - container_cpu_cfs_periods_total
+      - container_cpu_cfs_throttled_periods_total
+      - container_spec_cpu_quota
+      - container_spec_cpu_period
+    alerts: [target-down, container-restarting, container-throttled]
+    logs: docker
+    status:
+      internal: container telemetry, not a user-facing component
+alerts:
+  - name: container-restarting
+    title: Container restarting
+    expr: changes(container_start_time_seconds{name!=""}[15m]) > bool 2
+    for: 0m
+    severity: warning
+    summary: "{{ .Labels.name }} on {{ .Labels.host }} restarted more than twice in 15 minutes"
+    runbook: container-restarting
+  - name: container-throttled
+    title: Container CPU throttled
+    expr: >-
+      sum by (host, project, group, name) (rate(container_cpu_usage_seconds_total{name!=""}[30m]))
+      / max by (host, project, group, name) (container_spec_cpu_quota{name!=""} / container_spec_cpu_period{name!=""}) > bool 0.8
+    for: 0m
+    severity: warning
+    summary: "{{ .Labels.name }} on {{ .Labels.host }} used more than 80 % of its CPU limit on average over 30 minutes"
+    runbook: container-throttled
+dashboards: []
+files: []

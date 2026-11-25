@@ -1,0 +1,15 @@
+# HELP go_goroutines Number of goroutines that currently exist.
+# TYPE go_goroutines gauge
+go_goroutines 9
+# HELP node_scrape_collector_success node_exporter: Whether a collector succeeded.
+# TYPE node_scrape_collector_success gauge
+node_scrape_collector_success{collector="wifi"} 1
+# HELP node_wifi_interface_frequency_hertz The current frequency a WiFi interface is operating at, in hertz.
+# TYPE node_wifi_interface_frequency_hertz gauge
+node_wifi_interface_frequency_hertz{device="wlp3s0"} 5.18e+09
+# TYPE node_wifi_station_info gauge
+node_wifi_station_info{bssid="02:00:5e:10:00:01",device="wlp3s0",mode="client",ssid="Workshop 5G"} 1
+node_wifi_station_inactive_seconds{device="wlp3s0",mac_address="02:00:5e:10:00:01"} 4.457
+node_wifi_station_receive_bits_per_second{device="wlp3s0",mac_address="02:00:5e:10:00:01"} 4.333e+08
+node_wifi_station_signal_dbm{device="wlp3s0",mac_address="02:00:5e:10:00:01"} -62
+node_wifi_station_transmit_bits_per_second{device="wlp3s0",mac_address="02:00:5e:10:00:01"} 0

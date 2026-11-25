@@ -1,0 +1,898 @@
+{
+  "editable": false,
+  "panels": [
+    {
+      "ayeopsRequires": [
+        "probes.http"
+      ],
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "panels": [],
+      "title": {
+        "en": "Availability of the probed URLs, 30 days",
+        "uk": "Доступність URL під пробами, 30 днів"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "probes.http"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "description": {
+        "en": "Share of probes that got a 2xx answer over the last 30 days.",
+        "uk": "Частка проб із відповіддю 2xx за останні 30 днів."
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 99,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 99
+              },
+              {
+                "color": "green",
+                "value": 99.9
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * avg_over_time(probe_success{job=\"blackbox-http\"}[30d])",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Availability, %",
+        "uk": "Доступність, %"
+      },
+      "type": "bargauge"
+    },
+    {
+      "ayeopsRequires": [
+        "probes.http"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "description": {
+        "en": "Counted at one-minute steps; 43 minutes a month is 99.9 %.",
+        "uk": "Рахується похвилинно; 43 хвилини на місяць - це 99.9 %."
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 44
+              }
+            ]
+          },
+          "unit": "m"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum_over_time((1 - probe_success{job=\"blackbox-http\"})[30d:1m])",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Minutes down, 30 days",
+        "uk": "Хвилин недоступності, 30 днів"
+      },
+      "type": "bargauge"
+    },
+    {
+      "ayeopsRequires": [
+        "probes.http"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "id": 4,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * avg_over_time(probe_success{job=\"blackbox-http\"}[1h])",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Availability over the last hour, %",
+        "uk": "Доступність за останню годину, %"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "probes.internet"
+      ],
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 5,
+      "panels": [],
+      "title": {
+        "en": "Internet of each host, 30 days",
+        "uk": "Інтернет кожного хоста, 30 днів"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "probes.internet"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 99,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 99
+              },
+              {
+                "color": "green",
+                "value": 99.9
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 19
+      },
+      "id": 6,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * avg_over_time((max by (host) (probe_success{job=\"blackbox-icmp\",layer=\"internet\"}))[30d:1m])",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Internet available, %",
+        "uk": "Інтернет доступний, %"
+      },
+      "type": "bargauge"
+    },
+    {
+      "ayeopsRequires": [
+        "probes.internet"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 240
+              }
+            ]
+          },
+          "unit": "m"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "id": 7,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum_over_time((1 - max by (host) (probe_success{job=\"blackbox-icmp\",layer=\"internet\"}))[30d:1m])",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Minutes offline, 30 days",
+        "uk": "Хвилин без інтернету, 30 днів"
+      },
+      "type": "bargauge"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 8,
+      "panels": [],
+      "title": {
+        "en": "Alerts",
+        "uk": "Алерти"
+      },
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 9,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum(grafana_alerting_alerts{state=\"alerting\"})",
+          "legendFormat": {
+            "en": "firing",
+            "uk": "горить"
+          },
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum(grafana_alerting_alerts{state=\"pending\"})",
+          "legendFormat": {
+            "en": "pending",
+            "uk": "очікують"
+          },
+          "refId": "B"
+        }
+      ],
+      "title": {
+        "en": "Alerts firing",
+        "uk": "Алертів горить"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "offsite"
+      ],
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "id": 10,
+      "panels": [],
+      "title": {
+        "en": "Off-site backups",
+        "uk": "Копії поза хостом"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "offsite"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 93600
+              },
+              {
+                "color": "red",
+                "value": 172800
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 34
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "time() - ayeops_offsite_last_success_timestamp_seconds",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Since the last off-site copy",
+        "uk": "Від останньої копії"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "offsite"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": {
+                    "en": "Failed",
+                    "uk": "Провалено"
+                  }
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": {
+                    "en": "Passed",
+                    "uk": "Пройдено"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 34
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "ayeops_offsite_restore_test_ok",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Last restore test",
+        "uk": "Останній тест відновлення"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "offsite"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 691200
+              },
+              {
+                "color": "red",
+                "value": 1296000
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 34
+      },
+      "id": 13,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "time() - ayeops_offsite_restore_test_last_success_timestamp_seconds",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Since the last passed restore test",
+        "uk": "Від останнього вдалого тесту"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "offsite"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 34
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "ayeops_offsite_snapshots",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Snapshots kept",
+        "uk": "Знімків зберігається"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "backups"
+      ],
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "id": 15,
+      "panels": [],
+      "title": {
+        "en": "Dump jobs",
+        "uk": "Дампи"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "backups"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 93600
+              },
+              {
+                "color": "red",
+                "value": 172800
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "id": 16,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "time() - max by (host, backup) (ayeops_backup_last_success_timestamp_seconds)",
+          "legendFormat": "{{host}} {{backup}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Since the last successful dump",
+        "uk": "Від останнього вдалого дампу"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "backups"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "description": {
+        "en": "Jobs whose dump a service declares under data with an rpo: the age of the last good dump next to that rpo. A share of 100 % or more means the newest restore point is older than the service accepts.",
+        "uk": "Дампи, для яких сервіс оголошує rpo у data: вік останнього вдалого дампу поруч із цим rpo. Частка від 100 % означає, що найновіша точка відновлення старша, ніж сервіс допускає."
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #C"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 80
+                    },
+                    {
+                      "color": "red",
+                      "value": 100
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "id": 17,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "(time() - max by (host, backup) (ayeops_backup_last_success_timestamp_seconds)) and on (host, backup) max by (host, backup) (ayeops_backup_rpo_seconds)",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (host, backup) (ayeops_backup_rpo_seconds)",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * (time() - max by (host, backup) (ayeops_backup_last_success_timestamp_seconds)) / max by (host, backup) (ayeops_backup_rpo_seconds)",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "C"
+        }
+      ],
+      "title": {
+        "en": "Last good dump against its RPO",
+        "uk": "Останній вдалий дамп проти його RPO"
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4,
+              "backup": 1,
+              "host": 0
+            },
+            "renameByName": {
+              "Value #A": {
+                "en": "Age of the last good dump",
+                "uk": "Вік останнього вдалого дампу"
+              },
+              "Value #B": {
+                "en": "RPO",
+                "uk": "RPO"
+              },
+              "Value #C": {
+                "en": "Share of the RPO",
+                "uk": "Частка RPO"
+              },
+              "backup": {
+                "en": "Job",
+                "uk": "Дамп"
+              },
+              "host": {
+                "en": "Host",
+                "uk": "Хост"
+              }
+            }
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "ayeops"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": {
+    "en": "AyeOps / Reliability",
+    "uk": "AyeOps / Надійність"
+  },
+  "uid": "ayeops-reliability",
+  "version": 1
+}

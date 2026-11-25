@@ -1,0 +1,78 @@
+name: reconciler
+summary: Starts again a container of a compose project the host declares when Docker left it down (a start that failed after a reboot, a crash no restart policy covers), with a back-off, one JSON line per attempt and textfile metrics, and counts the running containers the manifest does not declare.
+requires:
+  node: {}
+defaults:
+  interval: 30s
+  attempts: 3
+  window: 1h
+  timeout: 2m
+  exclude: []
+  ignore: []
+  dry_run: false
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    interval:
+      type: string
+      pattern: "^[1-9][0-9]*[sm]$"
+    attempts:
+      type: integer
+      minimum: 1
+      maximum: 20
+    window:
+      type: string
+      pattern: "^[1-9][0-9]*[mh]$"
+    timeout:
+      type: string
+      pattern: "^[1-9][0-9]*[sm]$"
+    exclude:
+      type: array
+      items:
+        type: string
+        pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*)?$"
+    ignore:
+      type: array
+      items:
+        type: string
+        pattern: '^[A-Za-z0-9_.*?!\[\]-]+$'
+    dry_run:
+      type: boolean
+services:
+  reconciler:
+    description: Compares the containers of the compose projects the render declares for this host with what Docker runs, starts again through the docker socket the ones Docker left down, backs off after a few attempts an hour, counts the running containers of no declared project and writes what it did for node-exporter.
+    memory: 32m
+    cpus: 0.1
+    metrics: [ayeops_reconciler_last_run_timestamp_seconds, ayeops_reconciler_attempts_total, ayeops_reconciler_successes_total, ayeops_reconciler_failures_total, ayeops_reconciler_given_up, ayeops_reconciler_missing, ayeops_reconciler_stopped, ayeops_undeclared_containers, ayeops_undeclared_containers_overflow, ayeops_undeclared_container_info]
+    alerts: [reconciler-gave-up, reconciler-stale, host-drift]
+    logs: docker
+    status:
+      internal: host self-repair, not a user-facing component
+alerts:
+  - name: reconciler-gave-up
+    title: Reconciler gave up on a compose project
+    expr: max by (host, project, group, compose_project) (ayeops_reconciler_given_up) > bool 0
+    for: 1m
+    severity: warning
+    summary: "The reconciler on {{ .Labels.host }} started containers of {{ .Labels.compose_project }} as often as its back-off allows and they are still down; it leaves them to a person"
+    runbook: reconciler-gave-up
+  - name: reconciler-stale
+    title: Reconciler stopped checking
+    expr: time() - max by (host, project, group) (ayeops_reconciler_last_run_timestamp_seconds) > bool 300
+    for: 5m
+    severity: warning
+    summary: "The reconciler on {{ .Labels.host }} has not finished a pass over the declared containers for 5 minutes"
+    runbook: reconciler-stale
+  - name: host-drift
+    title: Host runs containers the manifest does not declare
+    expr: max by (host, project, group) (ayeops_undeclared_containers) > bool 0
+    for: 1h
+    severity: warning
+    summary: "{{ .Labels.host }} has run containers of no declared compose project for an hour (a docker run by hand, a leftover after a service moved); ayeops_undeclared_container_info names them"
+    runbook: host-drift
+dashboards: []
+files:
+  - src: files/reconciler.py
+    dest: reconciler/reconciler.py

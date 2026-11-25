@@ -1,0 +1,6 @@
+{% if settings.provider == "glitchtip" %}
+- job_name: glitchtip
+  metrics_path: /metrics
+  static_configs:
+    - targets: ["glitchtip:8000"]
+{% endif %}

@@ -1,0 +1,17 @@
+services:
+  smartctl-exporter:
+    image: prometheuscommunity/smartctl-exporter:v0.15.0@sha256:a76e08dbf5db4781fefd1ed81c65ad46ae8d2849dae6b6d3acebcde2fc4e59d6
+    command:
+      - {{ ("--smartctl.interval=" ~ settings.interval) | tojson }}
+{% for device in settings.devices %}
+      - {{ ("--smartctl.device=" ~ device) | tojson }}
+{% endfor %}
+    privileged: true
+    user: root
+    ports: [9633]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9633/"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+volumes: {}

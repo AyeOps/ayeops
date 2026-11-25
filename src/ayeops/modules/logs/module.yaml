@@ -1,0 +1,94 @@
+name: logs
+summary: Loki storage and Alloy shipping the container logs of declared compose projects, and optionally journald, with the same host label as metrics.
+requires:
+  metrics: {}
+defaults:
+  role: server
+  retention: 30d
+  push: null
+  projects: null
+  journald: false
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    role:
+      enum: [server, agent]
+    retention:
+      type: string
+      pattern: "^[0-9]+[hdwy]$"
+    push:
+      oneOf:
+        - type: "null"
+        - type: object
+          additionalProperties: false
+          required: [host]
+          properties:
+            host:
+              type: string
+        - type: object
+          additionalProperties: false
+          required: [url]
+          properties:
+            url:
+              type: string
+              pattern: "^https?://"
+    projects:
+      oneOf:
+        - type: "null"
+        - type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^[a-z0-9][a-z0-9_-]*$"
+    journald:
+      type: boolean
+    expose:
+      type: array
+      items:
+        enum: [3100]
+services:
+  loki:
+    description: Stores the logs of the fleet on local disk and answers the log queries of Grafana.
+    memory: 512m
+    cpus: 1.0
+    metrics: [loki_distributor_lines_received_total, loki_discarded_samples_total, loki_request_duration_seconds_count]
+    alerts: [target-down, logs-ingestion-errors]
+    logs: docker
+    status:
+      internal: storage behind log dashboards, not a user-facing component
+  alloy:
+    description: Tails the containers of the declared compose projects of its host and pushes their lines to Loki.
+    memory: 256m
+    cpus: 0.5
+    metrics: [loki_write_sent_entries_total, loki_write_dropped_entries_total, loki_source_docker_target_entries_total]
+    alerts: [target-down, logs-shipping-failing]
+    logs: docker
+    status:
+      internal: collection pipeline, failures surface as target-down and logs-shipping-failing
+alerts:
+  - name: logs-ingestion-errors
+    title: Loki discards log lines
+    expr: sum by (host, project, group, reason) (increase(loki_discarded_samples_total[10m])) > bool 0
+    for: 10m
+    severity: warning
+    summary: "Loki on {{ .Labels.host }} discards lines: {{ .Labels.reason }}"
+    runbook: logs-ingestion-errors
+  - name: logs-shipping-failing
+    title: Alloy drops log lines
+    expr: sum by (host, project, group) (increase(loki_write_dropped_entries_total[10m])) > bool 0
+    for: 0m
+    severity: warning
+    summary: "Alloy on {{ .Labels.host }} dropped log lines it could not push to Loki"
+    runbook: logs-shipping-failing
+dashboards: []
+files:
+  - src: files/loki.yaml.j2
+    dest: logs/loki.yaml
+    template: true
+    when: logs.server
+  - src: files/config.alloy.j2
+    dest: logs/config.alloy
+    template: true

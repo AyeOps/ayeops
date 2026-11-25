@@ -1,0 +1,884 @@
+{
+  "editable": false,
+  "panels": [
+    {
+      "ayeopsRequires": [
+        "node"
+      ],
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "panels": [],
+      "title": {
+        "en": "Hosts",
+        "uk": "Хости"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "node"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": {
+                    "en": "Down",
+                    "uk": "Лежить"
+                  }
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": {
+                    "en": "Up",
+                    "uk": "Працює"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "up{job=\"node\"}",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Up",
+        "uk": "Стан"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "node"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "time() - node_boot_time_seconds",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Uptime",
+        "uk": "Аптайм"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "node"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (host) (node_load5) / count by (host) (node_cpu_seconds_total{mode=\"idle\"})",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Load per core, 5 min",
+        "uk": "Навантаження на ядро, 5 хв"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "node"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 6
+      },
+      "id": 5,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * (1 - avg by (host) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "CPU busy, %",
+        "uk": "CPU зайнято, %"
+      },
+      "type": "bargauge"
+    },
+    {
+      "ayeopsRequires": [
+        "node"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 6
+      },
+      "id": 6,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Memory used, %",
+        "uk": "Памʼять зайнята, %"
+      },
+      "type": "bargauge"
+    },
+    {
+      "ayeopsRequires": [
+        "node"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
+      "id": 7,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (host) (100 * (1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs\"}))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Fullest filesystem, %",
+        "uk": "Найповніша файлова система, %"
+      },
+      "type": "bargauge"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "id": 8,
+      "panels": [],
+      "title": {
+        "en": "Alerts and scrape targets",
+        "uk": "Алерти й цілі збору"
+      },
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 13
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum(grafana_alerting_alerts{state=\"alerting\"})",
+          "legendFormat": {
+            "en": "firing",
+            "uk": "горить"
+          },
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Alerts firing",
+        "uk": "Алертів горить"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 13
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum(grafana_alerting_alerts{state=~\"nodata|error\"})",
+          "legendFormat": {
+            "en": "rules",
+            "uk": "правил"
+          },
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Rules without data or in error",
+        "uk": "Правил без даних або з помилкою"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 13
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "count(up == 0) or vector(0)",
+          "legendFormat": {
+            "en": "down",
+            "uk": "лежить"
+          },
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Scrape targets down",
+        "uk": "Цілей збору лежить"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "description": {
+        "en": "The on-disk queue of vmagent; it grows while the central host is out of reach.",
+        "uk": "Черга vmagent на диску; росте, поки центральний хост недосяжний."
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1048576
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 13
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum by (host) (vmagent_remotewrite_pending_data_bytes)",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Metrics waiting to be shipped",
+        "uk": "Метрик чекає на відправку"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "id": 13,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum by (state) (grafana_alerting_alerts{state!=\"normal\"})",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Alerts by state",
+        "uk": "Алерти за станом"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "containers"
+      ],
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 14,
+      "panels": [],
+      "title": {
+        "en": "Containers",
+        "uk": "Контейнери"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "containers"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 25
+      },
+      "id": 15,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "topk(10, sum by (host, name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[5m])))",
+          "legendFormat": "{{host}}/{{name}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "CPU of the busiest containers, cores",
+        "uk": "CPU найзайнятіших контейнерів, ядер"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "containers"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 25
+      },
+      "id": 16,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "topk(10, sum by (host, name) (container_memory_working_set_bytes{name!=\"\"}))",
+          "legendFormat": "{{host}}/{{name}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Memory of the largest containers",
+        "uk": "Памʼять найбільших контейнерів"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "containers"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "id": 17,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "topk(10, sum by (host, name) (changes(container_start_time_seconds{name!=\"\"}[1d])))",
+          "legendFormat": "{{host}}/{{name}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Container starts, 24 h",
+        "uk": "Запусків контейнерів, 24 год"
+      },
+      "type": "bargauge"
+    },
+    {
+      "ayeopsRequires": [
+        "reconciler"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "description": {
+        "en": "Running containers of no compose project the manifest declares for their host: a docker run by hand, a project started from a folder the manifest does not list, a leftover after a service moved. Up to 50 per host; the host-drift alert fires after an hour. Declare them, remove them, or add a name pattern to the ignore setting of the reconciler.",
+        "uk": "Запущені контейнери, що не належать жодному compose-проєкту, який маніфест оголошує для їхнього хоста: docker run вручну, проєкт із теки, якої немає в маніфесті, залишок після переїзду сервісу. До 50 на хост; алерт host-drift спрацьовує за годину. Оголосіть їх, видаліть або додайте шаблон імені в налаштування ignore модуля reconciler."
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "id": 18,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (host, name, image, compose_project) (ayeops_undeclared_container_info)",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Containers the manifest does not declare",
+        "uk": "Контейнери, яких немає в маніфесті"
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true
+            }
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "ayeops"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": {
+    "en": "AyeOps / Health",
+    "uk": "AyeOps / Здоровʼя"
+  },
+  "uid": "ayeops-health",
+  "version": 1
+}

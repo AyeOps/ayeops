@@ -1,0 +1,1468 @@
+name: acme-central
+services:
+  agentgateway:
+    cap_drop:
+    - ALL
+    command:
+    - -f
+    - /config/agentgateway.yaml
+    cpus: 0.5
+    depends_on:
+      mcp-s3-bin:
+        condition: service_healthy
+      mcp-tools:
+        condition: service_healthy
+    environment:
+      AYE_MCP_BACKUPS_ACCESS_KEY_ID: ${AYE_MCP_BACKUPS_ACCESS_KEY_ID:?set AYE_MCP_BACKUPS_ACCESS_KEY_ID}
+      AYE_MCP_BACKUPS_SECRET_ACCESS_KEY: ${AYE_MCP_BACKUPS_SECRET_ACCESS_KEY:?set AYE_MCP_BACKUPS_SECRET_ACCESS_KEY}
+      AYE_MCP_GRAFANA_SERVER_TOKEN: ${AYE_MCP_GRAFANA_SERVER_TOKEN:?set AYE_MCP_GRAFANA_SERVER_TOKEN}
+      SESSION_KEY: ${AYE_MCP_SESSION_KEY:?set AYE_MCP_SESSION_KEY}
+    healthcheck:
+      interval: 30s
+      retries: 3
+      start_period: 30s
+      test:
+      - CMD
+      - /opt/aye/tools/busybox
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:15021/healthz/ready
+      timeout: 5s
+    image: ghcr.io/agentgateway/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b
+    labels:
+      io.ayeops.config-hash: 8b0a8b59ee529341
+      io.ayeops.module: mcp
+      io.ayeops.service: agentgateway
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 256m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:3010:3000
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=16m
+    volumes:
+    - ./mcp:/config:ro
+    - mcp-tools:/opt/aye/tools:ro
+    - mcp-s3:/opt/aye/s3:ro
+  ai-usage-exporter:
+    command:
+    - python
+    - -I
+    - /app/ai_usage_exporter.py
+    cpus: 0.1
+    environment:
+      AYE_AI_BUDGETS: '{"anthropic": 50}'
+      AYE_AI_PORT: '9147'
+      AYE_AI_PROVIDERS: anthropic,openai
+      AYE_AI_REFRESH_SECONDS: '900'
+      AYE_AI_SPIKE_FLOOR_USD: '1'
+      AYE_ANTHROPIC_ADMIN_KEY: ${AYE_ANTHROPIC_ADMIN_KEY:?set AYE_ANTHROPIC_ADMIN_KEY}
+      AYE_OPENAI_ADMIN_KEY: ${AYE_OPENAI_ADMIN_KEY:?set AYE_OPENAI_ADMIN_KEY}
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:9147/health', timeout=5)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: 0c5c7e58e3a9b437
+      io.ayeops.module: ai-usage
+      io.ayeops.service: ai-usage-exporter
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:9147:9147
+    restart: unless-stopped
+    user: 65534:65534
+    volumes:
+    - ./ai-usage/ai_usage_exporter.py:/app/ai_usage_exporter.py:ro
+  alloy:
+    command:
+    - run
+    - --server.http.listen-addr=0.0.0.0:12345
+    - --storage.path=/var/lib/alloy/data
+    - --disable-reporting
+    - /etc/alloy/config.alloy
+    cpus: 0.5
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - bash
+      - -c
+      - "exec 3<>/dev/tcp/127.0.0.1/12345 && printf 'GET /-/ready HTTP/1.0\r\n\r\n' >&3 && head -n 1 <&3 | grep -q ' 200 '"
+      timeout: 5s
+    image: grafana/alloy:v1.21.3@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4
+    labels:
+      io.ayeops.config-hash: d041dfcfc980c77e
+      io.ayeops.module: logs
+      io.ayeops.service: alloy
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 256m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:12345:12345
+    restart: unless-stopped
+    volumes:
+    - ./logs/config.alloy:/etc/alloy/config.alloy:ro
+    - alloy-data:/var/lib/alloy/data
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+  autopilot:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/autopilot.py
+    cpus: 0.25
+    environment:
+      AYE_AUTOPILOT_API_KEY: ${AYE_AUTOPILOT_API_KEY:?set AYE_AUTOPILOT_API_KEY}
+      AYE_AUTOPILOT_AUTH: api_key
+      AYE_AUTOPILOT_CATALOG: /app/catalog.json
+      AYE_AUTOPILOT_CRITICAL_SERVICES: '["web"]'
+      AYE_AUTOPILOT_DAY_USD: '3'
+      AYE_AUTOPILOT_DOSSIER_TOKENS: '4000'
+      AYE_AUTOPILOT_ESCALATION_MODEL: claude-opus-5-5
+      AYE_AUTOPILOT_INCIDENTS: /incidents/incidents.jsonl
+      AYE_AUTOPILOT_LOKI_URL: http://loki:3100
+      AYE_AUTOPILOT_LOOKBACK_MINUTES: '60'
+      AYE_AUTOPILOT_METRICS_URL: http://victoriametrics:8428
+      AYE_AUTOPILOT_MODEL: claude-sonnet-5-5
+      AYE_AUTOPILOT_NIGHT_USD: '2'
+      AYE_AUTOPILOT_POST_VERDICT: 'false'
+      AYE_AUTOPILOT_QUIET_END: 08:00
+      AYE_AUTOPILOT_QUIET_START: '23:00'
+      AYE_AUTOPILOT_RUNNER: api
+      AYE_AUTOPILOT_RUNS_PER_HOUR: '4'
+      AYE_AUTOPILOT_RUN_SECONDS: '180'
+      AYE_AUTOPILOT_RUN_USD: '0.5'
+      AYE_AUTOPILOT_STATE: /tmp
+      AYE_AUTOPILOT_TIMEZONE: Europe/Kyiv
+      AYE_AUTOPILOT_WEBHOOK_SECRET: ${AYE_AUTOPILOT_WEBHOOK_SECRET:?set AYE_AUTOPILOT_WEBHOOK_SECRET}
+    healthcheck:
+      interval: 30s
+      retries: 3
+      start_period: 20s
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: 94711f86cda21a33
+      io.ayeops.module: autopilot
+      io.ayeops.service: autopilot
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 128m
+    platform: linux/arm64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    user: 65534:65534
+    volumes:
+    - ./autopilot/autopilot.py:/app/autopilot.py:ro
+    - ./autopilot/catalog.json:/app/catalog.json:ro
+    - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+    - autopilot-state:/tmp
+    - incidents-journal:/incidents:ro
+  blackbox:
+    command:
+    - --config.file=/etc/blackbox/blackbox.yml
+    cpus: 0.25
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:9115/-/healthy
+      timeout: 5s
+    image: prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
+    labels:
+      io.ayeops.config-hash: 6cb112ecf2c28187
+      io.ayeops.module: probes
+      io.ayeops.service: blackbox
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:9115:9115
+    restart: unless-stopped
+    volumes:
+    - ./probes/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+  cadvisor:
+    command:
+    - --housekeeping_interval=30s
+    - --docker_only=true
+    - --store_container_labels=false
+    cpus: 0.5
+    devices:
+    - /dev/kmsg
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8080/healthz
+      timeout: 5s
+    image: ghcr.io/google/cadvisor:v0.60.6@sha256:b8e7d1093144fd088f425ff003d75a4aa405de075db78dae3bc563730b1bd07a
+    labels:
+      io.ayeops.module: containers
+      io.ayeops.service: cadvisor
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 256m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:8080:8080
+    privileged: true
+    restart: unless-stopped
+    volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:ro
+    - /sys:/sys:ro
+    - /var/lib/docker/:/var/lib/docker:ro
+    - /dev/disk/:/dev/disk:ro
+  cloudflare-exporter:
+    command:
+    - python
+    - -I
+    - /app/cloudflare_exporter.py
+    cpus: 0.5
+    environment:
+      AYE_CLOUDFLARE_ACCOUNTS: 0123456789abcdef0123456789abcdef
+      AYE_CLOUDFLARE_ANALYTICS_TOKEN: ${AYE_CLOUDFLARE_ANALYTICS_TOKEN:?set AYE_CLOUDFLARE_ANALYTICS_TOKEN}
+      AYE_CLOUDFLARE_LAG_SECONDS: '180'
+      AYE_CLOUDFLARE_LIMITS: '{}'
+      AYE_CLOUDFLARE_PORT: '9131'
+      AYE_CLOUDFLARE_REFRESH_SECONDS: '300'
+      AYE_CLOUDFLARE_TOP_COUNTRIES: '10'
+      AYE_CLOUDFLARE_TOP_HOSTS: '20'
+      AYE_CLOUDFLARE_WINDOW_SECONDS: '900'
+      AYE_CLOUDFLARE_ZONES: acme.example
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:9131/health', timeout=5)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: c1f4b1b8912f5f4c
+      io.ayeops.module: cloudflare
+      io.ayeops.service: cloudflare-exporter
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:9131:9131
+    restart: unless-stopped
+    user: 65534:65534
+    volumes:
+    - ./cloudflare/cloudflare_exporter.py:/app/cloudflare_exporter.py:ro
+  garage:
+    command:
+    - /garage
+    - server
+    - --single-node
+    - --default-bucket
+    cpus: 1.0
+    environment:
+      GARAGE_ADMIN_TOKEN: ${AYE_OBJECTSTORE_ADMIN_TOKEN:?set AYE_OBJECTSTORE_ADMIN_TOKEN}
+      GARAGE_DEFAULT_ACCESS_KEY: ${AYE_OBJECTSTORE_ACCESS_KEY_ID:?set AYE_OBJECTSTORE_ACCESS_KEY_ID}
+      GARAGE_DEFAULT_BUCKET: acme-offsite
+      GARAGE_DEFAULT_SECRET_KEY: ${AYE_OBJECTSTORE_SECRET_ACCESS_KEY:?set AYE_OBJECTSTORE_SECRET_ACCESS_KEY}
+      GARAGE_RPC_SECRET: ${AYE_OBJECTSTORE_RPC_SECRET:?set AYE_OBJECTSTORE_RPC_SECRET}
+      RUST_LOG: garage=info
+    healthcheck:
+      interval: 30s
+      retries: 5
+      start_period: 30s
+      test:
+      - CMD
+      - /garage
+      - health
+      timeout: 10s
+    image: dxflrs/garage:v2.5.0@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5
+    labels:
+      io.ayeops.config-hash: fba9742118e2c8d8
+      io.ayeops.module: objectstore
+      io.ayeops.service: garage
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 256m
+    platform: linux/arm64
+    ports:
+    - 10.8.0.1:3900:3900
+    - 127.0.0.1:3903:3903
+    restart: unless-stopped
+    volumes:
+    - ./objectstore/garage.toml:/etc/garage.toml:ro
+    - objectstore-meta:/var/lib/garage/meta
+    - objectstore-data:/var/lib/garage/data
+  garage-admin:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/objectstore_admin.py
+    cpus: 0.1
+    depends_on:
+      garage:
+        condition: service_healthy
+    environment:
+      AYE_GARAGE_ADMIN_URL: http://garage:3903
+      AYE_OBJECTSTORE_ADMIN_PORT: '9132'
+      AYE_OBJECTSTORE_BUCKET: acme-offsite
+      AYE_OBJECTSTORE_QUOTA_BYTES: '42949672960'
+      GARAGE_ADMIN_TOKEN: ${AYE_OBJECTSTORE_ADMIN_TOKEN:?set AYE_OBJECTSTORE_ADMIN_TOKEN}
+    healthcheck:
+      interval: 60s
+      retries: 3
+      start_period: 60s
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:9132/health', timeout=5)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: fb7d234c87877a1b
+      io.ayeops.module: objectstore
+      io.ayeops.service: garage-admin
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 32m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:9132:9132
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=16m
+    user: 65534:65534
+    volumes:
+    - ./objectstore/objectstore_admin.py:/app/objectstore_admin.py:ro
+  github-exporter:
+    command:
+    - python
+    - -I
+    - /app/github_exporter.py
+    cpus: 0.1
+    environment:
+      AYE_GITHUB_ACCOUNTS: '[{"included_minutes": 2000, "org": "acme"}]'
+      AYE_GITHUB_IMPORT_URL: http://victoriametrics:8428/api/v1/import/prometheus
+      AYE_GITHUB_LOOKBACK_HOURS: '72'
+      AYE_GITHUB_PORT: '9135'
+      AYE_GITHUB_REFRESH_SECONDS: '300'
+      AYE_GITHUB_REPORTS: acme/shop
+      AYE_GITHUB_STATE: /tmp/imported.json
+      AYE_GITHUB_TOKEN: ${AYE_GITHUB_TOKEN:?set AYE_GITHUB_TOKEN}
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:9135/health', timeout=5)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: 923482109b8bfc9e
+      io.ayeops.module: github
+      io.ayeops.service: github-exporter
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:9135:9135
+    restart: unless-stopped
+    user: 65534:65534
+    volumes:
+    - ./github/github_exporter.py:/app/github_exporter.py:ro
+    - github-state:/tmp
+  goalert:
+    cpus: 0.5
+    depends_on:
+      goalert-db:
+        condition: service_healthy
+    entrypoint:
+    - sh
+    - /app/goalert_init.sh
+    environment:
+      AYE_ONCALL_ADMIN_PASSWORD: ${AYE_ONCALL_ADMIN_PASSWORD:?set AYE_ONCALL_ADMIN_PASSWORD}
+      AYE_ONCALL_ADMIN_USER: oncall
+      AYE_ONCALL_PERSON_EMAIL: oncall@acme.example
+      GOALERT_DATA_ENCRYPTION_KEY: ${AYE_ONCALL_ENCRYPTION_KEY:?set AYE_ONCALL_ENCRYPTION_KEY}
+      GOALERT_DB_URL: postgres://goalert:${AYE_ONCALL_DB_PASSWORD:?set AYE_ONCALL_DB_PASSWORD}@goalert-db:5432/goalert?sslmode=disable
+      GOALERT_LISTEN: :8081
+      GOALERT_LISTEN_PROMETHEUS: :9105
+      GOALERT_PUBLIC_URL: https://oncall.ops.acme.example
+    healthcheck:
+      interval: 30s
+      retries: 5
+      start_period: 120s
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8081/health
+      timeout: 5s
+    image: goalert/goalert:v0.35.0@sha256:f090a90538d7e61446aad245c21a7a1694d36d7b4f6c56fc55e9cc7405d9c03f
+    labels:
+      io.ayeops.config-hash: b14576fa4332eb9d
+      io.ayeops.module: oncall
+      io.ayeops.service: goalert
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 256m
+    platform: linux/arm64
+    restart: unless-stopped
+    volumes:
+    - ./oncall/goalert_init.sh:/app/goalert_init.sh:ro
+  goalert-db:
+    command:
+    - postgres
+    - -c
+    - shared_buffers=32MB
+    - -c
+    - max_connections=40
+    cpus: 0.25
+    environment:
+      POSTGRES_DB: goalert
+      POSTGRES_PASSWORD: ${AYE_ONCALL_DB_PASSWORD:?set AYE_ONCALL_DB_PASSWORD}
+      POSTGRES_USER: goalert
+    healthcheck:
+      interval: 10s
+      retries: 6
+      start_period: 30s
+      test:
+      - CMD
+      - pg_isready
+      - -U
+      - goalert
+      - -d
+      - goalert
+      timeout: 5s
+    image: postgres:18.6-alpine3.24@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b
+    labels:
+      io.ayeops.module: oncall
+      io.ayeops.service: goalert-db
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 192m
+    platform: linux/arm64
+    restart: unless-stopped
+    volumes:
+    - oncall-db:/var/lib/postgresql
+  grafana:
+    cpus: 0.5
+    environment:
+      AYE_AUTOPILOT_WEBHOOK_SECRET: ${AYE_AUTOPILOT_WEBHOOK_SECRET:?set AYE_AUTOPILOT_WEBHOOK_SECRET}
+      AYE_GRAFANA_PG_PASSWORD: ${AYE_GRAFANA_PG_PASSWORD:?set AYE_GRAFANA_PG_PASSWORD}
+      AYE_ONCALL_WEBHOOK_SECRET: ${AYE_ONCALL_WEBHOOK_SECRET:?set AYE_ONCALL_WEBHOOK_SECRET}
+      AYE_TELEGRAM_BOT_TOKEN: ${AYE_TELEGRAM_BOT_TOKEN:?set AYE_TELEGRAM_BOT_TOKEN}
+      AYE_TELEGRAM_CHAT_ID: ${AYE_TELEGRAM_CHAT_ID:?set AYE_TELEGRAM_CHAT_ID}
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_AUTH_GOOGLE_ALLOW_ASSIGN_GRAFANA_ADMIN: 'true'
+      GF_AUTH_GOOGLE_ALLOW_SIGN_UP: 'true'
+      GF_AUTH_GOOGLE_CLIENT_ID: ${AYE_AUTH_CLIENT_ID:?set AYE_AUTH_CLIENT_ID}
+      GF_AUTH_GOOGLE_CLIENT_SECRET: ${AYE_AUTH_CLIENT_SECRET:?set AYE_AUTH_CLIENT_SECRET}
+      GF_AUTH_GOOGLE_ENABLED: 'true'
+      GF_AUTH_GOOGLE_ROLE_ATTRIBUTE_PATH: contains(['ops@acme.example'], email) && 'GrafanaAdmin' || contains(['ops@acme.example', 'oncall@acme.example'], email) && 'Viewer' || ''
+      GF_AUTH_GOOGLE_ROLE_ATTRIBUTE_STRICT: 'true'
+      GF_AUTH_GOOGLE_SCOPES: openid email profile
+      GF_AUTH_GOOGLE_SKIP_ORG_ROLE_SYNC: 'false'
+      GF_AUTH_GOOGLE_USE_PKCE: 'true'
+      GF_SECURITY_ADMIN_PASSWORD: ${AYE_GRAFANA_ADMIN_PASSWORD:?set AYE_GRAFANA_ADMIN_PASSWORD}
+      GF_SECURITY_ADMIN_USER: ${AYE_GRAFANA_ADMIN_USER:?set AYE_GRAFANA_ADMIN_USER}
+      GF_SERVER_ROOT_URL: https://grafana.ops.acme.example
+      GF_SMTP_ENABLED: 'true'
+      GF_SMTP_FROM_ADDRESS: ops@acme.example
+      GF_SMTP_FROM_NAME: Acme Ops
+      GF_SMTP_HOST: smtp.mail.example:587
+      GF_SMTP_PASSWORD: ${AYE_SMTP_PASSWORD:?set AYE_SMTP_PASSWORD}
+      GF_SMTP_STARTTLS_POLICY: MandatoryStartTLS
+      GF_SMTP_USER: ${AYE_SMTP_USER:?set AYE_SMTP_USER}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:3000/api/health
+      timeout: 5s
+    image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
+    labels:
+      io.ayeops.config-hash: 88f8055695b3fc6c
+      io.ayeops.module: grafana
+      io.ayeops.service: grafana
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 512m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:3000:3000
+    restart: unless-stopped
+    volumes:
+    - grafana-data:/var/lib/grafana
+    - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    - ./grafana/project-dashboards:/etc/grafana/project-dashboards:ro
+  grafana-reader:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/grafana_reader.py
+    cpus: 0.1
+    depends_on:
+      grafana:
+        condition: service_healthy
+    environment:
+      AYE_GRAFANA_ADMIN_PASSWORD: ${AYE_GRAFANA_ADMIN_PASSWORD:?set AYE_GRAFANA_ADMIN_PASSWORD}
+      AYE_GRAFANA_ADMIN_USER: ${AYE_GRAFANA_ADMIN_USER:?set AYE_GRAFANA_ADMIN_USER}
+      AYE_GRAFANA_READER_PORT: '9137'
+      AYE_GRAFANA_READER_TOKEN_FILE: /tmp/token
+      AYE_GRAFANA_URL: http://grafana:3000
+    healthcheck:
+      interval: 30s
+      retries: 3
+      start_period: 60s
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:9137/health', timeout=5)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: ca8600ead4f00690
+      io.ayeops.module: grafana
+      io.ayeops.service: grafana-reader
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 32m
+    platform: linux/arm64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    user: 10470:10470
+    volumes:
+    - ./grafana/grafana_reader.py:/app/grafana_reader.py:ro
+    - grafana-reader:/tmp
+  incidents-agent:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/incidents_agent.py
+    cpus: 0.1
+    depends_on:
+      grafana-reader:
+        condition: service_healthy
+    environment:
+      AYE_GRAFANA_READER_TOKEN_FILE: /run/grafana-reader/token
+      AYE_INCIDENTS_BACKFILL_DAYS: '30'
+      AYE_INCIDENTS_DEGRADED_SEVERITIES: warning
+      AYE_INCIDENTS_DOWNTIME_SEVERITIES: critical,page
+      AYE_INCIDENTS_GRAFANA: http://grafana:3000
+      AYE_INCIDENTS_HOSTS: '{"central": ["mcp", "web"], "edge": ["acme-db"]}'
+      AYE_INCIDENTS_HOST_ALERTS: '[{"labels": {}, "title": "Host down"}, {"labels": {"job": "node"}, "title": "Scrape target down"}]'
+      AYE_INCIDENTS_HOST_MODULES: '{"central": ["ai-usage", "auth", "autopilot", "cloudflare", "containers", "delivery", "github", "grafana", "incidents", "ingress", "logs", "mcp", "metrics", "node", "objectstore", "oncall", "portal", "probes", "reconciler", "status"], "edge": ["backups", "containers", "disk-forecast", "eol", "gpu", "hygiene", "image-updates", "logs", "metrics", "network", "node", "offsite", "probes", "sentinel", "smart", "updates", "vulns"]}'
+      AYE_INCIDENTS_NIGHT_END: 08:00
+      AYE_INCIDENTS_NIGHT_START: '23:00'
+      AYE_INCIDENTS_ONCALL: http://oncall-bridge:8080
+      AYE_INCIDENTS_ONCALL_SECRET: ${AYE_ONCALL_ACKS_SECRET:?set AYE_ONCALL_ACKS_SECRET}
+      AYE_INCIDENTS_PORT: '9136'
+      AYE_INCIDENTS_REFRESH_SECONDS: '60'
+      AYE_INCIDENTS_ROUTES: '{"auth": [{"host": "central", "routes": ["auth@file"], "scrape_seconds": 30}], "grafana": [{"host": "central", "routes": ["grafana@file"], "scrape_seconds": 30}], "mcp": [{"host": "central", "routes": ["hub@file"], "scrape_seconds": 30}], "metrics": [{"host": "central", "routes": ["metrics@file"], "scrape_seconds": 30}], "oncall": [{"host": "central", "routes": ["oncall@file"], "scrape_seconds": 30}], "portal": [{"host": "central", "routes": ["portal@file"], "scrape_seconds": 30}]}'
+      AYE_INCIDENTS_SERVICES: '{"acme-db": "high", "mcp": "high", "web": "critical"}'
+      AYE_INCIDENTS_STATE: /tmp
+      AYE_INCIDENTS_TIMEZONE: Europe/Kyiv
+      AYE_INCIDENTS_VICTORIAMETRICS: http://victoriametrics:8428
+    group_add:
+    - '10470'
+    healthcheck:
+      interval: 60s
+      retries: 3
+      start_period: 60s
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:9136/health', timeout=5)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: 95743af6f5b9ca3c
+      io.ayeops.module: incidents
+      io.ayeops.service: incidents-agent
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:9136:9136
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    user: 65534:65534
+    volumes:
+    - ./incidents/incidents_agent.py:/app/incidents_agent.py:ro
+    - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+    - incidents-journal:/tmp
+    - grafana-reader:/run/grafana-reader:ro
+  loki:
+    command:
+    - -config.file=/etc/loki/loki.yaml
+    cpus: 1.0
+    healthcheck:
+      interval: 30s
+      retries: 3
+      start_period: 60s
+      test:
+      - CMD
+      - /usr/bin/loki
+      - -health
+      - -health.url=http://127.0.0.1:3100/ready
+      timeout: 5s
+    image: grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
+    labels:
+      io.ayeops.config-hash: 99397739d9c627ce
+      io.ayeops.module: logs
+      io.ayeops.service: loki
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 512m
+    platform: linux/arm64
+    ports:
+    - 10.8.0.1:3100:3100
+    restart: unless-stopped
+    volumes:
+    - ./logs/loki.yaml:/etc/loki/loki.yaml:ro
+    - loki-data:/loki
+  mcp-catalog:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/catalog_server.py
+    cpus: 0.1
+    environment:
+      AYE_MCP_CATALOG_FILE: /data/catalog.json
+      AYE_MCP_CATALOG_PORT: '8000'
+    healthcheck:
+      interval: 30s
+      retries: 3
+      start_period: 10s
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8000/health
+      timeout: 5s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: a6649c240c6d7fac
+      io.ayeops.module: mcp
+      io.ayeops.service: mcp-catalog
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/arm64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    user: 65534:65534
+    volumes:
+    - ./mcp-catalog/catalog_server.py:/app/catalog_server.py:ro
+    - ./mcp-catalog/catalog.json:/data/catalog.json:ro
+  mcp-grafana:
+    cap_drop:
+    - ALL
+    command:
+    - --transport
+    - streamable-http
+    - --address
+    - 0.0.0.0:8000
+    - --allowed-hosts
+    - mcp-grafana:8000
+    - --disable-write
+    - --metrics
+    - --metrics-address
+    - 0.0.0.0:9090
+    - --healthz-address
+    - 0.0.0.0:9090
+    - --usage-stats
+    - disabled
+    cpus: 0.25
+    depends_on:
+      grafana-reader:
+        condition: service_healthy
+      mcp-tools:
+        condition: service_healthy
+    entrypoint:
+    - /app/mcp-grafana
+    environment:
+      AYE_GRAFANA_READER_TOKEN_FILE: /run/grafana-reader/token
+      GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE: /run/grafana-reader/token
+      GRAFANA_URL: http://grafana:3000
+      MCP_GRAFANA_SERVER_TOKEN: ${AYE_MCP_GRAFANA_SERVER_TOKEN:?set AYE_MCP_GRAFANA_SERVER_TOKEN}
+    group_add:
+    - '10470'
+    healthcheck:
+      interval: 30s
+      retries: 3
+      start_period: 30s
+      test:
+      - CMD
+      - /opt/aye/tools/busybox
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:9090/healthz
+      timeout: 5s
+    image: grafana/mcp-grafana:2.1.1@sha256:71a3f4e6f412d253611314233df709ec2571fb50e39742d23fa2940f670646dc
+    labels:
+      io.ayeops.module: mcp
+      io.ayeops.service: mcp-grafana
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 128m
+    platform: linux/arm64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=16m
+    volumes:
+    - mcp-tools:/opt/aye/tools:ro
+    - grafana-reader:/run/grafana-reader:ro
+  mcp-s3-bin:
+    cap_drop:
+    - ALL
+    cpus: 0.05
+    entrypoint:
+    - sh
+    - -c
+    - cp /usr/local/bin/mcp-s3 /out/.mcp-s3.tmp && mv -f /out/.mcp-s3.tmp /out/mcp-s3 && cp /etc/ssl/certs/ca-certificates.crt /out/.ca.tmp && mv -f /out/.ca.tmp /out/ca-certificates.crt && exec sleep 2147483647
+    healthcheck:
+      interval: 5m
+      retries: 3
+      start_period: 30s
+      test:
+      - CMD
+      - test
+      - -x
+      - /out/mcp-s3
+      timeout: 10s
+    image: ghcr.io/txn2/mcp-s3:v1.5.1@sha256:c907ec59b4edd045c38d879d42fd117dfb3d396b61b2417243717fffb81bcc7d
+    init: true
+    labels:
+      io.ayeops.module: mcp
+      io.ayeops.service: mcp-s3-bin
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 16m
+    network_mode: none
+    platform: linux/arm64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    user: 0:0
+    volumes:
+    - mcp-s3:/out
+  mcp-tools:
+    cap_drop:
+    - ALL
+    cpus: 0.05
+    entrypoint:
+    - sh
+    - -c
+    - cp /bin/busybox /out/.busybox.tmp && mv -f /out/.busybox.tmp /out/busybox && exec sleep 2147483647
+    healthcheck:
+      interval: 5m
+      retries: 3
+      start_period: 30s
+      test:
+      - CMD
+      - /out/busybox
+      - 'true'
+      timeout: 10s
+    image: busybox:1.37.0-musl@sha256:f6a95d611e0a8780fabdb2aec43e31275b2720dfefa3e41b16835bfc42454478
+    init: true
+    labels:
+      io.ayeops.module: mcp
+      io.ayeops.service: mcp-tools
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 16m
+    network_mode: none
+    platform: linux/arm64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    volumes:
+    - mcp-tools:/out
+  mcp-victoriametrics:
+    cap_drop:
+    - ALL
+    cpus: 0.25
+    environment:
+      MCP_LISTEN_ADDR: 0.0.0.0:8080
+      MCP_LOG_FORMAT: json
+      MCP_SERVER_MODE: http
+      VM_INSTANCE_ENTRYPOINT: http://victoriametrics:8428
+      VM_INSTANCE_TYPE: single
+    healthcheck:
+      interval: 30s
+      retries: 3
+      start_period: 30s
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8080/health/readiness
+      timeout: 5s
+    image: ghcr.io/victoriametrics/mcp-victoriametrics:v1.20.2@sha256:bcbf84f945d6efb03fb8b2d2ccc3294420dccdc0b445752dce96f02619416dfe
+    labels:
+      io.ayeops.module: mcp
+      io.ayeops.service: mcp-victoriametrics
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 128m
+    platform: linux/arm64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=16m
+  node-exporter:
+    command:
+    - --path.rootfs=/host
+    - --collector.textfile.directory=/textfile
+    cpus: 0.25
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:9100/
+      timeout: 5s
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    labels:
+      io.ayeops.module: node
+      io.ayeops.service: node-exporter
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    pid: host
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:9100:9100
+    restart: unless-stopped
+    volumes:
+    - /:/host:ro,rslave
+    - node-textfile:/textfile:ro
+  oauth2-proxy:
+    cpus: 0.25
+    environment:
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/oauth2-proxy/emails.txt
+      OAUTH2_PROXY_CLIENT_ID: ${AYE_AUTH_CLIENT_ID:?set AYE_AUTH_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${AYE_AUTH_CLIENT_SECRET:?set AYE_AUTH_CLIENT_SECRET}
+      OAUTH2_PROXY_CODE_CHALLENGE_METHOD: S256
+      OAUTH2_PROXY_COOKIE_CSRF_PER_REQUEST: 'true'
+      OAUTH2_PROXY_COOKIE_DOMAINS: .ops.acme.example
+      OAUTH2_PROXY_COOKIE_EXPIRE: 24h
+      OAUTH2_PROXY_COOKIE_NAME: _aye_sso
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      OAUTH2_PROXY_COOKIE_SECRET: ${AYE_AUTH_COOKIE_SECRET:?set AYE_AUTH_COOKIE_SECRET}
+      OAUTH2_PROXY_COOKIE_SECURE: 'true'
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_METRICS_ADDRESS: 0.0.0.0:9180
+      OAUTH2_PROXY_PROVIDER: google
+      OAUTH2_PROXY_REDIRECT_URL: https://auth.ops.acme.example/oauth2/callback
+      OAUTH2_PROXY_REQUEST_LOGGING: 'false'
+      OAUTH2_PROXY_REVERSE_PROXY: 'true'
+      OAUTH2_PROXY_SILENCE_PING_LOGGING: 'true'
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: 'true'
+      OAUTH2_PROXY_UPSTREAMS: static://202
+      OAUTH2_PROXY_WHITELIST_DOMAINS: .ops.acme.example
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:4180/ping
+      timeout: 5s
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5-alpine@sha256:8e4bec4f9fe4de10de63070209204075e4407503170aa19893d6e8d99f083d1b
+    labels:
+      io.ayeops.config-hash: d105634449aec46b
+      io.ayeops.module: auth
+      io.ayeops.service: oauth2-proxy
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/arm64
+    restart: unless-stopped
+    volumes:
+    - ./auth/emails.txt:/etc/oauth2-proxy/emails.txt:ro
+  oncall-bridge:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/oncall_bridge.py
+    cpus: 0.25
+    environment:
+      AYE_ONCALL_ACKS_SECRET: ${AYE_ONCALL_ACKS_SECRET:?set AYE_ONCALL_ACKS_SECRET}
+      AYE_ONCALL_ADMIN_PASSWORD: ${AYE_ONCALL_ADMIN_PASSWORD:?set AYE_ONCALL_ADMIN_PASSWORD}
+      AYE_ONCALL_ADMIN_USER: oncall
+      AYE_ONCALL_BRIDGE: http://oncall-bridge:8080
+      AYE_ONCALL_CHAT_ID: '100200300'
+      AYE_ONCALL_EMAIL: 'true'
+      AYE_ONCALL_ESCALATION: '[{"delay_minutes": 0, "notify": "person"}]'
+      AYE_ONCALL_GOALERT: http://goalert:8081
+      AYE_ONCALL_LANGUAGE: en
+      AYE_ONCALL_MAX_REPEATS: '12'
+      AYE_ONCALL_PERSON_EMAIL: oncall@acme.example
+      AYE_ONCALL_PERSON_NAME: Acme On-call
+      AYE_ONCALL_PUBLIC_URL: https://oncall.ops.acme.example
+      AYE_ONCALL_QUIET_END: 08:00
+      AYE_ONCALL_QUIET_START: '23:00'
+      AYE_ONCALL_REPEAT_MINUTES: '5'
+      AYE_ONCALL_SMTP_ADDRESS: smtp.mail.example:587
+      AYE_ONCALL_SMTP_DISABLE_TLS: 'true'
+      AYE_ONCALL_SMTP_FROM: ops@acme.example
+      AYE_ONCALL_SMTP_PASSWORD: ${AYE_SMTP_PASSWORD:?set AYE_SMTP_PASSWORD}
+      AYE_ONCALL_SMTP_USER: ${AYE_SMTP_USER:?set AYE_SMTP_USER}
+      AYE_ONCALL_STATE: /tmp
+      AYE_ONCALL_TELEGRAM_TOKEN: ${AYE_ONCALL_TELEGRAM_TOKEN:?set AYE_ONCALL_TELEGRAM_TOKEN}
+      AYE_ONCALL_TEXTS: /app/oncall_texts.json
+      AYE_ONCALL_TIMEZONE: Europe/Kyiv
+      AYE_ONCALL_WEBHOOK_SECRET: ${AYE_ONCALL_WEBHOOK_SECRET:?set AYE_ONCALL_WEBHOOK_SECRET}
+    healthcheck:
+      interval: 30s
+      retries: 3
+      start_period: 60s
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8080/health
+      timeout: 5s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: 8fcf820503d0033e
+      io.ayeops.module: oncall
+      io.ayeops.service: oncall-bridge
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 96m
+    platform: linux/arm64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    user: 65534:65534
+    volumes:
+    - ./oncall/oncall_bridge.py:/app/oncall_bridge.py:ro
+    - ./oncall/oncall_setup.py:/app/oncall_setup.py:ro
+    - ./oncall/oncall_texts.json:/app/oncall_texts.json:ro
+    - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+    - oncall-state:/tmp
+  portal:
+    cpus: 0.25
+    environment:
+      NGINX_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE: '1'
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8080/
+      timeout: 5s
+    image: nginxinc/nginx-unprivileged:1.31.5-alpine3.24@sha256:19c132c9ab02d3b783f478743dafc7a7f42e27aa7d2bdcbec1bb1128ca8f2a07
+    labels:
+      io.ayeops.config-hash: 7179134f87cab801
+      io.ayeops.module: portal
+      io.ayeops.service: portal
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 32m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:8088:8080
+    restart: unless-stopped
+    volumes:
+    - ./portal:/usr/share/nginx/html:ro
+    - ./portal-nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+  rdap-exporter:
+    command:
+    - python
+    - -I
+    - /app/rdap_exporter.py
+    cpus: 0.1
+    environment:
+      AYE_RDAP_BOOTSTRAP_URL: https://data.iana.org/rdap/dns.json
+      AYE_RDAP_DOMAINS: acme.example
+      AYE_RDAP_PORT: '9130'
+      AYE_RDAP_REFRESH_SECONDS: '21600'
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:9130/health', timeout=5)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: 1865427aa118d6a5
+      io.ayeops.module: probes
+      io.ayeops.service: rdap-exporter
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:9130:9130
+    restart: unless-stopped
+    user: 65534:65534
+    volumes:
+    - ./probes/rdap_exporter.py:/app/rdap_exporter.py:ro
+  reconciler:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/reconciler.py
+    cpus: 0.1
+    environment:
+      AYE_RECONCILER_ATTEMPTS: '3'
+      AYE_RECONCILER_DECLARED: '["acme-apps","acme-central"]'
+      AYE_RECONCILER_DRY_RUN: 'false'
+      AYE_RECONCILER_IGNORE: '[]'
+      AYE_RECONCILER_INTERVAL: 30s
+      AYE_RECONCILER_PROJECTS: '{"acme-apps":["mcp","web"],"acme-central":["agentgateway","ai-usage-exporter","alloy","autopilot","blackbox","cadvisor","cloudflare-exporter","garage","garage-admin","github-exporter","goalert","goalert-db","grafana","grafana-reader","incidents-agent","loki","mcp-catalog","mcp-grafana","mcp-s3-bin","mcp-tools","mcp-victoriametrics","node-exporter","oauth2-proxy","oncall-bridge","portal","rdap-exporter","reconciler","status-reporter","traefik","victoriametrics","vmagent","vmalert"]}'
+      AYE_RECONCILER_STATE: /data/state.json
+      AYE_RECONCILER_TEXTFILE: /textfile/ayeops_reconciler.prom
+      AYE_RECONCILER_TIMEOUT: 2m
+      AYE_RECONCILER_WINDOW: 1h
+    healthcheck:
+      interval: 60s
+      retries: 3
+      start_period: 60s
+      test:
+      - CMD
+      - python
+      - -c
+      - import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/reconciler.alive') > 300)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: 9e9813cefec45c50
+      io.ayeops.module: reconciler
+      io.ayeops.service: reconciler
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 32m
+    network_mode: none
+    pids_limit: 32
+    platform: linux/arm64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=4m
+    volumes:
+    - ./reconciler/reconciler.py:/app/reconciler.py:ro
+    - /var/run/docker.sock:/var/run/docker.sock
+    - reconciler-data:/data
+    - node-textfile:/textfile
+  status-reporter:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/status_reporter.py
+    cpus: 0.05
+    depends_on:
+      grafana:
+        condition: service_healthy
+      grafana-reader:
+        condition: service_healthy
+    environment:
+      AYE_GRAFANA_READER_TOKEN_FILE: /run/grafana-reader/token
+      AYE_STATUS_COMPONENTS: '[{"id": "mcp-endpoint", "services": ["mcp"]}]'
+      AYE_STATUS_GRAFANA: http://grafana:3000
+      AYE_STATUS_INTERVAL: 1m
+      AYE_STATUS_PORT: '9136'
+      AYE_STATUS_PUSH_SECRET: ${AYE_STATUS_PUSH_SECRET:?set AYE_STATUS_PUSH_SECRET}
+      AYE_STATUS_TENANT: acme
+      AYE_STATUS_TIMEOUT: 10s
+      AYE_STATUS_URL: https://status.acme.example/api/push
+    group_add:
+    - '10470'
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:9136/health', timeout=5)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: d532fe4c50c6ac9a
+      io.ayeops.module: status
+      io.ayeops.service: status-reporter
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 48m
+    platform: linux/arm64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    user: 65534:65534
+    volumes:
+    - ./status/status_reporter.py:/app/status_reporter.py:ro
+    - grafana-reader:/run/grafana-reader:ro
+  traefik:
+    command:
+    - --configFile=/etc/traefik/traefik.yml
+    cpus: 0.5
+    environment:
+      CF_DNS_API_TOKEN: ${AYE_CLOUDFLARE_DNS_API_TOKEN:?set AYE_CLOUDFLARE_DNS_API_TOKEN}
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - traefik
+      - healthcheck
+      - --configFile=/etc/traefik/traefik.yml
+      timeout: 5s
+    image: traefik:v3.7.14@sha256:575fa15b135078fe5e50aa847987d96dbddd7b093c172429618404df73f3fa7c
+    labels:
+      io.ayeops.config-hash: 519968335efa065a
+      io.ayeops.module: ingress
+      io.ayeops.service: traefik
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 128m
+    networks:
+      default:
+        aliases:
+        - auth.ops.acme.example
+        - grafana.ops.acme.example
+        - hub.ops.acme.example
+        - metrics.ops.acme.example
+        - oncall.ops.acme.example
+        - portal.ops.acme.example
+    platform: linux/arm64
+    ports:
+    - 10.8.0.1:443:443
+    - 10.8.0.1:80:80
+    restart: unless-stopped
+    volumes:
+    - ./ingress/traefik.yml:/etc/traefik/traefik.yml:ro
+    - ./ingress/dynamic:/etc/traefik/dynamic:ro
+    - ingress-acme:/acme
+  victoriametrics:
+    command:
+    - -retentionPeriod=90d
+    - -storageDataPath=/storage
+    - -httpListenAddr=:8428
+    cpus: 1.0
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8428/health
+      timeout: 5s
+    image: victoriametrics/victoria-metrics:v1.153.0@sha256:5eff7af5341e401471002f58d106d399e614a62f3d240f2dbc21901e49eed5dd
+    labels:
+      io.ayeops.module: metrics
+      io.ayeops.service: victoriametrics
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 1g
+    platform: linux/arm64
+    ports:
+    - 10.8.0.1:8428:8428
+    restart: unless-stopped
+    volumes:
+    - victoriametrics-data:/storage
+  vmagent:
+    command:
+    - -promscrape.config=/etc/vmagent/scrape.yaml
+    - -remoteWrite.url=http://victoriametrics:8428/api/v1/write
+    - -remoteWrite.label=host=central
+    - -remoteWrite.label=project=acme
+    - -remoteWrite.tmpDataPath=/vmagent-data
+    - -remoteWrite.maxDiskUsagePerURL=1GB
+    - -httpListenAddr=:8429
+    cpus: 0.5
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8429/health
+      timeout: 5s
+    image: victoriametrics/vmagent:v1.153.0@sha256:474135388ae700b842007d3e186a8ae60ccf7de3dfd776fb6ed27cf8522d8331
+    labels:
+      io.ayeops.config-hash: 598d64a4c879469a
+      io.ayeops.module: metrics
+      io.ayeops.service: vmagent
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 256m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:8429:8429
+    restart: unless-stopped
+    volumes:
+    - ./vmagent/scrape.yaml:/etc/vmagent/scrape.yaml:ro
+    - vmagent-data:/vmagent-data
+  vmalert:
+    command:
+    - -rule=/etc/vmalert/rules.yml
+    - -datasource.url=http://victoriametrics:8428
+    - -remoteWrite.url=http://victoriametrics:8428
+    - -evaluationInterval=1m
+    - -notifier.blackhole
+    - -httpListenAddr=:8880
+    cpus: 0.25
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8880/health
+      timeout: 5s
+    image: victoriametrics/vmalert:v1.153.0@sha256:0c1c7718b54b03e8559d0f257f31f1bd79ef7fa32ac6e9ed90d7b92a74a4fe76
+    labels:
+      io.ayeops.config-hash: 25386e3091654c3a
+      io.ayeops.module: delivery
+      io.ayeops.service: vmalert
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 128m
+    platform: linux/arm64
+    ports:
+    - 127.0.0.1:8880:8880
+    restart: unless-stopped
+    volumes:
+    - ./delivery/rules.yml:/etc/vmalert/rules.yml:ro
+volumes:
+  alloy-data: {}
+  autopilot-state: {}
+  github-state: {}
+  grafana-data: {}
+  grafana-reader: {}
+  incidents-journal: {}
+  ingress-acme: {}
+  loki-data: {}
+  mcp-s3: {}
+  mcp-tools: {}
+  node-textfile: {}
+  objectstore-data: {}
+  objectstore-meta: {}
+  oncall-db: {}
+  oncall-state: {}
+  reconciler-data: {}
+  victoriametrics-data: {}
+  vmagent-data: {}

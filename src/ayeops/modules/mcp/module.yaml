@@ -1,0 +1,227 @@
+name: mcp
+summary: An MCP hub that gives assistants read access to the stack through a gateway the manifest picks, agentgateway first, with tools from Grafana, VictoriaMetrics, S3 stores, the service catalog and its runbooks, other MCP servers and OpenAPI specs; tools that write are denied unless allowed one by one.
+requires:
+  metrics: {}
+defaults:
+  provider: agentgateway
+  timeout: 60s
+  sources: {}
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  required: [sources]
+  properties:
+    provider:
+      enum: [agentgateway, contextforge, docker, microsoft]
+    timeout:
+      type: string
+      pattern: '^[1-9][0-9]{0,3}[sm]$'
+    sources:
+      type: object
+      minProperties: 1
+      propertyNames:
+        pattern: '^[a-z][a-z0-9]{0,23}$'
+      additionalProperties:
+        type: object
+        additionalProperties: false
+        required: [kind]
+        properties:
+          kind:
+            enum: [grafana, victoriametrics, s3, mcp, openapi, cli, catalog]
+          description:
+            type: string
+          url:
+            type: string
+            pattern: '^https?://[^\s$"\\]+$'
+          transport:
+            enum: [http, sse]
+          token:
+            type: boolean
+          image:
+            type: string
+            pattern: '^[a-z0-9./_-]+:v?[0-9]+(\.[0-9]+)+(-[a-z0-9.]+)?(@sha256:[a-f0-9]{64})?$'
+          command:
+            type: array
+            minItems: 1
+            items:
+              type: string
+              minLength: 1
+          spec:
+            type: string
+            pattern: '^(?!/)(?!.*(^|/)\.\.(/|$))[A-Za-z0-9_./-]+\.(json|ya?ml)$'
+          endpoint:
+            type: string
+            pattern: '^https?://[^\s/$"\\]+$'
+          region:
+            type: string
+            pattern: '^[a-z0-9-]{1,40}$'
+          path_style:
+            type: boolean
+          tools:
+            type: array
+            minItems: 1
+            uniqueItems: true
+            items:
+              type: string
+              pattern: '^[A-Za-z0-9_.-]{1,64}$'
+          allow_write:
+            type: array
+            uniqueItems: true
+            items:
+              type: string
+              pattern: '^[A-Za-z0-9_.-]{1,64}$'
+          binary:
+            type: string
+            pattern: '^/[A-Za-z0-9_./-]+$'
+          commands:
+            type: object
+            minProperties: 1
+            propertyNames:
+              pattern: '^[a-z][a-z0-9_]{0,39}$'
+            additionalProperties:
+              type: object
+              additionalProperties: false
+              required: [run]
+              properties:
+                description:
+                  type: string
+                run:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                args:
+                  type: object
+                  propertyNames:
+                    pattern: '^[a-z][a-z0-9_]{0,39}$'
+                  additionalProperties:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      type:
+                        enum: [string, integer, boolean]
+                      pattern:
+                        type: string
+                      enum:
+                        type: array
+                        items:
+                          type: [string, integer]
+                      description:
+                        type: string
+                write:
+                  type: boolean
+                allow_write:
+                  type: boolean
+                timeout:
+                  type: string
+                  pattern: '^[1-9][0-9]{0,3}[sm]$'
+services:
+  agentgateway:
+    description: agentgateway 1.7 as the MCP hub, one endpoint on 3000 that multiplexes every source of the manifest with its tools prefixed by the source name, lets through only the tools the manifest allows, and runs the S3 tools as stdio servers with one store's keys each.
+    memory: 256m
+    cpus: 0.5
+    metrics: [agentgateway_mcp_requests_total, agentgateway_config_synchronized]
+    alerts: [mcp-hub-down, mcp-hub-config]
+    logs: docker
+    login: none of its own; reach the loopback port 3010 over ssh (ssh -N -L 3010:127.0.0.1:3010 <host>), so whoever can ssh to the host can use it, as can the containers on its compose network; a route through the ingress sign-in serves browsers, not MCP clients
+    status:
+      internal: assistant access for the operators, users never see it
+  mcp-grafana:
+    description: Grafana's MCP server with --disable-write over streamable HTTP, answering only the hub's bearer token, reading the Grafana of its host with the Viewer token that grafana-reader keeps in its volume, read again on every request.
+    memory: 128m
+    cpus: 0.25
+    metrics: [mcp_server_operation_duration_seconds_count]
+    alerts: [target-down, grafana-reader-failing]
+    logs: docker
+    status:
+      internal: Grafana tools of the MCP hub
+    grafana_reader: true
+  mcp-victoriametrics:
+    description: VictoriaMetrics' MCP server over streamable HTTP, PromQL and metadata against the metrics store; it has no tools that write.
+    memory: 128m
+    cpus: 0.25
+    metrics: [mcp_victoriametrics_call_tool_total]
+    alerts: [target-down]
+    logs: docker
+    status:
+      internal: metrics tools of the MCP hub
+  mcp-catalog:
+    description: The catalog source of the hub, a stdlib Python MCP server over streamable HTTP that answers five read-only tools (hosts, services, one service, its alerts, an alert's runbook) from a JSON file the render builds from the manifest's catalog and the runbook pages, with no secret, no .env value and no access to anything else.
+    memory: 64m
+    cpus: 0.1
+    metrics: [ayeops_mcp_catalog_requests_total, ayeops_mcp_catalog_tool_calls_total, ayeops_mcp_catalog_entries]
+    alerts: [target-down, mcp-hub-down]
+    logs: docker
+    status:
+      internal: catalog tools of the MCP hub
+  mcp-tools:
+    description: Copies the static busybox binary into a volume, the wget of the healthchecks of the hub and mcp-grafana, whose images have no wget (the hub's has no shell either), then sleeps.
+    memory: 16m
+    cpus: 0.05
+    metrics:
+      none: it only holds a file; without it the hub fails its healthcheck and mcp-hub-down fires
+    alerts: [mcp-hub-down]
+    logs: docker
+    status:
+      internal: tool of the MCP hub's healthchecks
+  mcp-s3-bin:
+    description: Copies the static mcp-s3 binary and a CA bundle from the mcp-s3 image into a volume the hub runs the S3 tools from, then sleeps.
+    memory: 16m
+    cpus: 0.05
+    metrics:
+      none: it only holds a file; without it the S3 sources fail and the hub's log says so
+    alerts: [mcp-hub-down]
+    logs: docker
+    status:
+      internal: binary of the MCP hub's S3 tools
+alerts:
+  - name: mcp-hub-down
+    provider: agentgateway
+    title: MCP hub down
+    expr: min by (host, project, group) (up{job="agentgateway"}) == bool 0
+    for: 5m
+    severity: warning
+    summary: "The MCP hub on {{ .Labels.host }} does not answer: assistants have no tools"
+    runbook: mcp-hub
+    no_data: alerting
+  - name: mcp-hub-config
+    provider: agentgateway
+    title: MCP hub runs an older configuration
+    expr: min by (host, project, group) (agentgateway_config_synchronized) == bool 0
+    for: 10m
+    severity: warning
+    summary: "The MCP hub on {{ .Labels.host }} rejected its configuration file and serves the previous one"
+    runbook: mcp-hub
+dashboards: []
+files:
+  - src: files/catalog_server.py
+    dest: mcp-catalog/catalog_server.py
+    when: mcp.catalog
+permissions:
+  - issuer: "the S3 store of source {{ item[0] }}, {{ item[1].endpoint or 'the Garage of this host' }}"
+    credential: access key
+    env:
+      - "{{ 'AYE_MCP_' ~ (item[0] | upper) ~ '_ACCESS_KEY_ID' }}"
+      - "{{ 'AYE_MCP_' ~ (item[0] | upper) ~ '_SECRET_ACCESS_KEY' }}"
+    each: "settings.sources.items() | list"
+    when: "item[1].kind == 's3'"
+    grants:
+      - "read and list on the buckets assistants may see (Garage: garage bucket allow --read --key <key> <bucket>; R2: an Object Read token)"
+      - "{{ 'also write for ' ~ (item[1].allow_write | join(', ')) ~ ', which allow_write lists' if item[1].allow_write else 'no write, no delete' }}"
+  - issuer: "{{ item[1].url }}"
+    credential: "bearer token of source {{ item[0] }}"
+    env: ["{{ 'AYE_MCP_' ~ (item[0] | upper) ~ '_TOKEN' }}"]
+    each: "settings.sources.items() | list"
+    when: "item[1].kind in ['mcp', 'openapi'] and item[1].token"
+    grants:
+      - "the narrowest token the upstream offers for the tools it exposes; read-only where it can be"
+generated:
+  - env: [AYE_MCP_SESSION_KEY]
+    when: "settings.provider == 'agentgateway'"
+    format: hex
+    bytes: 32
+  - env: [AYE_MCP_GRAFANA_SERVER_TOKEN]
+    when: "settings.provider == 'agentgateway' and settings.sources.values() | selectattr('kind', 'equalto', 'grafana') | list"
+    format: hex
+    bytes: 32

@@ -1,0 +1,222 @@
+name: offsite
+summary: Encrypted, deduplicated off-site copies of a host's newest backup file with restic, pushed to a store on another host or provider, with retention (left to the store when it is append-only), a weekly restore test and textfile metrics.
+requires:
+  metrics: {}
+  node: {}
+defaults:
+  provider: restic
+  source: null
+  target: null
+  schedule: "05:30"
+  timezone: UTC
+  keep_daily: 7
+  keep_weekly: 4
+  keep_monthly: 3
+  restore_test_days: 7
+  settle_minutes: 15
+  retry_minutes: 60
+  verify: pg_dump
+  quota: null
+  region: null
+  restore_drill: null
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  required: [source, target]
+  properties:
+    provider:
+      enum: [restic]
+    source:
+      type: string
+      pattern: '^/[^:\s]*[^/:\s]$'
+    target:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [host]
+          properties:
+            host:
+              type: string
+              pattern: '^[a-z][a-z0-9-]{0,39}$'
+        - type: object
+          additionalProperties: false
+          required: [url]
+          properties:
+            url:
+              type: string
+              pattern: '^(s3|b2|rest|azure|gs|swift|sftp|rclone):\S+$'
+            append_only:
+              type: boolean
+    schedule:
+      type: string
+      pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+    timezone:
+      type: string
+      pattern: '^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$'
+    keep_daily:
+      type: integer
+      minimum: 0
+      maximum: 366
+    keep_weekly:
+      type: integer
+      minimum: 0
+      maximum: 260
+    keep_monthly:
+      type: integer
+      minimum: 0
+      maximum: 120
+    restore_test_days:
+      type: integer
+      minimum: 1
+      maximum: 60
+    settle_minutes:
+      type: integer
+      minimum: 0
+      maximum: 1440
+    retry_minutes:
+      type: integer
+      minimum: 5
+      maximum: 1440
+    verify:
+      enum: [pg_dump, none]
+    quota:
+      type: [string, "null"]
+      pattern: '^[0-9]+[mgt]$'
+    region:
+      type: [string, "null"]
+      pattern: '^[a-z0-9-]+$'
+    restore_drill:
+      type: [object, "null"]
+      additionalProperties: false
+      required: [engine, version, checks]
+      properties:
+        engine:
+          enum: [postgres]
+        version:
+          enum: [14, 15, 16, 17, 18]
+        every_days:
+          type: integer
+          minimum: 1
+          maximum: 60
+        schedule:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+        max_minutes:
+          type: integer
+          minimum: 5
+          maximum: 720
+        jobs:
+          type: integer
+          minimum: 1
+          maximum: 16
+        checks:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, query]
+            properties:
+              name:
+                type: string
+                pattern: '^[a-z][a-z0-9_]{0,39}$'
+              query:
+                type: string
+                minLength: 1
+services:
+  offsite:
+    description: Once a day after the dump, backs up the newest settled file matching source into the restic repository on the target, tagged with its sha256, applies the retention and prunes unless the target is append-only; once a week streams the newest snapshot back and compares its sha256 and pg_dump header.
+    memory: 512m
+    cpus: 1.0
+    metrics: [ayeops_offsite_last_success_timestamp_seconds, ayeops_offsite_max_age_seconds, ayeops_offsite_snapshots, ayeops_offsite_repo_size_bytes, ayeops_offsite_last_added_bytes, ayeops_offsite_last_duration_seconds, ayeops_offsite_restore_test_last_success_timestamp_seconds, ayeops_offsite_restore_test_ok]
+    alerts: [offsite-stale, offsite-restore-test, offsite-quota, offsite-retention]
+    logs: docker
+    status:
+      internal: users never see the off-site copy until a restore needs it
+  offsite-restic:
+    description: Copies the pinned static restic binary from the official image into a volume the agent mounts read-only, then sleeps; a new image version replaces the binary on the next deploy.
+    memory: 64m
+    cpus: 0.1
+    metrics:
+      none: it only holds a file; the agent fails offsite-stale without the binary
+    alerts: [offsite-stale]
+    logs: docker
+    status:
+      internal: tool of the off-site agent
+alerts:
+  - name: offsite-stale
+    title: No off-site backup within 26 hours or the rpo
+    expr: time() - max by (host, project, group) (ayeops_offsite_last_success_timestamp_seconds) > bool on (host, project, group) (max by (host, project, group) (ayeops_offsite_max_age_seconds) or max by (host, project, group) (ayeops_offsite_last_success_timestamp_seconds) * 0 + 93600)
+    for: 10m
+    severity: critical
+    summary: "The newest off-site snapshot of {{ .Labels.host }} is older than 26 hours, or than the rpo of a service whose dump it copies"
+    runbook: offsite-stale
+    no_data: alerting
+  - name: offsite-restore-test
+    title: Off-site restore test failed or older than 8 days
+    expr: max by (host, project, group) ((time() - ayeops_offsite_restore_test_last_success_timestamp_seconds > bool 691200) + (ayeops_offsite_restore_test_ok == bool 0))
+    for: 10m
+    severity: warning
+    summary: "The restore test of the off-site copy of {{ .Labels.host }} failed or has not passed for 8 days"
+    runbook: offsite-restore-test
+    no_data: alerting
+  - name: offsite-quota
+    title: Off-site repository above 80 % of its quota
+    expr: max by (host, project, group) (ayeops_offsite_repo_size_bytes / ayeops_offsite_quota_bytes) > bool 0.8
+    for: 30m
+    severity: warning
+    summary: "The off-site repository of {{ .Labels.host }} uses more than 80 % of its quota"
+    runbook: offsite-quota
+    dashboard: {uid: ayeops-reliability, panel: 14}
+  - name: offsite-retention
+    title: Off-site retention drifts from the policy
+    expr: min by (host, project, group) (ayeops_offsite_retention_ok) == bool 0
+    for: 10m
+    severity: warning
+    summary: "restic forget or prune on {{ .Labels.host }} did not leave the snapshots the policy keeps"
+    runbook: offsite-retention
+    dashboard: {uid: ayeops-reliability, panel: 14}
+  - name: offsite-drill
+    setting: restore_drill
+    title: Restore drill failed or overdue
+    expr: max by (host, project, group, repo) ((time() > bool ayeops_offsite_drill_deadline_timestamp_seconds) + ((ayeops_offsite_drill_ok == bool 0) or (ayeops_offsite_drill_deadline_timestamp_seconds * 0)))
+    for: 10m
+    severity: warning
+    summary: "The restore drill of {{ .Labels.repo }} on {{ .Labels.host }} failed, or none passed within every_days plus one"
+    runbook: offsite-drill
+    no_data: alerting
+dashboards: []
+files:
+  - src: files/offsite_agent.py
+    dest: offsite/offsite_agent.py
+permissions:
+  - issuer: "S3 provider of {{ settings.target.url }}"
+    credential: access key
+    env: [AYE_OFFSITE_ACCESS_KEY_ID, AYE_OFFSITE_SECRET_ACCESS_KEY]
+    when: "settings.target.url and settings.target.url.startswith('s3:')"
+    grants:
+      - "s3:ListBucket on the bucket of the repository, with a condition on its prefix"
+      - "s3:GetObject, s3:PutObject and s3:DeleteObject on that prefix only; restic deletes its lock files{{ '' if settings.target.append_only else ', prune deletes packs' }}"
+  - issuer: "provider of {{ settings.target.url }}"
+    credential: repository credentials
+    env: [AYE_OFFSITE_ACCESS_KEY_ID, AYE_OFFSITE_SECRET_ACCESS_KEY]
+    when: "settings.target.url and not settings.target.url.startswith('s3:')"
+    grants:
+      - "read, write and delete on that one repository path only"
+generated:
+  - env: [AYE_OFFSITE_RESTIC_PASSWORD]
+    format: base64
+    bytes: 33
+  - env: [AYE_OFFSITE_ACCESS_KEY_ID]
+    when: "settings.target.host"
+    format: copy
+    from: "AYE_OBJECTSTORE_ACCESS_KEY_ID on {{ settings.target.host }}, when it runs Garage"
+  - env: [AYE_OFFSITE_SECRET_ACCESS_KEY]
+    when: "settings.target.host"
+    format: copy
+    from: "AYE_OBJECTSTORE_SECRET_ACCESS_KEY on {{ settings.target.host }}, when it runs Garage"
+  - env: [AYE_OFFSITE_REST_PASSWORD]
+    when: "settings.target.host"
+    format: copy
+    from: "AYE_RESTSTORE_{{ host | upper | replace('-', '_') }}_PASSWORD on {{ settings.target.host }}, when it runs rest-server"

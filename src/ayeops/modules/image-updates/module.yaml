@@ -1,0 +1,88 @@
+name: image-updates
+summary: Watches the running containers whose image tag floats (latest, a bare major such as 18, no version at all) with Diun and flags each one whose tag in the registry now points to a newer image than the one it runs; pinned versions stay with Renovate.
+requires:
+  node: {}
+defaults:
+  schedule: "04:15"
+  timezone: UTC
+  interval: 60
+  ghcr_username: null
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    schedule:
+      type: string
+      pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+    timezone:
+      type: string
+      pattern: '^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$'
+    interval:
+      type: integer
+      minimum: 10
+      maximum: 3600
+    ghcr_username:
+      type: [string, "null"]
+      pattern: '^[A-Za-z0-9][A-Za-z0-9-]{0,38}$'
+services:
+  image-updates-proxy:
+    description: A docker socket proxy that answers only the container list and image inspect, read-only, on an internal network that only image-updates-agent shares.
+    memory: 32m
+    cpus: 0.1
+    metrics: [ayeops_image_updates_last_scan_timestamp_seconds]
+    alerts: [image-updates-scan-stale]
+    logs: docker
+    status:
+      internal: tool of the image-updates module
+  image-updates-agent:
+    description: Lists the running containers through the proxy, hands Diun the floating-tag images, keeps the digest Diun reports for each tag and writes which containers run an older image as textfile metrics, without internet access.
+    memory: 48m
+    cpus: 0.1
+    metrics: [ayeops_image_update_available, ayeops_image_updates_containers, ayeops_image_updates_last_scan_timestamp_seconds, ayeops_image_updates_last_check_success_timestamp_seconds]
+    alerts: [image-update-available, image-updates-scan-stale, image-updates-check-stale]
+    logs: docker
+    status:
+      internal: host maintenance, users never see it
+  diun:
+    description: Diun asks each registry once a day which digest the floating tags now point to and reports new and changed digests and every finished run to image-updates-agent.
+    memory: 64m
+    cpus: 0.25
+    metrics: [ayeops_image_updates_last_check_success_timestamp_seconds, ayeops_image_updates_tags]
+    alerts: [image-updates-check-stale]
+    logs: docker
+    status:
+      internal: host maintenance, users never see it
+alerts:
+  - name: image-update-available
+    title: A floating image tag points to a newer image
+    expr: max by (host, project, group) (ayeops_image_update_available) > bool 0
+    for: 12h
+    severity: warning
+    summary: "{{ .Labels.host }} runs containers whose floating tag now points to a newer image; the dashboard lists them"
+    runbook: image-update-available
+  - name: image-updates-scan-stale
+    title: Running containers not read for 15 minutes
+    expr: time() - max by (host, project, group) (ayeops_image_updates_last_scan_timestamp_seconds) > bool 900
+    for: 10m
+    severity: warning
+    summary: "image-updates-agent on {{ .Labels.host }} has not read the running containers for 15 minutes"
+    runbook: image-updates-scan-stale
+  - name: image-updates-check-stale
+    title: No finished Diun run for 2 days
+    expr: time() - max by (host, project, group) (ayeops_image_updates_last_check_success_timestamp_seconds) > bool 180000
+    for: 1h
+    severity: warning
+    summary: "Diun on {{ .Labels.host }} has not finished a registry check for more than 2 days"
+    runbook: image-updates-check-stale
+dashboards: []
+files:
+  - src: files/image_updates_agent.py
+    dest: image-updates/image_updates_agent.py
+permissions:
+  - issuer: GitHub
+    credential: "classic personal access token of {{ settings.ghcr_username }}"
+    env: [AYE_IMAGE_UPDATES_GHCR_TOKEN]
+    when: "settings.ghcr_username"
+    grants:
+      - "scope read:packages only, to read the tags of private ghcr.io images"

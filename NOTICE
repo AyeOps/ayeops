@@ -1,0 +1,25 @@
+AyeOps
+Copyright 2026 The AyeOps Authors
+
+AyeOps is published by the team behind trofey.app (https://trofey.app).
+
+This product includes third-party material under its own licence:
+
+Product icons in src/ayeops/portal/assets/icons.json come from Simple Icons 16.35.0
+(https://github.com/simple-icons/simple-icons), released under CC0 1.0. The marks they show
+belong to their owners; using them names the product a service runs and implies no
+endorsement.
+
+The JSON Schemas tests/fixtures/agentgateway/config.schema.json and
+tests/fixtures/agentgateway/cel.schema.json are copied unchanged from agentgateway v1.7.0
+(https://github.com/agentgateway/agentgateway, schema/config.json and schema/cel.json),
+Copyright The agentgateway Authors, licensed under the Apache License 2.0.
+
+The Trivy reports tests/fixtures/vulns/trivy-alpine-39.json and
+tests/fixtures/vulns/trivy-debian-buster.json are copied unchanged from the integration test
+golden outputs of Trivy v0.76.1 (https://github.com/aquasecurity/trivy,
+integration/testdata/alpine-39.json.golden and integration/testdata/debian-buster.json.golden),
+Copyright Aqua Security Software Ltd., licensed under the Apache License 2.0.
+
+The text of CODE_OF_CONDUCT.md is adapted from the Contributor Covenant 2.1
+(https://www.contributor-covenant.org), licensed under CC BY 4.0.

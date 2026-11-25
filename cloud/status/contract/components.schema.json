@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ayeops.dev/schema/status-components.schema.json",
+  "title": "AyeOps status tenant",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tenant", "hostname", "title", "locale", "notify", "access", "components"],
+  "properties": {
+    "tenant": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,39}$"},
+    "hostname": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1},
+    "locale": {"enum": ["uk", "en", "ru"]},
+    "notify": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["telegram_chat_id", "min_state"],
+          "properties": {
+            "telegram_chat_id": {"type": "string", "pattern": "^-?[0-9]{3,20}$"},
+            "min_state": {"enum": ["outage", "degraded", "no_data"]}
+          }
+        }
+      ]
+    },
+    "access": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["team", "aud"],
+          "properties": {
+            "team": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"},
+            "aud": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "probes", "push"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,39}$"},
+          "title": {"type": "string", "minLength": 1},
+          "probes": {"type": "array", "items": {"type": "string", "pattern": "^https://"}},
+          "push": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

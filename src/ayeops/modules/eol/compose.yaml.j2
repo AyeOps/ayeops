@@ -1,0 +1,35 @@
+services:
+  eol-agent:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/eol_agent.py"]
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:size=4m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 32
+    environment:
+      AYE_EOL_SCHEDULE: {{ settings.schedule | tojson }}
+      AYE_EOL_API: {{ settings.api | tojson }}
+      AYE_EOL_CACHE: /cache
+      AYE_EOL_TEXTFILE: /textfile/ayeops_eol.prom
+      AYE_EOL_OS_RELEASE: {{ ("/host/os-release" if settings.os else "") | tojson }}
+      TZ: {{ settings.timezone | tojson }}
+    volumes:
+      - "./eol/eol_agent.py:/app/eol_agent.py:ro"
+      - "eol-cache:/cache"
+{% if settings.os %}
+      - "/etc/os-release:/host/os-release:ro"
+{% endif %}
+      - {{ (textfile ~ ":/textfile") | tojson }}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/eol.alive') > 300)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+volumes:
+  eol-cache: {}
+{% if textfile == "node-textfile" %}
+  node-textfile: {}
+{% endif %}

@@ -1,0 +1,20 @@
+{% if settings.provider == "agentgateway" %}
+- job_name: agentgateway
+  static_configs:
+    - targets: ["agentgateway:15020"]
+{% if mcp.grafana %}
+- job_name: mcp-grafana
+  static_configs:
+    - targets: ["mcp-grafana:9090"]
+{% endif %}
+{% if mcp.victoriametrics %}
+- job_name: mcp-victoriametrics
+  static_configs:
+    - targets: ["mcp-victoriametrics:8080"]
+{% endif %}
+{% if mcp.catalog %}
+- job_name: mcp-catalog
+  static_configs:
+    - targets: ["mcp-catalog:8000"]
+{% endif %}
+{% endif %}

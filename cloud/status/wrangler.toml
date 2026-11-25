@@ -1,0 +1,17 @@
+name = "ayeops-status"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ayeops-status"
+database_id = "<d1-database-id>"
+migrations_dir = "migrations"
+
+[[routes]]
+pattern = "<status-hostname>"
+custom_domain = true

@@ -1,0 +1,112 @@
+{
+  "data": {
+    "viewer": {
+      "zones": [
+        {
+          "httpRequestsAdaptiveGroups": [
+            {
+              "count": 900,
+              "dimensions": {
+                "cacheStatus": "hit",
+                "clientRequestHTTPHost": "acme.example",
+                "edgeResponseStatus": 200
+              },
+              "sum": {
+                "edgeResponseBytes": 9000000
+              }
+            },
+            {
+              "count": 300,
+              "dimensions": {
+                "cacheStatus": "dynamic",
+                "clientRequestHTTPHost": "acme.example",
+                "edgeResponseStatus": 200
+              },
+              "sum": {
+                "edgeResponseBytes": 1500000
+              }
+            },
+            {
+              "count": 40,
+              "dimensions": {
+                "cacheStatus": "miss",
+                "clientRequestHTTPHost": "acme.example",
+                "edgeResponseStatus": 404
+              },
+              "sum": {
+                "edgeResponseBytes": 40000
+              }
+            },
+            {
+              "count": 30,
+              "dimensions": {
+                "cacheStatus": "dynamic",
+                "clientRequestHTTPHost": "acme.example",
+                "edgeResponseStatus": 502
+              },
+              "sum": {
+                "edgeResponseBytes": 3000
+              }
+            },
+            {
+              "count": 6,
+              "dimensions": {
+                "cacheStatus": "none",
+                "clientRequestHTTPHost": "acme.example",
+                "edgeResponseStatus": 522
+              },
+              "sum": {
+                "edgeResponseBytes": 0
+              }
+            },
+            {
+              "count": 2,
+              "dimensions": {
+                "cacheStatus": "none",
+                "clientRequestHTTPHost": "acme.example",
+                "edgeResponseStatus": 526
+              },
+              "sum": {
+                "edgeResponseBytes": 0
+              }
+            },
+            {
+              "count": 120,
+              "dimensions": {
+                "cacheStatus": "dynamic",
+                "clientRequestHTTPHost": "api.acme.example",
+                "edgeResponseStatus": 200
+              },
+              "sum": {
+                "edgeResponseBytes": 240000
+              }
+            },
+            {
+              "count": 1,
+              "dimensions": {
+                "cacheStatus": "none",
+                "clientRequestHTTPHost": "api.acme.example",
+                "edgeResponseStatus": 301
+              },
+              "sum": {
+                "edgeResponseBytes": 100
+              }
+            },
+            {
+              "count": 5,
+              "dimensions": {
+                "cacheStatus": "none",
+                "clientRequestHTTPHost": "",
+                "edgeResponseStatus": 403
+              },
+              "sum": {
+                "edgeResponseBytes": 500
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "errors": null
+}

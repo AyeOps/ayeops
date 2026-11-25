@@ -1,0 +1,167 @@
+{% set hub = settings.provider == "agentgateway" %}
+services:
+{% if hub %}
+  mcp-tools:
+    image: busybox:1.37.0-musl@sha256:f6a95d611e0a8780fabdb2aec43e31275b2720dfefa3e41b16835bfc42454478
+    init: true
+    entrypoint: ["sh", "-c", "cp /bin/busybox /out/.busybox.tmp && mv -f /out/.busybox.tmp /out/busybox && exec sleep 2147483647"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - "mcp-tools:/out"
+    healthcheck:
+      test: ["CMD", "/out/busybox", "true"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+{% if mcp.s3 %}
+  mcp-s3-bin:
+    image: ghcr.io/txn2/mcp-s3:v1.5.1@sha256:c907ec59b4edd045c38d879d42fd117dfb3d396b61b2417243717fffb81bcc7d
+    user: "0:0"
+    init: true
+    entrypoint: ["sh", "-c", "cp /usr/local/bin/mcp-s3 /out/.mcp-s3.tmp && mv -f /out/.mcp-s3.tmp /out/mcp-s3 && cp /etc/ssl/certs/ca-certificates.crt /out/.ca.tmp && mv -f /out/.ca.tmp /out/ca-certificates.crt && exec sleep 2147483647"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - "mcp-s3:/out"
+    healthcheck:
+      test: ["CMD", "test", "-x", "/out/mcp-s3"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+{% endif %}
+  agentgateway:
+    image: ghcr.io/agentgateway/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b
+    command: ["-f", "/config/agentgateway.yaml"]
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      SESSION_KEY: "${AYE_MCP_SESSION_KEY:?set AYE_MCP_SESSION_KEY}"
+{% for name in mcp.secrets %}
+      {{ name }}: {{ ("${" ~ name ~ ":?set " ~ name ~ "}") | tojson }}
+{% endfor %}
+    volumes:
+      - "./mcp:/config:ro"
+      - "mcp-tools:/opt/aye/tools:ro"
+{% if mcp.s3 %}
+      - "mcp-s3:/opt/aye/s3:ro"
+{% endif %}
+    ports: ["3010:3000"]
+    depends_on:
+      mcp-tools:
+        condition: service_healthy
+{% if mcp.s3 %}
+      mcp-s3-bin:
+        condition: service_healthy
+{% endif %}
+    healthcheck:
+      test: ["CMD", "/opt/aye/tools/busybox", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:15021/healthz/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+{% if mcp.grafana %}
+  mcp-grafana:
+    image: grafana/mcp-grafana:2.1.1@sha256:71a3f4e6f412d253611314233df709ec2571fb50e39742d23fa2940f670646dc
+    entrypoint: ["/app/mcp-grafana"]
+    command:
+      - "--transport"
+      - "streamable-http"
+      - "--address"
+      - "0.0.0.0:8000"
+      - "--allowed-hosts"
+      - "mcp-grafana:8000"
+      - "--disable-write"
+{% if mcp.grafana.enable_write_tools %}
+      - "--enable-write-tools"
+      - {{ mcp.grafana.enable_write_tools | tojson }}
+{% endif %}
+      - "--metrics"
+      - "--metrics-address"
+      - "0.0.0.0:9090"
+      - "--healthz-address"
+      - "0.0.0.0:9090"
+      - "--usage-stats"
+      - "disabled"
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    group_add: [{{ grafana_reader.group | tojson }}]
+    environment:
+      GRAFANA_URL: {{ mcp.grafana.url | tojson }}
+      GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE: {{ grafana_reader.token_file | tojson }}
+      {{ grafana_reader.env }}: {{ grafana_reader.token_file | tojson }}
+      MCP_GRAFANA_SERVER_TOKEN: "${AYE_MCP_GRAFANA_SERVER_TOKEN:?set AYE_MCP_GRAFANA_SERVER_TOKEN}"
+    volumes:
+      - "mcp-tools:/opt/aye/tools:ro"
+      - {{ grafana_reader.volume | tojson }}
+    depends_on:
+      mcp-tools:
+        condition: service_healthy
+      {{ grafana_reader.service }}:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/opt/aye/tools/busybox", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+{% endif %}
+{% if mcp.victoriametrics %}
+  mcp-victoriametrics:
+    image: ghcr.io/victoriametrics/mcp-victoriametrics:v1.20.2@sha256:bcbf84f945d6efb03fb8b2d2ccc3294420dccdc0b445752dce96f02619416dfe
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      VM_INSTANCE_ENTRYPOINT: {{ mcp.victoriametrics.url | tojson }}
+      VM_INSTANCE_TYPE: single
+      MCP_SERVER_MODE: http
+      MCP_LISTEN_ADDR: 0.0.0.0:8080
+      MCP_LOG_FORMAT: json
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health/readiness"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+{% endif %}
+{% if mcp.catalog %}
+  mcp-catalog:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/catalog_server.py"]
+    user: "65534:65534"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      AYE_MCP_CATALOG_FILE: /data/catalog.json
+      AYE_MCP_CATALOG_PORT: "8000"
+    volumes:
+      - "./mcp-catalog/catalog_server.py:/app/catalog_server.py:ro"
+      - "./mcp-catalog/catalog.json:/data/catalog.json:ro"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+{% endif %}
+{% endif %}
+volumes:
+{% if hub %}
+  mcp-tools: {}
+{% if mcp.s3 %}
+  mcp-s3: {}
+{% endif %}
+{% endif %}
