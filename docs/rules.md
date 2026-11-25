@@ -137,6 +137,7 @@ once, at the anchor. The same loader reads:
 | `incidents-host-alert` | every entry of the incidents module's `host_alerts`, a name or the `alert:` of an entry with labels, is an alert of a module |
 | `sentinel-watch` | a sentinel's `watch` names a host of the manifest other than its own, in another `zone` when both hosts name one: one outage must not silence both |
 | `sentinel-checks` | a sentinel has at least one check after the defaults and overrides, and each has a known kind with its `url` or `host` |
+| `sentinel-digest` | a sentinel with `digest` knows where to read the backup metrics: its `digest.url`, or a `samples` check of kind `fresh` to take the url from |
 | `status-reporter` | the `status` module has a `status_page.hostname` to push to and at least one public component without a `probe`, which waits for its pushes |
 | `expose-bind` | a host that exposes ports declares `public_bind`; nothing is published on all interfaces by default |
 | `memory-budget` | the `mem_limit` of all services plus the host's `reserved` memory fits into `memory_budget_pct` (default 85 %) of the host `memory` |
