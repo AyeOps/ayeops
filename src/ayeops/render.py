@@ -227,15 +227,20 @@ def telegram_template(lang: str) -> str:
     )
 
 
+SLACK_TITLE = (
+    '{{ define "aye.slack.title" }}'
+    "{{ if .Alerts.Firing }}🔴{{ else }}✅{{ end }} {{ .CommonLabels.alertname }}"
+    "{{ if gt (len .Alerts) 1 }}{{ if .GroupLabels.scope }} · {{ .GroupLabels.scope }}"
+    "{{ end }}{{ end }}{{ end }}"
+)
+
+
 def slack_template(lang: str) -> str:
     return (
         SLACK_ESCAPE
         + message_parts(lang, SLACK_STYLE)
-        + '{{ define "aye.slack.title" }}'
-        '{{ if .Alerts.Firing }}🔴{{ else }}✅{{ end }} {{ .CommonLabels.alertname }}'
-        "{{ if gt (len .Alerts) 1 }}{{ if .GroupLabels.scope }} · {{ .GroupLabels.scope }}"
-        "{{ end }}{{ end }}{{ end }}"
-        '{{ define "aye.slack" }}{{ if gt (len .Alerts) 1 }}'
+        + SLACK_TITLE
+        + '{{ define "aye.slack" }}{{ if gt (len .Alerts) 1 }}'
         + message_groups(SLACK_STYLE)
         + "{{ else }}{{ range .Alerts }}"
         + escaped(".Annotations.summary")
