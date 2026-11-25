@@ -120,6 +120,11 @@ VictoriaMetrics `v1.153.0` single-node and vmagent `v1.153.0`.
 | `queue_max` | `1GB` | on-disk buffer per remote_write URL while the target is unreachable |
 | `remote_write` | none | `{host: <name>}` or `{url: <url>}`; required for `agent` |
 | `networks` | `[]` | existing docker networks vmagent joins besides its own, e.g. the default network of your application's compose project, so a scrape job reaches its services by name without a published port; declared `external`, so the application stack never depends on this one |
+| `backup` | `false` | `server` only: a daily snapshot archive of the store and a weekly restore test of it, see [backup of the store](#backup-of-the-store); needs [`backups`](#backups) on the host |
+| `backup_hour` | `2` | UTC hour from which the daily archive runs |
+| `backup_keep_days` | `2` | archives older than this many days are deleted after a new one is written |
+| `backup_dir` | `/var/backups/ayeops/metrics` | host directory of the archives, mounted at `/backups`; host-init creates it, root only |
+| `restore_test_days` | `7` | days between passing restore tests |
 
 vmagent labels every sample with `host=<host name>` and `project=<manifest project>`, and with
 `group=<group>` when the host has a [group](manifest.md#host) (its `group`, else its `profile`).
@@ -147,6 +152,94 @@ room; `metrics-shipping-dropped` (critical) when in the last hour the full queue
 or storage rejected one with `400` or `409`. The queue's own gauges travel through the queue:
 while a host cannot reach storage at all, `host-down` fires and holds both back, and the drops
 of such an outage show once the host reports again.
+
+### Backup of the store
+
+The store holds the history every dashboard, baseline, forecast and incident reads, and a copy
+of its live directory is no backup: VictoriaMetrics merges and deletes parts while it runs, so a
+plain copy can miss files or hold a mix of two moments. With `backup: true` the module takes
+the copy the way VictoriaMetrics supports, from an instant snapshot, and proves weekly that the
+copy opens. It is off by default because it costs disk, not a surprise: every archive is a
+full copy of the store on the host's disk, `backup_keep_days` of them plus one during the
+restore test. `aye check` warns (rule `metrics-backup`) for every `role: server` host without
+it, and fails when `backup` is set on an `agent` or on a host without `backups`.
+
+```yaml
+metrics:
+  role: server
+  backup: true
+backups: {}
+```
+
+| Service | Limit | Role |
+|---|---|---|
+| `victoriametrics-backup` | 512 MiB, 0.5 CPU | `metrics/backup.sh` on the pinned `victoria-metrics` image itself (its busybox `sh`, `wget` and `tar`, and the `victoria-metrics-prod` binary for the test), read-only root, no capabilities, the store's volume mounted read-only |
+
+**The archive.** Every 5 minutes, and first 2 minutes after the container starts, the script
+looks for today's archive; when there is none and the UTC hour has reached `backup_hour`, or
+when no archive exists at all, it
+
+1. asks the store for a snapshot, `GET /snapshot/create` on `victoriametrics:8428`, which
+   answers `{"status":"ok","snapshot":"<name>"}`. A snapshot is instant and takes no space at
+   first: hard links to the immutable parts below `<storage>/snapshots/<name>`, with relative
+   links from `data/small`, `data/big` and `data/indexdb` to the parts' own snapshot
+   directories and a copy of `metadata`;
+2. writes `tar -ch` of that directory to a dot-file in `/backups`, so `-h` stores the files the
+   links point to, not the links: VictoriaMetrics warns that `cp` or `rsync` of a snapshot
+   misses data, because they copy the links as links;
+3. deletes the snapshot with `GET /snapshot/delete?snapshot=<name>`, also when `tar` failed,
+   and renames the dot-file to `victoriametrics-<YYYYmmddTHHMMZ>.tar` only when it is complete
+   and not empty;
+4. deletes archives older than `backup_keep_days`.
+
+All of it runs through [`backups/backup_run.sh`](#backups), so each attempt reports as the
+backup job `metrics` (schedule `0 <backup_hour> * * *` UTC, threshold `93600`, 26 hours) with
+the same metrics and the same `backup-failed` and `backup-missing` as every other dump. The
+archive is not compressed: the parts are compressed already, and an uncompressed tar of the
+mostly unchanged parts deduplicates well in restic. A snapshot is never left behind for long:
+its name sits in `/backups/.snapshot` until the delete succeeded, the next pass deletes it when
+a run was killed, and VictoriaMetrics deletes snapshots older than `-snapshotsMaxAge` (3 days by
+default) on its own; `vm_snapshots` counts them.
+
+**Off-site.** The archives are files in `backup_dir` on the host, so [offsite](#offsite) copies
+them like any dump: `source: /var/backups/ayeops/metrics/victoriametrics-*.tar` with
+`verify: none` (a tar has no `pg_dump` header), and a `schedule` after `backup_hour` plus the
+archive's duration and `settle_minutes`. The off-site restore test then proves the bytes; the
+restore test below proves the store.
+
+**The restore test.** After the first archive and then every `restore_test_days`, the script
+unpacks the newest archive into `/backups/.restore`, starts a second VictoriaMetrics from the
+same image on it, listening on `127.0.0.1:8438` inside the container only, so nothing writes to
+it, with `-retentionPeriod=100y`, so it deletes nothing of the restored data, waits up to 10
+minutes for `/health`, and asks
+`count(last_over_time(up[1h]))` at one minute after the archive's time. The test passes when
+the answer is a number above 0: the archive opens as a store and holds the samples of the hour
+before it was taken. Then it stops the instance and deletes `/backups/.restore`, also after a
+failure; a failed test retries after 6 hours. It proves the archive restores into the pinned
+VictoriaMetrics; restoring it into the live store is the
+[runbook](runbooks/metrics-restore-test.md#restore-the-store-from-an-archive).
+
+Metrics in the node textfile directory (`ayeops_backup_restore_metrics.prom`), each with the
+label `backup="metrics"`: `ayeops_backup_restore_test_ok`,
+`ayeops_backup_restore_test_last_attempt_timestamp_seconds`,
+`ayeops_backup_restore_test_last_success_timestamp_seconds` (0 until the first pass),
+`ayeops_backup_restore_test_duration_seconds`, `ayeops_backup_restore_test_series` (the series
+of `up` found), `ayeops_backup_restore_test_backup_timestamp_seconds` (the time of the archive
+tested) and `ayeops_backup_restore_test_deadline_timestamp_seconds`, when a pass is due at the
+latest: the last pass, or the first start, plus `restore_test_days` plus one day. The textfile
+is also the test's state. They are a sibling of the off-site `ayeops_offsite_restore_test_*`,
+which has no `backup` label because it tests the one copy of its host; the `backup` label leaves
+room for restore tests of other dumps.
+
+Alert `metrics-restore-test` (warning, also on silence): the last test failed, or the deadline
+passed. It exists only while some host has `backup: true`. Runbook:
+[metrics-restore-test](runbooks/metrics-restore-test.md). The container touches
+`/tmp/backup.alive` on every pass and every minute of an archive or a test, which its
+healthcheck watches. Its variables: `AYE_BACKUP_DIR`, `AYE_STORAGE_DIR`, `AYE_TEXTFILE_DIR`,
+`AYE_VM_URL`, `AYE_BACKUP_HOUR`, `AYE_BACKUP_KEEP_DAYS`, `AYE_RESTORE_TEST_DAYS`, and for tests
+`AYE_BACKUP_ONCE=1` (one pass, no start delay), `AYE_BACKUP_CLOCK` (as for the
+[secrets](#secrets) dump), `AYE_RESTORE_CLOCK` (replaces `date +%s`), `AYE_BACKUP_FETCH`
+(replaces `wget -q -T 60 -O -`) and `AYE_VM_BINARY`.
 
 ## logs
 
@@ -3076,7 +3169,8 @@ Garage: [runbook](runbooks/offsite-append-only.md).
 ## backups
 
 The metrics contract of a host's dump jobs: the host's own `pg_dump`, `mysqldump` or `tar`, and
-the built-in dumps of [secrets](#secrets) and [errors](#errors). Every job runs its command
+the built-in dumps of [secrets](#secrets), [errors](#errors) and the
+[metrics store](#backup-of-the-store). Every job runs its command
 through the wrapper `backups/backup_run.sh` (POSIX sh), which writes start, end, success, size
 and duration into the [node](#node) textfile directory; the manifest declares the job with its
 cron schedule, and `aye check` turns the schedule into the age after which a job without a
@@ -3199,15 +3293,19 @@ the last successful run, kept across failed runs). The file is written to a temp
 renamed, so a scrape never reads half of it.
 
 **Built-in dumps.** A module that dumps its own database declares the job in its
-`module.yaml` (`backup_jobs`: name, service, schedule over its settings, zone, grace), and its
-dump container runs `pg_dump` through the same wrapper, mounted from `backups/backup_run.sh`.
-So `secrets` and `errors` require `backups` on their host (`backups: {}` is enough), and their
-dumps report under the label of the module:
+`module.yaml` (`backup_jobs`: name, service, schedule over its settings, zone, grace, and
+`when`, a setting that must be true for the job to exist), and its dump container runs
+`pg_dump`, or `tar` of a snapshot for the metrics store, through the same wrapper, mounted from
+`backups/backup_run.sh`.
+So `secrets` and `errors` require `backups` on their host (`backups: {}` is enough), as does
+`metrics` with `backup: true` (rule `metrics-backup`), and their dumps report under the label
+of the module:
 
 | Job | Service | Schedule | Threshold |
 |---|---|---|---|
 | `secrets` | `infisical-backup` | `0 <backup_hour> * * *` UTC | `93600` (26 hours) |
 | `errors` | `glitchtip-backup` | `0 <backup_hour> * * *` UTC | `93600` (26 hours) |
+| `metrics` | `victoriametrics-backup` | `0 <backup_hour> * * *` UTC, only with `backup: true` | `93600` (26 hours) |
 
 The container still decides when to dump (today's dump missing and the UTC hour at
 `backup_hour`, checked every 5 minutes) and still writes `<dump>-<YYYYmmddTHHMMZ>.dump` through

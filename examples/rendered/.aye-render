@@ -3,6 +3,8 @@ central/ai-usage/ai_usage_exporter.py
 central/auth/emails.txt
 central/autopilot/autopilot.py
 central/autopilot/catalog.json
+central/backups/backup_jobs.sh
+central/backups/backup_run.sh
 central/cloudflare/cloudflare_exporter.py
 central/compose.yaml
 central/delivery/rules.yml
@@ -35,6 +37,7 @@ central/logs/loki.yaml
 central/mcp-catalog/catalog.json
 central/mcp-catalog/catalog_server.py
 central/mcp/agentgateway.yaml
+central/metrics/backup.sh
 central/objectstore/garage.toml
 central/objectstore/objectstore_admin.py
 central/oncall/goalert_init.sh

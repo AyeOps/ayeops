@@ -237,23 +237,28 @@ def test_an_unknown_host_is_refused() -> None:
 
 def test_module_directories_come_from_the_manifest() -> None:
     data = example_data()
+    assert [path for path, *_ in plan_for(data).directories] == ["/var/backups/ayeops/metrics"]
+    data["hosts"]["central"]["modules"]["metrics"]["backup"] = False
     assert plan_for(data).directories == ()
+    data["hosts"]["central"]["modules"]["metrics"]["backup"] = True
     data["hosts"]["central"]["modules"]["node"] = {"textfile_dir": "/var/lib/ayeops/textfile"}
     data["hosts"]["central"]["modules"]["objectstore"]["data_dir"] = "/srv/garage/data"
     data["hosts"]["central"]["modules"]["objectstore"]["meta_dir"] = "/srv/garage/meta"
     directories = plan_for(data).directories
     assert [(path, owner, mode) for path, owner, mode, _ in directories] == [
+        ("/var/backups/ayeops/metrics", "0:0", "0700"),
         ("/var/lib/ayeops/textfile", "0:0", "0755"),
         ("/srv/garage/data", "0:0", "0700"),
         ("/srv/garage/meta", "0:0", "0700"),
     ]
-    assert directories[0][3].startswith("node: the textfile collectors")
+    assert directories[0][3].startswith("metrics: the archives of the metrics store")
+    assert directories[1][3].startswith("node: the textfile collectors")
     data["hosts"]["central"]["modules"]["objectstore"]["provider"] = "rest-server"
     del data["hosts"]["central"]["modules"]["objectstore"]["meta_dir"]
     for key in ("bucket", "region"):
         data["hosts"]["central"]["modules"]["objectstore"].pop(key, None)
     paths = [path for path, *_ in plan_for(data).directories]
-    assert paths == ["/var/lib/ayeops/textfile", "/srv/garage/data"]
+    assert paths == ["/var/backups/ayeops/metrics", "/var/lib/ayeops/textfile", "/srv/garage/data"]
 
 
 @needs_shell

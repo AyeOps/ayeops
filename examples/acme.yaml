@@ -35,6 +35,7 @@ hosts:
         role: server
         retention: 90d
         expose: [8428]
+        backup: true
       logs:
         role: server
         retention: 30d
@@ -128,6 +129,7 @@ hosts:
         bucket: acme-offsite
         quota: 40g
         expose: [3900]
+      backups: {}
   edge:
     arch: amd64
     zone: office

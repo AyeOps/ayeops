@@ -380,6 +380,26 @@ def test_offsite_backs_up_and_restores_the_file() -> None:
     assert restored == BACKUP_FILE.read_bytes()
 
 
+def test_the_metrics_store_is_archived_and_the_archive_restores() -> None:
+    host = central()
+    assert "victoriametrics-backup" in compose(host)["services"]
+
+    def reported() -> None:
+        found = {
+            name: values(f'ayeops_backup_{name}{{backup="metrics",host="{host}"}}')
+            for name in ("last_run_success", "last_size_bytes", "restore_test_ok")
+        }
+        found["series"] = values(f'ayeops_backup_restore_test_series{{host="{host}"}}')
+        found["snapshots"] = values(f'vm_snapshots{{host="{host}"}}')
+        assert found["last_run_success"] == [1.0], found
+        assert found["last_size_bytes"] and found["last_size_bytes"][0] > 0, found
+        assert found["restore_test_ok"] == [1.0], found
+        assert found["series"] and found["series"][0] >= 1, found
+        assert found["snapshots"] == [0.0], found
+
+    eventually(reported)
+
+
 def docker_images() -> list[str]:
     output = subprocess.run(
         ["docker", "image", "ls", "-a", "-q", "--no-trunc"],

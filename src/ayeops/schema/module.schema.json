@@ -98,7 +98,8 @@
           "service": {"$ref": "#/$defs/name"},
           "schedule": {"type": "string", "minLength": 1},
           "timezone": {"type": "string", "pattern": "^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$"},
-          "grace": {"type": "string", "pattern": "^[1-9][0-9]{0,3}[mh]$"}
+          "grace": {"type": "string", "pattern": "^[1-9][0-9]{0,3}[mh]$"},
+          "when": {"type": "string", "pattern": "^[a-z_][a-z0-9_]*$"}
         }
       }
     }

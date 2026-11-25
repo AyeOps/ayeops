@@ -1960,6 +1960,43 @@ groups:
     noDataState: OK
     title: vmagent drops metrics
     uid: aye-metrics-shipping-dropped
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-restore-test.md
+      summary: The restore test of the metrics store backup on {{ .Labels.host }} failed, or none passed within restore_test_days plus one
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, backup) ((time() > bool ayeops_backup_restore_test_deadline_timestamp_seconds) + ((ayeops_backup_restore_test_ok == bool 0) or (ayeops_backup_restore_test_deadline_timestamp_seconds * 0)))) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, backup) ((time() > bool ayeops_backup_restore_test_deadline_timestamp_seconds) + ((ayeops_backup_restore_test_ok == bool 0) or (ayeops_backup_restore_test_deadline_timestamp_seconds * 0))))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: metrics
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: Alerting
+    title: Metrics store restore test failed or overdue
+    uid: aye-metrics-restore-test
 - folder: AyeOps
   interval: 1m
   name: network
