@@ -2135,7 +2135,7 @@ groups:
     data:
     - datasourceUid: victoriametrics
       model:
-        expr: 1 - (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) + on (host) group_right () (0 * last_over_time(up{job="node"}[1d])))
+        expr: (1 - (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) + on (host) group_right () (0 * last_over_time(up{job="node"}[1d])))) unless on (host) (label_replace(max by (peer) (probe_success{job="blackbox-link"} unless on (zone) (max by (zone) (probe_success{job="blackbox-link"}) > 0)), "host", "$$1", "peer", "(.+)")) or 0 * (1 - (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) + on (host) group_right () (0 * last_over_time(up{job="node"}[1d]))))
         instant: true
         refId: A
       refId: A
@@ -2836,6 +2836,45 @@ groups:
     noDataState: OK
     title: Probe failing
     uid: aye-probe-failing
+  - annotations:
+      __dashboardUid__: ayeops-probes
+      __panelId__: '5'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/link-down.md
+      summary: '{{ .Labels.host }} gets no ping back from any probed host of {{ .Labels.zone }} over the private network'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, zone) (probe_success{job="blackbox-link"}) == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, zone) (probe_success{job="blackbox-link"}) == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 3m
+    labels:
+      module: probes
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: Private network link down
+    uid: aye-link-down
   - annotations:
       __dashboardUid__: ayeops-probes
       __panelId__: '3'

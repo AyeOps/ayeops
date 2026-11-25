@@ -561,6 +561,17 @@
       "summary": "{{ .Labels.device }} on {{ .Labels.host }} has been down for 5 minutes",
       "title": "Network interface down"
     },
+    "link-down": {
+      "expr": "max by (host, project, group, zone) (probe_success{job=\"blackbox-link\"}) == bool 0",
+      "for": "3m",
+      "module": "probes",
+      "name": "link-down",
+      "runbook": "link-down",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/link-down.md",
+      "severity": "critical",
+      "summary": "{{ .Labels.host }} gets no ping back from any probed host of {{ .Labels.zone }} over the private network",
+      "title": "Private network link down"
+    },
     "link-speed-degraded": {
       "expr": "(node_network_speed_bytes{job=\"network\"} > 0) < bool max_over_time(node_network_speed_bytes{job=\"network\"}[7d])",
       "for": "10m",
@@ -1343,7 +1354,7 @@
     },
     "host-down": {
       "name": "host-down",
-      "text": "# Host down\n\nNo fresh node metrics from the host for three minutes: the machine is off or asleep, vmagent cannot reach storage, or node-exporter is down.\n\n## What to do\n\n1. Is the host reachable at all (ping, ssh)? A laptop that sleeps fires this by design. If the\n   host is expected to disappear (a workstation switched off at night, a machine on an\n   unreliable link), mark it `volatile: true` in the manifest: `host-down` then leaves it out\n   and [host-gone](host-gone.md) warns only after it has been away for a day, or the duration\n   given. If the outage is planned and recurs (an update night, a weekly backup run that takes\n   the box down), declare a `maintenance` window on the host instead of a silence in Grafana:\n   it lives in the manifest, so nobody forgets it ([manifest](../manifest.md#volatile-hosts-and-maintenance-windows)).\n2. On the host: `docker compose ps`; vmagent buffers to disk while storage is unreachable and replays when it is back. The buffer lasts until `queue_max` is full, then [metrics-shipping-dropped](metrics-shipping-dropped.md) follows; `curl -s http://127.0.0.1:8429/metrics | grep pending_data_bytes` on the host shows its size in bytes.\n3. On the central host: is VictoriaMetrics up and is port 8428 reachable from the edge over the private address?\n4. While the host is down its other alerts are held back (value 0 in Grafana, see `docs/modules.md`, grafana). Once `host-down` resolves, look at what fires on the host in the next minutes: that is what was hidden.\n5. Fired right after a maintenance window of the host ended? The window holds the alert back\n   only while it is open; a host still down two minutes after its end is down.\n",
+      "text": "# Host down\n\nNo fresh node metrics from the host for three minutes: the machine is off or asleep, vmagent cannot reach storage, or node-exporter is down.\n\n## What to do\n\n1. Is the host reachable at all (ping, ssh)? A laptop that sleeps fires this by design. If the\n   host is expected to disappear (a workstation switched off at night, a machine on an\n   unreliable link), mark it `volatile: true` in the manifest: `host-down` then leaves it out\n   and [host-gone](host-gone.md) warns only after it has been away for a day, or the duration\n   given. If the outage is planned and recurs (an update night, a weekly backup run that takes\n   the box down), declare a `maintenance` window on the host instead of a silence in Grafana:\n   it lives in the manifest, so nobody forgets it ([manifest](../manifest.md#volatile-hosts-and-maintenance-windows)).\n2. On the host: `docker compose ps`; vmagent buffers to disk while storage is unreachable and replays when it is back. The buffer lasts until `queue_max` is full, then [metrics-shipping-dropped](metrics-shipping-dropped.md) follows; `curl -s http://127.0.0.1:8429/metrics | grep pending_data_bytes` on the host shows its size in bytes.\n3. On the central host: is VictoriaMetrics up and is port 8428 reachable from the edge over the private address?\n   A host that `probes.links` pings is held back while none of its zone answers: then\n   [link-down](link-down.md) fires once for the zone instead. A `host-down` of such a host means\n   the host still answers ping, or another host of its zone does, so the link is up and the host\n   itself stopped reporting.\n4. While the host is down its other alerts are held back (value 0 in Grafana, see `docs/modules.md`, grafana). Once `host-down` resolves, look at what fires on the host in the next minutes: that is what was hidden.\n5. Fired right after a maintenance window of the host ended? The window holds the alert back\n   only while it is open; a host still down two minutes after its end is down.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/host-down.md"
     },
     "host-drift": {
@@ -1385,6 +1396,11 @@
       "name": "interface-down",
       "text": "# Network interface down\n\nA declared network interface has been down (no carrier, no association, or not present) for 5\nminutes. Only the interfaces listed in `network.interfaces` are watched.\n\n## What to do\n\n1. `ip -br link` and `ip -br addr` on the host.\n2. Wired: cable, switch port, and `ethtool <device>` for link detection and negotiated speed.\n3. Wi-Fi: `iw dev <device> link`, `nmcli device status`; is the access point up?\n4. If the interface is gone on purpose (an undocked laptop, a removed USB adapter), remove it\n   from `network.interfaces`.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/interface-down.md"
+    },
+    "link-down": {
+      "name": "link-down",
+      "text": "# Private network link down\n\nThe host in the `host` label has pinged every host of `zone` it probes over the private network\n(`probes.links`, the `address` of each host) for 3 minutes and none answered. A host without a\n`zone` is a zone of its own, named after the host. While the zone is unreachable, `host-down` of\nits probed hosts is held back, so a tunnel or a site that drops shows as this one alert instead\nof a `host-down` per host.\n\nIt reads the same for three causes: the tunnel between the sites is down (WireGuard, Tailscale,\nany VPN), the site lost its uplink, or the site lost power. From the probing host they look\nalike; the steps below tell them apart.\n\n## What to do\n\n1. Look at the dashboard `AyeOps / Probes`, panel \"Private network links\": does the probing host\n   reach the other zones? If every zone is red at once, the problem is on the probing host's\n   side: its own VPN interface (`ip -br addr`, `wg show` or `tailscale status` there) or its\n   uplink.\n2. Only this zone is red: is the site on the internet at all? Its public services (the\n   `probe-failing` alerts of services on its hosts), the [sentinel](../modules.md#sentinel) on a\n   host there, or someone on site tell. A site that is online with the tunnel down is a VPN\n   problem: on a host of the zone, `wg show` (latest handshake older than about two minutes with\n   traffic flowing means the peer is not answering), `tailscale status`, or the VPN client's log;\n   then the firewall, a changed public address of the endpoint, an expired key or login.\n3. The site is offline too: power or the provider. Nothing in the fleet can help from outside;\n   the hosts' vmagent queues hold their metrics and replay them when the link is back, so the\n   dashboards fill in the gap afterwards.\n4. The hosts answer `ssh` over the private address but not ping: ICMP is filtered on the VPN\n   interface. Allow echo requests from the probing host there, or drop the host from\n   `probes.links`; with only ICMP blocked this alert fires while everything works.\n5. When the alert resolves, `host-down` of the zone's hosts evaluates again: a host that still\n   does not report two minutes later is down by itself, not by the link.\n",
+      "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/link-down.md"
     },
     "link-speed-degraded": {
       "name": "link-speed-degraded",
@@ -1694,9 +1710,10 @@
       "alerts": [
         "target-down",
         "probe-failing",
-        "tls-expiring"
+        "tls-expiring",
+        "link-down"
       ],
-      "description": "Probes the configured URLs for a 2xx answer and their TLS certificate expiry, and pings the gateway and public addresses and asks public resolvers from the host.",
+      "description": "Probes the configured URLs for a 2xx answer and their TLS certificate expiry, pings the gateway and public addresses and asks public resolvers from the host, and pings the private address of other hosts.",
       "host": "central",
       "id": "central/blackbox",
       "logs": "docker",
@@ -2451,9 +2468,10 @@
       "alerts": [
         "target-down",
         "probe-failing",
-        "tls-expiring"
+        "tls-expiring",
+        "link-down"
       ],
-      "description": "Probes the configured URLs for a 2xx answer and their TLS certificate expiry, and pings the gateway and public addresses and asks public resolvers from the host.",
+      "description": "Probes the configured URLs for a 2xx answer and their TLS certificate expiry, pings the gateway and public addresses and asks public resolvers from the host, and pings the private address of other hosts.",
       "host": "edge",
       "id": "edge/blackbox",
       "logs": "docker",
