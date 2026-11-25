@@ -1,5 +1,12 @@
 # AyeOps
 
+[![ci](https://github.com/AyeOps/ayeops/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AyeOps/ayeops/actions/workflows/ci.yml)
+[![e2e](https://github.com/AyeOps/ayeops/actions/workflows/e2e.yml/badge.svg)](https://github.com/AyeOps/ayeops/actions/workflows/e2e.yml)
+[![release](https://img.shields.io/github/v/release/AyeOps/ayeops?label=release)](https://github.com/AyeOps/ayeops/releases)
+[![license](https://img.shields.io/github/license/AyeOps/ayeops)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.13%2B-3776ab)](pyproject.toml)
+[![platforms](https://img.shields.io/badge/images-amd64%20%7C%20arm64-2ea44f)](docs/modules.md)
+
 AyeOps is an open-source ops kit for small fleets: a laptop, a home server, a cheap ARM VM.
 You describe hosts and services in one manifest; `aye check` refuses a service that ships
 without a description, a metric, an alert with a runbook, a log source and a status-page mark,
