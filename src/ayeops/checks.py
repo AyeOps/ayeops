@@ -13,7 +13,11 @@ DEFAULT_INTERVAL = 60
 DEFAULT_TIMEOUT = 10
 DEFAULT_FOR = "5m"
 BLACKBOX = "check-blackbox:9116"
-BLACKBOX_TYPES = ("http", "tcp", "dns")
+BLACKBOX_TYPES = ("http", "tcp", "smtp", "dns")
+SMTP_IMPLICIT_TLS_PORT = 465
+SMTP_PLAIN_PORTS = (25, 587)
+SMTP_READY = "^220( |$)"
+SMTP_OK = "^250( |$)"
 SCRAPE_SLACK = 60
 
 Problem = tuple[str, str, str]
@@ -68,7 +72,7 @@ class Check:
     def target(self) -> str:
         if self.type == "http":
             return str(self.spec["url"])
-        if self.type == "tcp":
+        if self.type in ("tcp", "smtp"):
             return str(self.spec["address"])
         if self.type == "dns":
             return str(self.spec["name"])
@@ -216,12 +220,44 @@ def dns_module(check: Check, prober: dict[str, Any]) -> dict[str, Any]:
     return prober
 
 
-def blackbox_module(check: Check) -> dict[str, Any]:
+def smtp_port(check: Check) -> int:
+    return int(check.target.rsplit(":", 1)[1])
+
+
+def smtp_tls(check: Check) -> str:
+    implicit = smtp_port(check) == SMTP_IMPLICIT_TLS_PORT
+    return str(check.spec.get("tls") or ("tls" if implicit else "starttls"))
+
+
+def smtp_ehlo(manifest: Manifest, check: Check) -> str:
+    mail = manifest.mail
+    return str(check.spec.get("ehlo") or (mail["from"].rpartition("@")[2] if mail else ""))
+
+
+def smtp_module(check: Check, prober: dict[str, Any], ehlo: str) -> dict[str, Any]:
+    hello = [{"send": f"EHLO {ehlo}\r"}, {"expect": SMTP_OK}]
+    steps: list[dict[str, Any]] = [{"expect": SMTP_READY}, *hello]
+    tls = smtp_tls(check)
+    if tls == "starttls":
+        steps += [{"send": "STARTTLS\r"}, {"expect": SMTP_READY}, {"starttls": True}, *hello]
+    tcp: dict[str, Any] = {
+        "preferred_ip_protocol": "ip4",
+        "query_response": [*steps, {"send": "QUIT\r"}],
+    }
+    if tls == "tls":
+        tcp["tls"] = True
+    prober["tcp"] = tcp
+    return prober
+
+
+def blackbox_module(check: Check, ehlo: str) -> dict[str, Any]:
     prober: dict[str, Any] = {"prober": check.type, "timeout": f"{check.timeout}s"}
     if check.type == "http":
         return http_module(check, prober)
     if check.type == "dns":
         return dns_module(check, prober)
+    if check.type == "smtp":
+        return smtp_module(check, {**prober, "prober": "tcp"}, ehlo)
     prober["tcp"] = {"preferred_ip_protocol": "ip4"}
     return prober
 
@@ -331,7 +367,12 @@ def checks_context(manifest: Manifest, host: str, settings: dict[str, Any]) -> d
     sql = sql_group(manifest, checks)
     return {
         "probes": [check.id for check in probes],
-        "blackbox": {"modules": {c.blackbox_module: blackbox_module(c) for c in probes}},
+        "blackbox": {
+            "modules": {
+                check.blackbox_module: blackbox_module(check, smtp_ehlo(manifest, check))
+                for check in probes
+            }
+        },
         "jobs": [blackbox_job(check, settings) for check in probes],
         "scripts": scripts,
         "scripts_net": scripts_net,
@@ -370,6 +411,8 @@ def check_problems(manifest: Manifest) -> list[Problem]:
             )
         if check.backend == "sql":
             problems.extend(sql_problems(manifest, check, enabled))
+        if check.type == "smtp":
+            problems.extend(smtp_problems(manifest, check))
         if check.timeout >= check.interval:
             problems.append(
                 (
@@ -400,4 +443,38 @@ def sql_problems(manifest: Manifest, check: Check, enabled: set[str]) -> list[Pr
     problem = sql_query_problem(str(check.spec.get("query") or ""))
     if problem:
         problems.append((path, "check-sql-query", problem))
+    return problems
+
+
+def smtp_problems(manifest: Manifest, check: Check) -> list[Problem]:
+    problems: list[Problem] = []
+    port = smtp_port(check)
+    implicit = smtp_tls(check) == "tls"
+    if implicit and port in SMTP_PLAIN_PORTS:
+        problems.append(
+            (
+                check.path,
+                "check-smtp",
+                f"port {port} greets in plain text and upgrades with STARTTLS, use tls: starttls "
+                f"or none; TLS from the first byte is port {SMTP_IMPLICIT_TLS_PORT}",
+            )
+        )
+    if port == SMTP_IMPLICIT_TLS_PORT and not implicit:
+        problems.append(
+            (
+                check.path,
+                "check-smtp",
+                f"port {SMTP_IMPLICIT_TLS_PORT} speaks TLS from the first byte, "
+                "use tls: tls or leave tls out",
+            )
+        )
+    if not smtp_ehlo(manifest, check):
+        problems.append(
+            (
+                check.path,
+                "check-smtp",
+                "the probe greets with EHLO <name>: set ehlo: <hostname>, or mail.from to take "
+                "its domain",
+            )
+        )
     return problems
