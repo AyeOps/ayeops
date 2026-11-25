@@ -247,7 +247,9 @@ Removing `status_page.access` and deploying closes the admin API again.
 
 `GET /` renders HTML on the server: overall banner, open incidents (and those resolved in the
 last 24 hours), planned and running maintenance, every component with its current state and 90
-daily bars, and the time of the last update. It loads no scripts, fonts, images or stylesheets
+daily bars, the time of the last update, and in the footer a "Powered by AyeOps" link to the
+[project](https://github.com/AyeOps/ayeops) (`rel="noopener noreferrer"`, so the page's address
+is not sent along). It loads no scripts, fonts, images or stylesheets
 (the CSP forbids them), follows the light or dark preference of the device, and fits a phone
 screen.
 
