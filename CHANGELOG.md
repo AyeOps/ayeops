@@ -18,6 +18,15 @@ and was never tagged.
   vmagent queue holds more than 30 minutes of its own traffic or more than half of its room, and
   `metrics-shipping-dropped` (critical), when in the last hour the full queue dropped blocks or
   storage rejected one.
+- Hosts declare expected downtime in the manifest instead of a silence in Grafana
+  ([volatile hosts and maintenance windows](docs/manifest.md#volatile-hosts-and-maintenance-windows)).
+  `volatile: true`, or a duration from `1h` to `7d`, leaves a host out of `host-down`; the new
+  warning `host-gone` fires once it has been away for a day, or the duration, so a workstation
+  switched off at night never pages. `maintenance: [{days, start, duration}]` (UTC, at most 24
+  hours, crossing midnight and the week as needed) holds back every alert of the host,
+  `host-down` included, while a window is open. The alerts of the services declared on such a
+  host are held too, whichever host probes them. Rules `host-volatile` and
+  `maintenance-window` check both.
 
 ### Changed
 
