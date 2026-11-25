@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 import yaml
 
+from ayeops.cli import main as cli_main
 from ayeops.render import HOSTS_DOWN, NODE_UP
 from tests.e2e.stack import (
     BACKUP_FILE,
@@ -315,6 +316,63 @@ def test_grafana_dashboards_match_the_render() -> None:
     actual = [item["uid"] for item in grafana("/api/search?type=dash-db&limit=5000")]
     assert len(actual) == len(expected)
     assert set(actual) == expected
+
+
+def grafana_send(method: str, path: str, body: Any = None) -> int:
+    env = dotenv(central())
+    token = f"{env['AYE_GRAFANA_ADMIN_USER']}:{env['AYE_GRAFANA_ADMIN_PASSWORD']}"
+    request = urllib.request.Request(
+        f"http://{published(central(), 'grafana', 3000)}{path}",
+        data=None if body is None else json.dumps(body).encode(),
+        method=method,
+        headers={
+            "Authorization": "Basic " + base64.b64encode(token.encode()).decode(),
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return int(response.status)
+
+
+def test_dashboards_drift_finds_a_dashboard_drawn_in_the_ui_and_pull_writes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    env = dotenv(central())
+    monkeypatch.setenv("AYE_GRAFANA_ADMIN_USER", env["AYE_GRAFANA_ADMIN_USER"])
+    monkeypatch.setenv("AYE_GRAFANA_ADMIN_PASSWORD", env["AYE_GRAFANA_ADMIN_PASSWORD"])
+    url = f"http://{published(central(), 'grafana', 3000)}"
+    drift = ["dashboards", "drift", str(MANIFEST), "--url", url, "--format", "json"]
+
+    def counted() -> None:
+        assert values("ayeops_grafana_reader_dashboards_unmanaged") == [0.0]
+
+    eventually(counted)
+    assert cli_main(drift) == 0, capsys.readouterr()
+    panel = {
+        "id": 1,
+        "type": "timeseries",
+        "title": "Targets up",
+        "datasource": {"type": "prometheus", "uid": "victoriametrics"},
+        "targets": [{"refId": "A", "expr": "up"}],
+    }
+    board = {"uid": "e2e-drawn", "title": "E2E drawn by hand", "panels": [panel]}
+    assert grafana_send("POST", "/api/dashboards/db", {"dashboard": board}) == 200
+    try:
+        capsys.readouterr()
+        assert cli_main(drift) == 1
+        found = json.loads(capsys.readouterr().out)["drift"]
+        assert [(entry["kind"], entry["uid"]) for entry in found] == [("unmanaged", "e2e-drawn")]
+        pull = ["dashboards", "pull", str(MANIFEST), "--url", url, "-o", str(tmp_path)]
+        assert cli_main(pull) == 0
+        pulled = json.loads((tmp_path / "e2e-drawn.json").read_text(encoding="utf-8"))
+        assert "id" not in pulled and "version" not in pulled
+        assert (pulled["uid"], pulled["title"]) == ("e2e-drawn", "E2E drawn by hand")
+        assert pulled["panels"][0]["datasource"] == panel["datasource"]
+        assert cli_main(pull) == 0
+        assert "1 unchanged" in capsys.readouterr().out
+    finally:
+        grafana_send("DELETE", "/api/dashboards/uid/e2e-drawn")
+    assert cli_main(drift) == 0
 
 
 def loki(query: str, since: float) -> list[str]:

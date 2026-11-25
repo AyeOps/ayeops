@@ -14,6 +14,18 @@ and was never tagged.
 
 ### Added
 
+- `aye dashboards drift <manifest>`: lists the dashboards in Grafana that no file provisions,
+  the provisioned ones the render no longer has and the rendered ones Grafana lacks, and exits 1
+  on any, for CI or cron; `--format json` for scripts. `aye dashboards pull <manifest>` writes the
+  unprovisioned ones into `grafana.dashboards` as `<uid>.json` without `id` and `version`, with
+  the manifest's datasource uids and sorted keys, and refuses to replace a different file
+  without `--force`; the next deploy provisions each under the same uid. Both read Grafana with
+  `AYE_GRAFANA_ADMIN_USER` and `AYE_GRAFANA_ADMIN_PASSWORD` from the environment and refuse plain
+  `http` to anything but a loopback address.
+- `grafana`: `grafana-reader` counts the dashboards no file provisions as
+  `ayeops_grafana_reader_dashboards_unmanaged`, and the `info` alert `dashboards-unmanaged`
+  fires when there have been some for a day.
+
 - `metrics`: the alerts `metrics-shipping-backlog` (warning), when for 15 minutes a host's
   vmagent queue holds more than 30 minutes of its own traffic or more than half of its room, and
   `metrics-shipping-dropped` (critical), when in the last hour the full queue dropped blocks or

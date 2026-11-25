@@ -47,6 +47,8 @@ class FakeGrafana:
         self.annotations = 5
         self.forbidden: set[str] = set()
         self.down = False
+        self.dashboards: dict[str, Any] = {}
+        self.dashboard_status = 200
         self.calls: list[tuple[str, str]] = []
 
     def new_id(self) -> int:
@@ -88,6 +90,16 @@ class FakeGrafana:
 
     def as_admin(self, method: str, path: str, query: str, body: Any) -> tuple[int, bytes]:
         parts = path.strip("/").split("/")
+        if path == "/api/search":
+            asked = urllib.parse.parse_qs(query)
+            limit, page = int(asked["limit"][0]), int(asked["page"][0])
+            hits = [{"uid": uid, "type": "dash-db"} for uid in self.dashboards]
+            return 200, json.dumps(hits[(page - 1) * limit : page * limit]).encode()
+        if path.startswith("/api/dashboards/uid/"):
+            uid = urllib.parse.unquote(path.removeprefix("/api/dashboards/uid/"))
+            meta = {"provisioned": self.dashboards[uid]}
+            answer = {"meta": meta, "dashboard": {"uid": uid}}
+            return self.dashboard_status, json.dumps(answer).encode()
         if path == "/api/serviceaccounts/search":
             name = urllib.parse.parse_qs(query)["query"][0]
             found = [a for a in self.accounts.values() if name in a["name"]]
@@ -287,6 +299,61 @@ def test_the_token_file_is_written_whole_with_mode_0440(tmp_path: Path) -> None:
     assert path.read_text(encoding="utf-8") == "glsa_two\n"
     assert stat.S_IMODE(path.stat().st_mode) == 0o440
     assert [p.name for p in tmp_path.iterdir()] == ["token"]
+
+
+def test_the_reader_counts_the_dashboards_no_file_provisions(tmp_path: Path) -> None:
+    grafana = FakeGrafana()
+    grafana.dashboards = {"ayeops-health": True, "drawn": False, "a b": "yes", "kept": True}
+    rec = reconciler(grafana, tmp_path)
+    assert rec.refresh().ok
+    assert metric(rec.metrics(), "dashboards_unmanaged") == "2"
+    assert ("GET", "/api/dashboards/uid/a%20b") in grafana.calls
+    grafana.dashboards = {"ayeops-health": True}
+    rec.refresh()
+    assert metric(rec.metrics(), "dashboards_unmanaged") == "0"
+
+
+def test_the_dashboard_count_reads_every_page_as_admin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(reader, "SEARCH_LIMIT", 2)
+    grafana = FakeGrafana()
+    grafana.dashboards = {"a": False, "b": True, "c": False, "d": False}
+    client = reader.Grafana("http://grafana:3000", grafana)
+    assert reader.dashboard_uids(client, ADMIN) == ["a", "b", "c", "d"]
+    assert grafana.calls.count(("GET", "/api/search")) == 3
+    assert reader.count_unmanaged(client, ADMIN) == 3
+    assert reader.SEARCH_LIMIT == 2
+
+
+def test_a_failing_count_drops_the_metric_and_logs_once(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    grafana = FakeGrafana()
+    grafana.dashboards = {"drawn": False}
+    rec = reconciler(grafana, tmp_path)
+    rec.refresh()
+    capsys.readouterr()
+    grafana.dashboard_status = 500
+    assert rec.refresh().ok
+    rec.refresh()
+    text = rec.metrics()
+    assert "dashboards_unmanaged" not in text
+    assert metric(text, "ok") == "1"
+    assert capsys.readouterr().err == (
+        "grafana-reader: dashboards: GET /api/dashboards/uid/drawn answered HTTP 500\n"
+    )
+    grafana.dashboard_status = 200
+    rec.refresh()
+    assert metric(rec.metrics(), "dashboards_unmanaged") == "1"
+    assert capsys.readouterr().err == "grafana-reader: dashboards: counted again\n"
+
+
+def test_metrics_carry_the_count_only_once_there_is_one() -> None:
+    assert "dashboards_unmanaged" not in reader.metrics_text(reader.State())
+    assert f"{reader.PREFIX}dashboards_unmanaged 0\n" in reader.metrics_text(
+        reader.State(unmanaged=0)
+    )
 
 
 def test_metrics_omit_the_success_time_before_a_success() -> None:

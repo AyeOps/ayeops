@@ -2226,6 +2226,76 @@ With [`auth`](#auth) on the same host Grafana signs people in itself with the sa
 `admins` get `GrafanaAdmin`, the other `emails` get `Viewer`, and `role_attribute_strict` refuses
 every other account. The admin password form stays as break-glass.
 
+### Dashboards drawn in Grafana
+
+Every provisioned dashboard is read-only (`allowUiUpdates: false`), so a dashboard someone
+needs is drawn in the UI or saved as a copy of a provisioned one, and then lives only in
+Grafana's database: nobody reviews it, the repository has no copy, and it goes with the
+`grafana-data` volume. Two commands bring it back to the repository; both read Grafana with the
+admin credentials and change nothing in it.
+
+```sh
+aye secrets run -- aye dashboards drift ops/ayeops.yaml
+aye secrets run -- aye dashboards pull ops/ayeops.yaml
+```
+
+`aye dashboards drift <manifest>` runs the check, lists every dashboard of Grafana's search
+(`GET /api/search?type=dash-db`, 5000 a page), reads each one (`GET /api/dashboards/uid/<uid>`)
+for its `meta.provisioned`, and compares the uids with the dashboards the render provisions,
+the modules' and the `dashboards` directory's:
+
+```text
+unmanaged sales-funnel "Sales funnel" in Shared: no file provisions it, aye dashboards pull writes it
+stale old-board "Old board" in AyeOps: provisioned, but the render no longer has it, a deploy removes it
+not-deployed acme-orders "Acme / Orders": rendered, but Grafana does not provision it yet, deploy the Grafana host
+ops/ayeops.yaml: 1 unmanaged, 1 stale, 1 not-deployed among the 14 dashboard(s) in https://grafana.ops.acme.example
+```
+
+It exits 1 when any line is printed, so CI or cron can run it, 0 with
+`... all 13 dashboard(s) in <url> are provisioned from the render`, and 2 when Grafana cannot be
+read. `--format json` prints `{"grafana": <url>, "dashboards": <count>, "drift": [{"kind",
+"uid", "title", "folder"}, ...]}` instead, with the same exit codes. It compares uids, not
+contents: Grafana refuses to save a provisioned dashboard from the UI, so a provisioned copy
+differs from its file only when the host runs an older render, which
+[`aye diff`](deploy.md#diff) shows file by file.
+
+`aye dashboards pull <manifest> [--uid <uid> ...] [-o <dir>] [--force]` writes every
+dashboard that is not provisioned (or the `--uid` ones, which must exist and not be
+provisioned) into `dashboards`, as `<uid>.json`, or into the file there that already has that
+uid:
+
+- the top-level `id`, `version`, `iteration`, `folderId` and `folderUid` are dropped; the
+  `uid`, the title, the panels and their ids stay;
+- every `datasource` is written the way the module dashboards write it: a reference to
+  `victoriametrics`, `loki` or a `datasources` uid stays, a datasource name becomes
+  `{"type": ..., "uid": ...}` of the provisioned one, and a uid Grafana knows under a
+  provisioned name (`GET /api/datasources`) becomes that name's uid; a built-in or a
+  `${variable}` stays; anything else stays as it is with a `warning`, since `aye check` refuses
+  it until it is declared;
+- the JSON is written with sorted keys and an indent of two, the form of the render, so a
+  second pull of the same dashboard writes nothing (`unchanged`) and a diff shows what changed;
+- a file that differs is `refused` (exit 1) unless `--force`; a uid that is not 1 to 40 of
+  `A-Z a-z 0-9 - _` is refused, since it names the file.
+
+`dashboards` must be set and hold a `*.json` for the check to pass, so on a manifest without it
+pull into a new directory with `-o dashboards` first and then set `dashboards: dashboards`.
+After a render and a deploy, Grafana provisions each pulled dashboard under its uid in the
+project's folder: file provisioning saves with overwrite, so the UI copy becomes the provisioned
+one and its links keep working.
+
+The URL is `--url`, else `AYE_GRAFANA_URL`, else `root_url` (or the ingress route that the
+`auth` module makes it). The credentials are `AYE_GRAFANA_ADMIN_USER` and
+`AYE_GRAFANA_ADMIN_PASSWORD`, the generated pair Grafana starts with, taken from the
+environment only (for example under `aye secrets run`); they go out as basic auth and never into
+output or an error message. Plain `http` is refused unless the host is a loopback address, for
+an ssh tunnel to the published `127.0.0.1:3000`; redirects are not followed.
+
+With the [`grafana-reader`](#grafana-reader) rendered, the reader also counts these dashboards
+every 5 minutes as `ayeops_grafana_reader_dashboards_unmanaged`, and the `info` alert
+[`dashboards-unmanaged`](runbooks/dashboards-unmanaged.md) fires when the count has been above
+zero for a day. Without the reader there is no count and no alert; `aye dashboards drift` and
+its exit code are the signal.
+
 ### grafana-reader
 
 Agents that read Grafana (the `status` reporter, the `incidents` journal, the autopilot, the
@@ -2249,7 +2319,12 @@ then, every 5 minutes:
    (temporary file, `fsync`, rename) and then deletes every other token of the account, so a
    token that leaked before stops working;
 4. compares what the token sees with what the admin sees, and serves the result on 9137
-   (not published, scraped as `grafana-reader`).
+   (not published, scraped as `grafana-reader`);
+5. with the admin password, lists the dashboards and reads the `meta.provisioned` of each, and
+   serves the number of those no file provisions as `ayeops_grafana_reader_dashboards_unmanaged`
+   (left out while that fails, which the log says once), for the alert
+   [`dashboards-unmanaged`](runbooks/dashboards-unmanaged.md), see
+   [dashboards drawn in Grafana](#dashboards-drawn-in-grafana).
 
 The token is never logged or printed; logs name the endpoint and the HTTP status. Tokens do not
 expire: a time limit would break the consumers between the expiry and the next pass. To rotate

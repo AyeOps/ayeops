@@ -231,6 +231,17 @@
       "summary": "Line coverage of {{ .Labels.project }} is more than 2 points below its 30-day median",
       "title": "Line coverage dropped more than 2 pp"
     },
+    "dashboards-unmanaged": {
+      "expr": "max by (host, project, group) (ayeops_grafana_reader_dashboards_unmanaged) > bool 0",
+      "for": "1d",
+      "module": "grafana",
+      "name": "dashboards-unmanaged",
+      "runbook": "dashboards-unmanaged",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/dashboards-unmanaged.md",
+      "severity": "info",
+      "summary": "Grafana on {{ .Labels.host }} has held dashboards for a day that no file provisions: they are not reviewed and go with the grafana-data volume; run aye dashboards pull",
+      "title": "Dashboards drawn in Grafana, not in the repository"
+    },
     "delivery-silent": {
       "expr": "aye:delivery_overdue == bool 1",
       "for": "15m",
@@ -1246,6 +1257,11 @@
       "text": "# Line coverage dropped more than 2 points\n\nThe latest line coverage reported on the watched branches is more than two percentage points\nbelow its 30-day median.\n\n## What to do\n\n1. «Coverage trend» on `AyeOps / Quality` names the suite and the day it dropped.\n2. The commit of that report is on «Latest runs» (`report=\"coverage\"`).\n3. Usual causes: new code merged without tests, tests that are now skipped, or a coverage\n   configuration that started counting a new directory.\n4. A deliberate change, such as counting a new package, settles once it becomes the median.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/coverage-dropped.md"
     },
+    "dashboards-unmanaged": {
+      "name": "dashboards-unmanaged",
+      "text": "# Dashboards drawn in Grafana, not in the repository\n\nFor a day, Grafana has held at least one dashboard that no file provisions: someone drew it in\nthe UI, or saved a copy of a provisioned one. It lives only in Grafana's database, in the\n`grafana-data` volume: nobody reviewed it, the manifest's repository has no copy, and a lost\nvolume or a fresh Grafana loses it. Nothing is broken now. `grafana-reader` counts these\ndashboards every 5 minutes as `ayeops_grafana_reader_dashboards_unmanaged`. Background:\n[modules](../modules.md#dashboards-drawn-in-grafana).\n\n1. See which dashboards, from a machine with the repository and the Grafana admin credentials:\n\n   ```sh\n   aye secrets run -- aye dashboards drift ops/ayeops.yaml\n   ```\n\n   Each `unmanaged` line names a uid, a title and a folder. `stale` and `not-deployed` lines mean\n   the Grafana host runs an older render: deploy it.\n\n2. Keep the ones worth keeping: run `aye dashboards pull`.\n\n   ```sh\n   aye secrets run -- aye dashboards pull ops/ayeops.yaml\n   aye secrets run -- aye dashboards pull ops/ayeops.yaml --uid <uid>\n   ```\n\n   It writes each one as `<uid>.json` into the manifest's `grafana.dashboards` directory, without\n   `id` and `version`, with the datasource uids of the manifest. It refuses to replace a file that\n   differs unless `--force`. A `warning` line names a datasource the manifest does not provision:\n   declare it under `grafana.datasources` or point the panels at one that is.\n\n3. Review the files, run `aye check`, commit, render and deploy the Grafana host. Grafana then\n   provisions each dashboard under the same uid, in the folder named after `project`, and the UI\n   copy becomes that provisioned dashboard: links and bookmarks keep working.\n\n4. A dashboard nobody needs: delete it in Grafana (Dashboard settings, Delete).\n\nThe alert clears on the next pass of the reader once `ayeops_grafana_reader_dashboards_unmanaged`\nis `0`.\n",
+      "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/dashboards-unmanaged.md"
+    },
     "delivery-silent": {
       "name": "delivery-silent",
       "text": "# No delivery report when one is expected\n\nThe manifest expects a `step` report of a project at least every `every` (`delivery.expect`),\nand none arrived in that time. Either nothing ran, or it ran and could not report.\n\n## What to do\n\n1. Check that the pipeline or deploy ran at all: a schedule that was turned off, a runner that\n   is offline, a branch filter.\n2. If it ran, read its log for `aye report:` lines. Without `--strict` a failed push is only a\n   warning, so the job stays green.\n3. From a self-hosted runner, check that the runner reaches `AYE_METRICS_URL` (port `8428` of the\n   metrics server on the private network).\n4. From a GitHub-hosted runner, check the `github-report-import-failing` alert and that the\n   repository is listed under `github.reports`.\n",
@@ -1891,9 +1907,10 @@
     "central/grafana-reader": {
       "alerts": [
         "grafana-reader-failing",
+        "dashboards-unmanaged",
         "target-down"
       ],
-      "description": "Keeps a Grafana service account with role Viewer and a token for it in the grafana-reader volume, so agents on the Grafana host read alert rules, silences, alerts and alert annotations without the admin password; checks the token every 5 minutes, writes a new one only when the file is missing or Grafana refuses it, and serves the result on 9137.",
+      "description": "Keeps a Grafana service account with role Viewer and a token for it in the grafana-reader volume, so agents on the Grafana host read alert rules, silences, alerts and alert annotations without the admin password; checks the token every 5 minutes, writes a new one only when the file is missing or Grafana refuses it, counts the dashboards that no file provisions, and serves the result on 9137.",
       "host": "central",
       "id": "central/grafana-reader",
       "logs": "docker",
@@ -1901,7 +1918,8 @@
         "ayeops_grafana_reader_ok",
         "ayeops_grafana_reader_endpoint_ok",
         "ayeops_grafana_reader_last_success_timestamp_seconds",
-        "ayeops_grafana_reader_rotations_total"
+        "ayeops_grafana_reader_rotations_total",
+        "ayeops_grafana_reader_dashboards_unmanaged"
       ],
       "name": "grafana-reader",
       "source": "module grafana",

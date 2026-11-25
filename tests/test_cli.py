@@ -7,6 +7,7 @@ import yaml
 
 from ayeops.cli import (
     COMMON,
+    DASHBOARDS_EXAMPLES,
     EXAMPLES,
     OVERVIEW,
     SECRETS_EXAMPLES,
@@ -53,10 +54,12 @@ def command_names() -> list[str]:
     commands = subcommands(build_parser())
     names = [name for name in commands.choices if name != "report"]
     secrets = subcommands(commands.choices["secrets"])
+    dashboards = subcommands(commands.choices["dashboards"])
     report = subcommands(build_report_parser())
     return [
         *names,
         *(f"secrets {name}" for name in secrets.choices),
+        *(f"dashboards {name}" for name in dashboards.choices),
         *(f"report {name}" for name in report.choices),
         "report",
         "status deploy",
@@ -83,6 +86,7 @@ def test_the_examples_cover_every_command_and_secrets_action() -> None:
     commands = subcommands(build_parser())
     assert set(EXAMPLES) == set(commands.choices) - {"report"}
     assert set(SECRETS_EXAMPLES) == set(subcommands(commands.choices["secrets"]).choices)
+    assert set(DASHBOARDS_EXAMPLES) == set(subcommands(commands.choices["dashboards"]).choices)
 
 
 def test_aye_alone_prints_the_common_commands_and_the_exit_codes(

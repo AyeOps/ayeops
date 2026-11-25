@@ -10,6 +10,9 @@ score = 97.9
 tests = ["tests/test_sql_checks.py"]
 score = 100.0
 
+[modules."src/ayeops/dashboard_sync.py"]
+tests = ["tests/test_dashboard_sync.py"]
+
 [modules."src/ayeops/dashboards.py"]
 tests = ["tests/test_dashboards.py"]
 score = 98.9

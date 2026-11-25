@@ -208,6 +208,11 @@ Teams that harden or bootstrap hosts with their own Ansible playbooks target the
 instead of a second host list: `aye inventory examples/acme.yaml -o inventory.yaml` writes the
 hosts with groups such as `zone_office`, `module_node` and `service_postgres`, and `--check`
 fails CI when a committed inventory is out of date: see [docs/inventory.md](docs/inventory.md).
+Provisioned dashboards are read-only, so new ones get drawn in the Grafana UI and live only in
+its database: `aye dashboards drift examples/acme.yaml` lists them and exits 1 while any exist,
+and `aye dashboards pull examples/acme.yaml` writes them as reviewable JSON into the manifest's
+dashboards directory, so the next deploy provisions them under the same uid: see
+[docs/modules.md](docs/modules.md#dashboards-drawn-in-grafana).
 
 Every image is pinned to an exact version and the digest of its multi-arch index, so a tag
 pushed again cannot change what a host pulls, and runs on `linux/amd64` and `linux/arm64`.
