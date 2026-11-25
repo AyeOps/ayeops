@@ -31,7 +31,7 @@ from ayeops.replication import (
     stream,
     writable,
 )
-from tests.conftest import ROOT, manifest_from, rules_hit
+from tests.conftest import ROOT, example_data, manifest_from, rules_hit
 from tests.test_dashboards import exporter_metrics, metric_names
 
 Problem = tuple[str, str, str]
@@ -56,6 +56,29 @@ BROKEN_EXPR = (
     ' label_replace(label_replace(((count(pg_replication_is_replica{service="acme-db"})'
     ' or on () vector(0)) == bool 0), "host", "edge", "", ""), "side", "primary", "", "")'
 )
+
+
+def with_replica(data: dict[str, Any]) -> dict[str, Any]:
+    data["hosts"]["central"]["units"] = {"acme-db-replica": "postgresql.service"}
+    data["services"]["acme-db"]["metrics"] += [
+        "pg_stat_replication_pg_wal_lsn_diff",
+        "pg_replication_is_replica",
+        "pg_stat_replication_pg_current_wal_lsn_bytes",
+    ]
+    data["services"]["acme-db-replica"] = {
+        "host": "central",
+        "description": "Streaming replica of the acme database, read by the order dashboards.",
+        "replication": {"primary": "acme-db", "max_lag": "10m"},
+        "metrics": ["pg_replication_is_replica"],
+        "logs": "journald",
+        "status": {"internal": "a standby of acme-db, the shop never reads it"},
+    }
+    return data
+
+
+@pytest.fixture
+def data() -> dict[str, Any]:
+    return with_replica(example_data())
 
 
 def services(data: dict[str, Any]) -> dict[str, Any]:
@@ -83,7 +106,7 @@ def second_replica(data: dict[str, Any], name: str, **spec: Any) -> dict[str, An
     return entry
 
 
-def test_the_example_declares_a_replica_of_its_database_and_passes(data: dict[str, Any]) -> None:
+def test_a_replica_of_the_example_database_passes(data: dict[str, Any]) -> None:
     assert replica(data)["replication"] == {"primary": "acme-db", "max_lag": "10m"}
     assert problems(data) == []
     assert pairs(manifest_from(data)) == [PAIR]
