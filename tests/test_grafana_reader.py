@@ -98,8 +98,8 @@ class FakeGrafana:
         if path.startswith("/api/dashboards/uid/"):
             uid = urllib.parse.unquote(path.removeprefix("/api/dashboards/uid/"))
             meta = {"provisioned": self.dashboards[uid]}
-            answer = {"meta": meta, "dashboard": {"uid": uid}}
-            return self.dashboard_status, json.dumps(answer).encode()
+            board: dict[str, Any] = {"meta": meta, "dashboard": {"uid": uid}}
+            return self.dashboard_status, json.dumps(board).encode()
         if path == "/api/serviceaccounts/search":
             name = urllib.parse.parse_qs(query)["query"][0]
             found = [a for a in self.accounts.values() if name in a["name"]]
