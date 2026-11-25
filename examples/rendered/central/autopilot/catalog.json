@@ -1,5 +1,13 @@
 {
   "rules": {
+    "aye-acme-db-replica-replication-broken": {
+      "expr": "label_replace(label_replace(((((max(pg_replication_is_replica{service=\"acme-db-replica\"}) == bool 0) or on () vector(1)) + on () (((max(pg_replication_is_replica{service=\"acme-db\"}) == bool 0) * on () ((count(pg_stat_replication_pg_current_wal_lsn_bytes{service=\"acme-db\",application_name=\"acme-db-replica\",state=\"streaming\"}) or on () vector(0)) == bool 0)) or on () vector(0))) * on () (1 - (((max(pg_replication_is_replica{service=\"acme-db\"}) == bool 0) * on () (max(pg_replication_is_replica{service=\"acme-db-replica\"}) == bool 0)) or on () vector(0)))), \"host\", \"central\", \"\", \"\"), \"side\", \"replica\", \"\", \"\") or label_replace(label_replace(((count(pg_replication_is_replica{service=\"acme-db\"}) or on () vector(0)) == bool 0), \"host\", \"edge\", \"\", \"\"), \"side\", \"primary\", \"\", \"\")",
+      "module": null,
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/replication-broken.md",
+      "service": "acme-db-replica",
+      "severity": "critical",
+      "title": "Replication broken"
+    },
     "aye-ai-budget-exceeded": {
       "expr": "sum by (provider) (ayeops_ai_cost_month_usd) / on (provider) ayeops_ai_budget_usd > bool 1",
       "module": "ai-usage",
@@ -15,6 +23,14 @@
       "service": null,
       "severity": "critical",
       "title": "Backup job missed its schedule"
+    },
+    "aye-d9287aa5604051fa": {
+      "expr": "label_replace((((max(pg_replication_is_replica{service=\"acme-db\"}) == bool 0) * on () (max(pg_replication_is_replica{service=\"acme-db-replica\"}) == bool 0)) or on () vector(0)), \"host\", \"central\", \"\", \"\")",
+      "module": null,
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/replication-two-primaries.md",
+      "service": "acme-db-replica",
+      "severity": "critical",
+      "title": "Two primaries"
     },
     "aye-deploy-failed": {
       "expr": "aye:step_success:last{step=\"deploy\"} == bool 0",
@@ -179,6 +195,12 @@
       "depends_on": [],
       "description": "PostgreSQL database of the acme shop on the office server, dumped every night and copied to central.",
       "host": "edge"
+    },
+    "acme-db-replica": {
+      "container": null,
+      "depends_on": [],
+      "description": "Streaming replica of the acme database, read by the order dashboards.",
+      "host": "central"
     },
     "mcp": {
       "container": "acme-apps[-_]mcp[-_][0-9]+",

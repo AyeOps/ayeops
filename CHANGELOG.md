@@ -18,6 +18,16 @@ and was never tagged.
   vmagent queue holds more than 30 minutes of its own traffic or more than half of its room, and
   `metrics-shipping-dropped` (critical), when in the last hour the full queue dropped blocks or
   storage rejected one.
+- `replication` on a service declares it the PostgreSQL streaming replica of its `primary`,
+  with an optional `max_lag` (default `5m`) and `application_name`. AyeOps then writes
+  `<replica>-replication-lag` (warning), when the replica has not replayed the WAL position the
+  primary had `max_lag` ago, measured on the primary so an idle primary never reads as lag;
+  `<replica>-replication-broken` (critical), when the replica left recovery, does not stream or
+  a node reports nothing; and `<replica>-replication-two-primaries` (critical), when both nodes
+  accept writes. `aye check` refuses an unknown, planned or cascaded primary
+  (`replication-primary`), an engine other than `postgres` (`replication-engine`), a pair whose
+  `metrics` lack the postgres_exporter series the alerts read (`replication-metrics`) and two
+  replicas of one primary under one `application_name` (`replication-name`).
 
 ### Changed
 

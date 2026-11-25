@@ -28,6 +28,8 @@ hosts:
     memory: 12g
     reserved:
       postgres: 2g
+    units:
+      acme-db-replica: postgresql.service
     compose:
       - apps/web.compose.yaml
     modules:
@@ -234,6 +236,9 @@ services:
     metrics:
       - ayeops_backup_last_success_timestamp_seconds
       - ayeops_backup_last_size_bytes
+      - pg_replication_is_replica
+      - pg_stat_replication_pg_current_wal_lsn_bytes
+      - pg_stat_replication_pg_wal_lsn_diff
     alerts:
       - name: acme-db-dump-small
         title: Database dump suspiciously small
@@ -247,6 +252,18 @@ services:
       internal:
         reason: customers reach the shop, never its database
         until: 2031-06-30
+  acme-db-replica:
+    host: central
+    description: Streaming replica of the acme database, read by the order dashboards.
+    icon: postgresql
+    replication:
+      primary: acme-db
+      max_lag: 10m
+    metrics:
+      - pg_replication_is_replica
+    logs: journald
+    status:
+      internal: a standby of acme-db, the shop never reads it
   mcp:
     host: central
     description: Public MCP endpoint that lets AI assistants read the acme catalog.

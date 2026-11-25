@@ -175,7 +175,7 @@ services:
       timeout: 10s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: 77ca902f4ea2e3a0
+      io.ayeops.config-hash: 5e90fa6968543ad9
       io.ayeops.module: autopilot
       io.ayeops.service: autopilot
     logging:
@@ -575,7 +575,7 @@ services:
       timeout: 5s
     image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
     labels:
-      io.ayeops.config-hash: 56c511ac3c22f263
+      io.ayeops.config-hash: 79070b0d5794a99b
       io.ayeops.module: grafana
       io.ayeops.service: grafana
     logging:
@@ -657,7 +657,7 @@ services:
       AYE_INCIDENTS_DEGRADED_SEVERITIES: warning
       AYE_INCIDENTS_DOWNTIME_SEVERITIES: critical,page
       AYE_INCIDENTS_GRAFANA: http://grafana:3000
-      AYE_INCIDENTS_HOSTS: '{"central": ["mcp", "web"], "edge": ["acme-db"]}'
+      AYE_INCIDENTS_HOSTS: '{"central": ["acme-db-replica", "mcp", "web"], "edge": ["acme-db"]}'
       AYE_INCIDENTS_HOST_ALERTS: '[{"labels": {}, "title": "Host down"}, {"labels": {"job": "node"}, "title": "Scrape target down"}]'
       AYE_INCIDENTS_HOST_MODULES: '{"central": ["ai-usage", "auth", "autopilot", "cloudflare", "containers", "delivery", "github", "grafana", "incidents", "ingress", "logs", "mcp", "metrics", "node", "objectstore", "oncall", "portal", "probes", "reconciler", "status"], "edge": ["backups", "containers", "disk-forecast", "eol", "gpu", "hygiene", "image-updates", "logs", "metrics", "network", "node", "offsite", "probes", "sentinel", "smart", "updates", "vulns"]}'
       AYE_INCIDENTS_NIGHT_END: 08:00
@@ -667,7 +667,7 @@ services:
       AYE_INCIDENTS_PORT: '9136'
       AYE_INCIDENTS_REFRESH_SECONDS: '60'
       AYE_INCIDENTS_ROUTES: '{"auth": [{"host": "central", "routes": ["auth@file"], "scrape_seconds": 30}], "grafana": [{"host": "central", "routes": ["grafana@file"], "scrape_seconds": 30}], "mcp": [{"host": "central", "routes": ["hub@file"], "scrape_seconds": 30}], "metrics": [{"host": "central", "routes": ["metrics@file"], "scrape_seconds": 30}], "oncall": [{"host": "central", "routes": ["oncall@file"], "scrape_seconds": 30}], "portal": [{"host": "central", "routes": ["portal@file"], "scrape_seconds": 30}]}'
-      AYE_INCIDENTS_SERVICES: '{"acme-db": "high", "mcp": "high", "web": "critical"}'
+      AYE_INCIDENTS_SERVICES: '{"acme-db": "high", "acme-db-replica": "normal", "mcp": "high", "web": "critical"}'
       AYE_INCIDENTS_STATE: /tmp
       AYE_INCIDENTS_TIMEZONE: Europe/Kyiv
       AYE_INCIDENTS_VICTORIAMETRICS: http://victoriametrics:8428
@@ -764,7 +764,7 @@ services:
       timeout: 5s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: 34aca0cc81b0951d
+      io.ayeops.config-hash: 2275e61e05428be4
       io.ayeops.module: mcp
       io.ayeops.service: mcp-catalog
     logging:

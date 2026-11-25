@@ -90,6 +90,9 @@ score = 100.0
 tests = ["tests/test_render_index.py"]
 score = 97.4
 
+[modules."src/ayeops/replication.py"]
+tests = ["tests/test_replication.py"]
+
 [modules."src/ayeops/sentinel.py"]
 tests = ["tests/test_sentinel_module.py"]
 score = 97.3

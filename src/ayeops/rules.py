@@ -52,6 +52,7 @@ from ayeops.render import (
     project_dashboard_files,
     service_owners,
 )
+from ayeops.replication import replication_alerts, replication_problems
 from ayeops.sentinel import sentinel_problems
 from ayeops.status import reporter_problems, status_problems
 from ayeops.strict import StrictValidator
@@ -156,7 +157,7 @@ def check_service(path: str, service: dict[str, Any]) -> list[Finding]:
             Finding(path, "service-metrics", "service has no metric and no explicit metrics: none")
         )
     alerts = service.get("alerts") or []
-    if not alerts and not checks:
+    if not alerts and not checks and not service.get("replication"):
         findings.append(Finding(path, "service-alerts", "service has no alert"))
     for index, alert in enumerate(alerts):
         findings.extend(check_alert(f"{path}.alerts.{index}", alert))
@@ -453,6 +454,11 @@ def check_services(
         for alert in service.get("alerts") or []
         for name in alert_names(alert)
     ] + [alert["name"] for check in service_checks(manifest) for alert in check_alerts(check)]
+    service_alerts += [
+        alert["name"]
+        for name, service in sorted(manifest.services.items())
+        for alert in replication_alerts(manifest, name, service)
+    ]
     for alert, count in sorted(Counter(module_alerts + service_alerts).items()):
         if count > 1:
             findings.append(
@@ -970,6 +976,7 @@ def check_manifest(
     findings += [Finding(*problem) for problem in backups_problems(manifest)]
     findings += [Finding(*problem) for problem in objectstore_problems(manifest)]
     findings += [Finding(*problem) for problem in datastore_problems(manifest)]
+    findings += [Finding(*problem) for problem in replication_problems(manifest)]
     findings += [Finding(*problem) for problem in mcp_problems(manifest)]
     findings += check_references(manifest, modules, renders)
     findings += check_alert_traps(manifest, modules)

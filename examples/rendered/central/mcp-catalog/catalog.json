@@ -11,6 +11,39 @@
       "summary": "The newest dump of the acme database is smaller than 1 MiB",
       "title": "Database dump suspiciously small"
     },
+    "acme-db-replica-replication-broken": {
+      "expr": "label_replace(label_replace(((((max(pg_replication_is_replica{service=\"acme-db-replica\"}) == bool 0) or on () vector(1)) + on () (((max(pg_replication_is_replica{service=\"acme-db\"}) == bool 0) * on () ((count(pg_stat_replication_pg_current_wal_lsn_bytes{service=\"acme-db\",application_name=\"acme-db-replica\",state=\"streaming\"}) or on () vector(0)) == bool 0)) or on () vector(0))) * on () (1 - (((max(pg_replication_is_replica{service=\"acme-db\"}) == bool 0) * on () (max(pg_replication_is_replica{service=\"acme-db-replica\"}) == bool 0)) or on () vector(0)))), \"host\", \"central\", \"\", \"\"), \"side\", \"replica\", \"\", \"\") or label_replace(label_replace(((count(pg_replication_is_replica{service=\"acme-db\"}) or on () vector(0)) == bool 0), \"host\", \"edge\", \"\", \"\"), \"side\", \"primary\", \"\", \"\")",
+      "for": "5m",
+      "name": "acme-db-replica-replication-broken",
+      "runbook": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/replication-broken",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/replication-broken.md",
+      "service": "acme-db-replica",
+      "severity": "critical",
+      "summary": "acme-db-replica does not stream from acme-db: it left recovery, acme-db sees no streaming standby acme-db-replica, or one of them reports nothing",
+      "title": "Replication broken"
+    },
+    "acme-db-replica-replication-lag": {
+      "expr": "label_replace(((max(pg_stat_replication_pg_wal_lsn_diff{service=\"acme-db\",application_name=\"acme-db-replica\"}) > bool (max(pg_stat_replication_pg_current_wal_lsn_bytes{service=\"acme-db\",application_name=\"acme-db-replica\"}) - min(min_over_time(pg_stat_replication_pg_current_wal_lsn_bytes{service=\"acme-db\",application_name=\"acme-db-replica\"}[10m])))) or on () vector(0)), \"host\", \"central\", \"\", \"\")",
+      "for": "5m",
+      "name": "acme-db-replica-replication-lag",
+      "runbook": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/replication-lag",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/replication-lag.md",
+      "service": "acme-db-replica",
+      "severity": "warning",
+      "summary": "acme-db-replica has not replayed what acme-db wrote 10m ago",
+      "title": "Replica lags behind its primary"
+    },
+    "acme-db-replica-replication-two-primaries": {
+      "expr": "label_replace((((max(pg_replication_is_replica{service=\"acme-db\"}) == bool 0) * on () (max(pg_replication_is_replica{service=\"acme-db-replica\"}) == bool 0)) or on () vector(0)), \"host\", \"central\", \"\", \"\")",
+      "for": "2m",
+      "name": "acme-db-replica-replication-two-primaries",
+      "runbook": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/replication-two-primaries",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/replication-two-primaries.md",
+      "service": "acme-db-replica",
+      "severity": "critical",
+      "summary": "acme-db and its replica acme-db-replica both accept writes",
+      "title": "Two primaries"
+    },
     "ai-budget-80": {
       "expr": "sum by (provider) (ayeops_ai_cost_month_usd) / on (provider) ayeops_ai_budget_usd > bool 0.8",
       "for": "15m",
@@ -1598,6 +1631,26 @@
     }
   },
   "services": {
+    "central/acme-db-replica": {
+      "alerts": [
+        "acme-db-replica-replication-lag",
+        "acme-db-replica-replication-broken",
+        "acme-db-replica-replication-two-primaries"
+      ],
+      "description": "Streaming replica of the acme database, read by the order dashboards.",
+      "host": "central",
+      "id": "central/acme-db-replica",
+      "logs": "journald",
+      "metrics": [
+        "pg_replication_is_replica"
+      ],
+      "name": "acme-db-replica",
+      "source": "manifest",
+      "state": "live",
+      "status": {
+        "internal": "a standby of acme-db, the shop never reads it"
+      }
+    },
     "central/agentgateway": {
       "alerts": [
         "mcp-hub-down",
@@ -2371,7 +2424,10 @@
       "logs": "journald",
       "metrics": [
         "ayeops_backup_last_success_timestamp_seconds",
-        "ayeops_backup_last_size_bytes"
+        "ayeops_backup_last_size_bytes",
+        "pg_replication_is_replica",
+        "pg_stat_replication_pg_current_wal_lsn_bytes",
+        "pg_stat_replication_pg_wal_lsn_diff"
       ],
       "name": "acme-db",
       "source": "manifest",

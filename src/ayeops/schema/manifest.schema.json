@@ -280,6 +280,16 @@
         "state": {"enum": ["live", "planned", "disabled"]},
         "criticality": {"enum": ["critical", "high", "normal", "low"]},
         "data": {"$ref": "#/$defs/data"},
+        "replication": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["primary"],
+          "properties": {
+            "primary": {"$ref": "#/$defs/name"},
+            "max_lag": {"$ref": "#/$defs/duration"},
+            "application_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,63}$"}
+          }
+        },
         "description": {"$ref": "#/$defs/text"},
         "url": {"type": "string", "pattern": "^https?://"},
         "login": {"type": "string"},
