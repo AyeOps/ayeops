@@ -20,6 +20,7 @@ from ayeops.downtime import (
     gone_term,
     guarded,
     host_set,
+    hostless_alert,
     hosts_down,
     in_maintenance,
     in_window,
@@ -36,6 +37,7 @@ from ayeops.downtime import (
     window_problems,
     window_terms,
 )
+from ayeops.links import UNREACHABLE, link_down_expr
 from ayeops.manifest import Manifest
 
 TERM = re.compile(r"vector\(time\(\) - (\d+)\) % (\d+) < (\d+)")
@@ -339,6 +341,11 @@ def test_a_service_on_a_volatile_maintained_host_is_held_by_that_host_alone() ->
     ]
 
 
+def test_a_hostless_alert_takes_no_guard() -> None:
+    alert = {"name": "duty-overdue", "expr": "vector(time() >= bool 1)"}
+    assert hostless_alert(alert) == {"name": "duty-overdue", "expr": "vector(time() >= bool 1)"}
+
+
 def test_a_service_elsewhere_gets_the_fleet_guards_only() -> None:
     assert service_guards("central", True, BOTH) == [("host", HOSTS_DOWN), ("host", EDGE_WINDOW)]
     assert service_guards("central", False, NONE) == []
@@ -463,3 +470,43 @@ def test_the_problems_of_every_host_and_window_are_reported_by_path() -> None:
         ),
         ("hosts.b.maintenance.1.duration", "maintenance-window", "a window of 0 never opens"),
     ]
+
+
+LINKED = Downtime({"edge": 86400}, {"edge": SUN_2300_3H}, True)
+
+
+def test_the_downtime_of_a_manifest_says_whether_any_host_probes_links() -> None:
+    manifest = fleet(
+        central=node_host(address="10.8.0.1", modules={"probes": {"links": ["edge"]}}),
+        edge=node_host(address="10.8.0.2"),
+    )
+    assert downtime_of(manifest) == Downtime({}, {}, True)
+    assert downtime_of(fleet(central=node_host())) == Downtime({}, {}, False)
+
+
+def test_host_down_is_also_held_for_the_hosts_of_an_unreachable_zone() -> None:
+    assert alert_guards("host-down", True, LINKED) == [
+        ("host", VOLATILE_EDGE),
+        ("host", UNREACHABLE),
+        ("host", EDGE_WINDOW),
+    ]
+    assert alert_guards("host-down", True, Downtime({}, {}, True)) == [("host", UNREACHABLE)]
+    assert alert_guards("disk-full", True, Downtime({}, {}, True)) == [("host", HOSTS_DOWN)]
+    assert alert_guards("host-gone", True, LINKED) == [("host", EDGE_WINDOW)]
+
+
+def test_link_down_drops_the_peers_in_maintenance_and_keeps_its_guards() -> None:
+    alert = {"name": "link-down", "expr": "plain"}
+    dropped = link_down_expr({"edge": SUN_2300_3H})
+    assert module_alert(alert, True, LINKED) == {
+        "name": "link-down",
+        "expr": (
+            f"({dropped}) unless on (host) ({HOSTS_DOWN})"
+            f" unless on (host) ({EDGE_WINDOW}) or 0 * ({dropped})"
+        ),
+    }
+    assert module_alert(alert, False, Downtime({}, {}, True)) == alert
+    assert module_alert({"name": "disk-full", "expr": "x"}, False, LINKED) == {
+        "name": "disk-full",
+        "expr": f"(x) unless on (host) ({EDGE_WINDOW}) or 0 * (x)",
+    }

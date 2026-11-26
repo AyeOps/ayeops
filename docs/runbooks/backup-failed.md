@@ -6,8 +6,9 @@ today's copy, and the off-site copy of tonight copies yesterday's file again. Se
 [backups](../modules.md#backups).
 
 The label names either a job of the manifest (`backups.jobs.<name>`, run by its systemd timer
-or by your own cron) or a built-in dump: `secrets` (the `infisical-backup` service) or `errors`
-(`glitchtip-backup`), see [Built-in dumps](#built-in-dumps).
+or by your own cron) or a built-in dump: `secrets` (the `infisical-backup` service), `errors`
+(`glitchtip-backup`) or `metrics` (`victoriametrics-backup`), see
+[Built-in dumps](#built-in-dumps).
 
 ## What to do
 
@@ -46,3 +47,23 @@ failed one on the next pass, so one failure right after a restart of the databas
    `docker compose exec -e AYE_BACKUP_ONCE=1 -e AYE_BACKUP_HOUR=0 infisical-backup sh /backup.sh`
    writes a dump only when today has none; delete today's file first to force one. Restore:
    [infisical](infisical.md#restore), [glitchtip](glitchtip.md#restore).
+
+## The metrics store
+
+`victoriametrics-backup` archives a snapshot of VictoriaMetrics once a day, see
+[backup of the store](../modules.md#backup-of-the-store), and retries a failed run on the next
+pass, 5 minutes later.
+
+1. `docker compose logs --tail 50 victoriametrics-backup`: every failure is a `backup:` line.
+   - `/snapshot/create answered without a snapshot` or a `wget` error: the store did not take a
+     snapshot. `docker compose ps victoriametrics` must be healthy; with `-snapshotAuthKey` set
+     by hand the API refuses the call. A store whose disk is full cannot snapshot either.
+   - `tar of the snapshot <name> failed`: usually `No space left on device` on `backup_dir`
+     (`df -h /var/backups/ayeops/metrics`): an archive needs room for a full copy of the store.
+     Lower `backup_keep_days`, or give `backup_dir` a larger disk.
+   - `cannot delete the snapshot <name> yet`: the archive may be fine; the snapshot stays until
+     a later pass deletes it, or VictoriaMetrics after `-snapshotsMaxAge`. `vm_snapshots` above
+     1 for a day means they pile up: `curl -s http://127.0.0.1:8428/snapshot/list` on the host
+     and `curl -s 'http://127.0.0.1:8428/snapshot/delete?snapshot=<name>'` for each.
+2. To archive now: `docker compose restart victoriametrics-backup` takes one 2 minutes later
+   when today has none; delete today's file in `backup_dir` first to force one.

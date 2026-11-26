@@ -7,8 +7,10 @@ from typing import Any
 import pytest
 
 from ayeops.discover.adopt import RUNBOOK as ADOPT_RUNBOOK
+from ayeops.duties import RUNBOOK as DUTY_RUNBOOK
 from ayeops.local_modules import with_local_modules
 from ayeops.registry import Module, load_modules
+from ayeops.replication import RUNBOOKS as REPLICATION_RUNBOOKS
 from ayeops.sentinel import RUNBOOK as SENTINEL_RUNBOOK
 from ayeops.unused import (
     linked_pages,
@@ -54,7 +56,7 @@ def test_every_runbook_page_belongs_to_an_alert_or_is_a_shared_page(
     modules: dict[str, Module],
 ) -> None:
     alerts = {str(alert["runbook"]) for module in modules.values() for alert in module.alerts}
-    for runbook in (SENTINEL_RUNBOOK, ADOPT_RUNBOOK):
+    for runbook in (SENTINEL_RUNBOOK, ADOPT_RUNBOOK, DUTY_RUNBOOK, *REPLICATION_RUNBOOKS):
         alerts.add(runbook.rpartition("/")[2].removesuffix(".md"))
     pages = {page.stem for page in RUNBOOKS.glob("*.md")}
     assert sorted(pages - alerts - SHARED_PAGES) == []

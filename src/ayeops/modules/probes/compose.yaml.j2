@@ -4,7 +4,7 @@ services:
     image: prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
     command:
       - "--config.file=/etc/blackbox/blackbox.yml"
-{% if settings.internet or settings.gateway %}
+{% if settings.internet or settings.gateway or links %}
     sysctls:
       net.ipv4.ping_group_range: "0 2147483647"
 {% endif %}

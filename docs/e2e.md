@@ -96,7 +96,7 @@ daemon; `offline` is rendered and validated only.
 
 | Host | Modules | Started |
 |---|---|---|
-| `central` | metrics server, logs server, node, probes, grafana, checks, ingress, auth, portal, objectstore, secrets | everything |
+| `central` | metrics server with `backup: true`, logs server, node, probes, grafana, checks, ingress, auth, portal, objectstore, secrets, backups | everything |
 | `edge` | metrics agent, logs agent, node, containers, disk-forecast, network, offsite, hygiene (`dry_run`) | everything |
 | `offline` | metrics agent, cloudflare, smart, gpu | `docker compose config -q` only |
 
@@ -124,9 +124,17 @@ rule, dashboard or datasource is covered without touching the test.
   from the `grafana-reader` volume sees every rendered rule and reads silences, alerts and alert
   annotations, and is refused (`403`) creating a silence, listing service accounts and reading
   the server settings.
+- Dashboards drawn in Grafana: the reader counts `0` unprovisioned dashboards and
+  `aye dashboards drift` exits `0`; a dashboard created through the API makes it exit `1` with
+  that uid as `unmanaged`, `aye dashboards pull -o <tmp>` writes it without `id` and `version`
+  and a second pull leaves it `unchanged`; the dashboard is deleted again.
 - Loki returns a line pushed to it, and holds container logs from every host that runs Alloy.
 - Offsite: the agent made a snapshot of `/tmp/aye-e2e-backups/e2e.dump` in Garage on `central`,
   its restore test passed, and `restic dump latest` gives back the same bytes.
+- Metrics store backup: two minutes after the start `victoriametrics-backup` archived a
+  snapshot of the store (`ayeops_backup_last_run_success{backup="metrics"} 1` with a size),
+  deleted the snapshot (`vm_snapshots 0`), and its restore test opened the archive in a scratch
+  VictoriaMetrics and found series of `up` (`ayeops_backup_restore_test_ok 1`).
 - Hygiene: one pass in dry-run removes no image and reports `ayeops_hygiene_dry_run 1`.
 - Portal: every page answers `200`, and `services.html` names every service of every host,
   `offline` included, and every catalog service.

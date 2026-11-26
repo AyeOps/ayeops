@@ -15,8 +15,8 @@ Every built-in module, what it runs, its settings and its alerts. The module tab
 | [`gpu`](#gpu) | NVIDIA GPU temperature, memory and driver health |
 | [`network`](#network) | link state, speed, errors and Wi-Fi signal of the declared interfaces |
 | [`disk-forecast`](#disk-forecast) | an alert when a filesystem fills up within 7 days |
-| [`probes`](#probes) | blackbox-exporter for HTTP, TLS expiry and the host's own internet, RDAP for domains |
-| [`checks`](#checks) | the runners of the HTTP, TCP, DNS, script and SQL checks declared under services |
+| [`probes`](#probes) | blackbox-exporter for HTTP, TLS expiry, the host's own internet and the private network links, RDAP for domains |
+| [`checks`](#checks) | the runners of the HTTP, TCP, SMTP, DNS, script and SQL checks declared under services |
 | [`hygiene`](#hygiene) | a nightly prune of stopped containers, unused images and build cache |
 | [`reconciler`](#reconciler) | starts again a declared container that Docker left down, with a back-off |
 | [`image-updates`](#image-updates) | Diun over the containers on a floating tag |
@@ -44,7 +44,8 @@ Every built-in module, what it runs, its settings and its alerts. The module tab
 | [`offsite`](#offsite) | restic copies of a host's newest backup to another host, with restore tests |
 
 After the modules: [flow baselines](#flow-baselines), an alert that compares a flow with its
-own usual level, and [write your own module](#write-your-own-module).
+own usual level, [database replication](#database-replication), the alerts of a declared
+primary and replica pair, and [write your own module](#write-your-own-module).
 
 ## How a module renders
 
@@ -80,7 +81,9 @@ would otherwise page forever. Likewise an alert with a `setting` is rendered onl
 host sets that setting of the module, so `offsite-drill` exists only with a `restore_drill`.
 An alert with `only_with: grafana_reader` is rendered only when the
 [`grafana-reader`](#grafana-reader) is, so `grafana-reader-failing` does not page on an install
-without a consumer of the reader.
+without a consumer of the reader. `only_with: links` renders an alert only when some host's
+[`probes.links`](#links-between-hosts) names a host to ping, so `link-down` and its hold on
+`host-down` come together.
 
 A module alert that aggregates by host keeps the `project` and `group` labels that
 [vmagent](#metrics) puts on every sample: `max by (host, project, group) (...)`, not
@@ -120,6 +123,11 @@ VictoriaMetrics `v1.153.0` single-node and vmagent `v1.153.0`.
 | `queue_max` | `1GB` | on-disk buffer per remote_write URL while the target is unreachable |
 | `remote_write` | none | `{host: <name>}` or `{url: <url>}`; required for `agent` |
 | `networks` | `[]` | existing docker networks vmagent joins besides its own, e.g. the default network of your application's compose project, so a scrape job reaches its services by name without a published port; declared `external`, so the application stack never depends on this one |
+| `backup` | `false` | `server` only: a daily snapshot archive of the store and a weekly restore test of it, see [backup of the store](#backup-of-the-store); needs [`backups`](#backups) on the host |
+| `backup_hour` | `2` | UTC hour from which the daily archive runs |
+| `backup_keep_days` | `2` | archives older than this many days are deleted after a new one is written |
+| `backup_dir` | `/var/backups/ayeops/metrics` | host directory of the archives, mounted at `/backups`; host-init creates it, root only |
+| `restore_test_days` | `7` | days between passing restore tests |
 
 vmagent labels every sample with `host=<host name>` and `project=<manifest project>`, and with
 `group=<group>` when the host has a [group](manifest.md#host) (its `group`, else its `profile`).
@@ -147,6 +155,95 @@ room; `metrics-shipping-dropped` (critical) when in the last hour the full queue
 or storage rejected one with `400` or `409`. The queue's own gauges travel through the queue:
 while a host cannot reach storage at all, `host-down` fires and holds both back, and the drops
 of such an outage show once the host reports again.
+
+### Backup of the store
+
+The store holds the history every dashboard, baseline, forecast and incident reads, and a copy
+of its live directory is no backup: VictoriaMetrics merges and deletes parts while it runs, so a
+plain copy can miss files or hold a mix of two moments. With `backup: true` the module takes
+the copy the way VictoriaMetrics supports, from an instant snapshot, and proves weekly that the
+copy opens. It is off by default because it costs disk, not a surprise: every archive is a
+full copy of the store on the host's disk, `backup_keep_days` of them plus one during the
+restore test, and 512 MiB more in the host's [memory budget](rules.md). `aye check` warns
+(rule `metrics-backup`) for a `role: server` host that runs `backups` for its other dumps but
+not this one, and fails when `backup` is set on an `agent` or on a host without `backups`.
+
+```yaml
+metrics:
+  role: server
+  backup: true
+backups: {}
+```
+
+| Service | Limit | Role |
+|---|---|---|
+| `victoriametrics-backup` | 512 MiB, 0.5 CPU | `metrics/backup.sh` on the pinned `victoria-metrics` image itself (its busybox `sh`, `wget` and `tar`, and the `victoria-metrics-prod` binary for the test), read-only root, no capabilities, the store's volume mounted read-only |
+
+**The archive.** Every 5 minutes, and first 2 minutes after the container starts, the script
+looks for today's archive; when there is none and the UTC hour has reached `backup_hour`, or
+when no archive exists at all, it
+
+1. asks the store for a snapshot, `GET /snapshot/create` on `victoriametrics:8428`, which
+   answers `{"status":"ok","snapshot":"<name>"}`. A snapshot is instant and takes no space at
+   first: hard links to the immutable parts below `<storage>/snapshots/<name>`, with relative
+   links from `data/small`, `data/big` and `data/indexdb` to the parts' own snapshot
+   directories and a copy of `metadata`;
+2. writes `tar -ch` of that directory to a dot-file in `/backups`, so `-h` stores the files the
+   links point to, not the links: VictoriaMetrics warns that `cp` or `rsync` of a snapshot
+   misses data, because they copy the links as links;
+3. deletes the snapshot with `GET /snapshot/delete?snapshot=<name>`, also when `tar` failed,
+   and renames the dot-file to `victoriametrics-<YYYYmmddTHHMMZ>.tar` only when it is complete
+   and not empty;
+4. deletes archives older than `backup_keep_days`.
+
+All of it runs through [`backups/backup_run.sh`](#backups), so each attempt reports as the
+backup job `metrics` (schedule `0 <backup_hour> * * *` UTC, threshold `93600`, 26 hours) with
+the same metrics and the same `backup-failed` and `backup-missing` as every other dump. The
+archive is not compressed: the parts are compressed already, and an uncompressed tar of the
+mostly unchanged parts deduplicates well in restic. A snapshot is never left behind for long:
+its name sits in `/backups/.snapshot` until the delete succeeded, the next pass deletes it when
+a run was killed, and VictoriaMetrics deletes snapshots older than `-snapshotsMaxAge` (3 days by
+default) on its own; `vm_snapshots` counts them.
+
+**Off-site.** The archives are files in `backup_dir` on the host, so [offsite](#offsite) copies
+them like any dump: `source: /var/backups/ayeops/metrics/victoriametrics-*.tar` with
+`verify: none` (a tar has no `pg_dump` header), and a `schedule` after `backup_hour` plus the
+archive's duration and `settle_minutes`. The off-site restore test then proves the bytes; the
+restore test below proves the store.
+
+**The restore test.** After the first archive and then every `restore_test_days`, the script
+unpacks the newest archive into `/backups/.restore`, starts a second VictoriaMetrics from the
+same image on it, listening on `127.0.0.1:8438` inside the container only, so nothing writes to
+it, with `-retentionPeriod=100y`, so it deletes nothing of the restored data, waits up to 10
+minutes for `/health`, and asks
+`count(last_over_time(up[1h]))` at one minute after the archive's time. The test passes when
+the answer is a number above 0: the archive opens as a store and holds the samples of the hour
+before it was taken. Then it stops the instance and deletes `/backups/.restore`, also after a
+failure; a failed test retries after 6 hours. It proves the archive restores into the pinned
+VictoriaMetrics; restoring it into the live store is the
+[runbook](runbooks/metrics-restore-test.md#restore-the-store-from-an-archive).
+
+Metrics in the node textfile directory (`ayeops_backup_restore_metrics.prom`), each with the
+label `backup="metrics"`: `ayeops_backup_restore_test_ok`,
+`ayeops_backup_restore_test_last_attempt_timestamp_seconds`,
+`ayeops_backup_restore_test_last_success_timestamp_seconds` (0 until the first pass),
+`ayeops_backup_restore_test_duration_seconds`, `ayeops_backup_restore_test_series` (the series
+of `up` found), `ayeops_backup_restore_test_backup_timestamp_seconds` (the time of the archive
+tested) and `ayeops_backup_restore_test_deadline_timestamp_seconds`, when a pass is due at the
+latest: the last pass, or the first start, plus `restore_test_days` plus one day. The textfile
+is also the test's state. They are a sibling of the off-site `ayeops_offsite_restore_test_*`,
+which has no `backup` label because it tests the one copy of its host; the `backup` label leaves
+room for restore tests of other dumps.
+
+Alert `metrics-restore-test` (warning, also on silence): the last test failed, or the deadline
+passed. It exists only while some host has `backup: true`. Runbook:
+[metrics-restore-test](runbooks/metrics-restore-test.md). The container touches
+`/tmp/backup.alive` on every pass and every minute of an archive or a test, which its
+healthcheck watches. Its variables: `AYE_BACKUP_DIR`, `AYE_STORAGE_DIR`, `AYE_TEXTFILE_DIR`,
+`AYE_VM_URL`, `AYE_BACKUP_HOUR`, `AYE_BACKUP_KEEP_DAYS`, `AYE_RESTORE_TEST_DAYS`, and for tests
+`AYE_BACKUP_ONCE=1` (one pass, no start delay), `AYE_BACKUP_CLOCK` (as for the
+[secrets](#secrets) dump), `AYE_RESTORE_CLOCK` (replaces `date +%s`), `AYE_BACKUP_FETCH`
+(replaces `wget -q -T 60 -O -`) and `AYE_VM_BINARY`.
 
 ## logs
 
@@ -374,6 +471,7 @@ domain from the IANA bootstrap file and reads the `expiration` event.
 | `dns_query` | `example.com` | the name asked for, an A record |
 | `gateway` | none | the router's IPv4 address, pinged for the `gateway` layer; `aye discover` suggests it from the default route |
 | `internet_interval` | `15s` | scrape interval of the ping and DNS probes |
+| `links` | `[]` | hosts whose `address` this host pings over the private network, by name, or `true` for every other host with an `address` that is not `volatile`; see [links](#links-between-hosts) |
 | `domains` | `[]` | domains whose expiry is looked up over RDAP |
 | `rdap_bootstrap_url` | IANA `dns.json` | bootstrap file |
 | `rdap_refresh_seconds` | `21600` | how often RDAP is asked |
@@ -385,7 +483,8 @@ failed lookup is reported as `0`, not dropped. Its variables: `AYE_RDAP_DOMAINS`
 
 Alerts: `probe-failing` (5m), `tls-expiring` (< 14 days), `domain-expiring-60d` (info),
 `domain-expiring-30d` (warning), `domain-expiring-7d` (critical), `domain-expiry-unknown` (RDAP
-silent for a day). Dashboard: `AyeOps / Probes`.
+silent for a day), [`link-down`](runbooks/link-down.md) (critical, with `links`). Dashboard:
+`AyeOps / Probes`.
 
 The internet probes run on the host whose connection they describe, usually one at home or in an
 office, so enable `probes` there with `internet: true`. blackbox-exporter pings without raw
@@ -402,11 +501,59 @@ failing probes to the central host, so an alert there would fire late, after the
 vmagent keeps the samples in its queue and sends them on reconnection, so the dashboard shows
 the outage afterwards.
 
+### Links between hosts
+
+Hosts reach each other over a private network, a WireGuard tunnel, Tailscale or any VPN, at the
+`address` the manifest gives them. AyeOps does not run that network and does not care which one
+it is: `links` pings the addresses, so it sees what the fleet depends on, whatever carries it.
+When a tunnel or a whole site drops, the central host stops receiving the metrics of every host
+there and each of them fires `host-down`; with `links` that wave is one alert per zone:
+
+```yaml
+hosts:
+  central:
+    arch: arm64
+    address: 10.8.0.1
+    modules: {metrics: {role: server}, node: {}, probes: {links: true}}
+  shop-1:
+    arch: amd64
+    zone: shop
+    address: 10.8.0.11
+    modules: {metrics: {role: agent, remote_write: {host: central}}, node: {}}
+  shop-2:
+    arch: amd64
+    zone: shop
+    address: 10.8.0.12
+    modules: {metrics: {role: agent, remote_write: {host: central}}, node: {}}
+```
+
+The job `blackbox-link` pings each peer through the blackbox module `link` (ICMP, IPv4, falling
+back to IPv6 for an IPv6 address, 5 s timeout) at the host's scrape interval, without raw
+sockets, as the internet probes do. Its series carry `peer` (the host pinged) and `zone` (the
+peer's `zone`, else the peer's name, so a host without a zone is a zone of its own); `host` is
+the prober, as on every series. `link-down` (critical, 3 minutes) is
+`max by (host, project, group, zone) (probe_success{job="blackbox-link"}) == bool 0`: no probed
+host of the zone answers. While that holds, `host-down` of the zone's probed hosts is held back
+(see [grafana](#grafana)), so the alert that pages is the one that names the zone. A probed host
+whose zone still answers, or that answers ping itself, keeps its `host-down`: the link is up and
+the host stopped reporting. A peer in an open `maintenance` window drops out of `link-down`, so
+a site rebooted in its window does not page; a `volatile` host is not probed at all (`true`
+skips it, a list naming one fails rule `probe-links`), since it is expected to disappear.
+
+Ping from the host that runs the metrics server, usually the central one: its probe results do
+not cross the link they test. From another host the results of a broken link queue in its
+vmagent and arrive after the link is back, too late for the alert. Probing every host of a zone
+(`true`) folds the whole wave; a list may name one host per site, and then only that host's
+`host-down` is held. The peers must answer ICMP echo on their private address; a peer that
+filters it fires `link-down` while everything works. Dashboard `AyeOps / Probes`: reachability
+and round-trip time of every link.
+
 ## checks
 
-The runners of the [checks](checks.md) declared under `services.<name>.checks`: HTTP, TCP and
-DNS through blackbox-exporter, scripts in a sandboxed runner, read-only SQL queries against a
-Postgres datasource. Requires `metrics` on the same host; script and SQL checks also need
+The runners of the [checks](checks.md) declared under `services.<name>.checks`: HTTP, TCP,
+SMTP and DNS through blackbox-exporter, scripts in a sandboxed runner, read-only SQL queries
+against a Postgres datasource. An [`smtp`](checks.md#smtp) check greets a mail server, with
+`STARTTLS` on 25 and 587 or TLS from the first byte on 465, instead of only opening its port. Requires `metrics` on the same host; script and SQL checks also need
 `node`, whose textfile directory serves their results.
 
 | Setting | Default | Meaning |
@@ -416,7 +563,9 @@ Postgres datasource. Requires `metrics` on the same host; script and SQL checks 
 
 It renders only what the checks of its host need: `check-blackbox`, `check-scripts`,
 `check-scripts-net` and `check-sql`. Every check gets its own alert; the module adds
-`target-down` for the blackbox and
+`target-down` for the blackbox,
+[`check-tls-expiring`](runbooks/check-tls-expiring.md) when the certificate an `https` or TLS
+`smtp` check sees expires in less than 14 days, and
 [`check-runner-stale`](runbooks/check-runner-stale.md) when a runner has not written results
 for 5 minutes. Fields, sandboxes and metrics of each check type:
 [the checks module](checks.md#the-checks-module).
@@ -1283,7 +1432,7 @@ hit rate, not its list price.
 Who watches the watcher. Every alert of the kit leaves through the Grafana of the central host,
 so when that host dies, nobody hears about it. The sentinel is one stdlib Python script on
 `python:3.13.16-alpine3.23` (48 MB limit) that runs on **another** host, checks the central
-one every minute and talks to Telegram itself.
+one every minute and talks to Telegram itself, or to Slack with `alerting.contact: slack`.
 
 ```yaml
 hosts:
@@ -1332,7 +1481,10 @@ check and the time of the first failure, then one every `reminder` while it stay
 all-clear with the length of the outage when a round passes again. A message that Telegram did
 not accept is sent again next round; an all-clear that did not arrive keeps the alert open, so a
 relapse is not announced twice. Messages are plain text to `AYE_TELEGRAM_BOT_TOKEN` and
-`AYE_TELEGRAM_CHAT_ID`, the same chat as the Grafana contact point.
+`AYE_TELEGRAM_CHAT_ID`, the same chat as the Grafana contact point. With
+[`alerting.contact: slack`](manifest.md#slack) they go to the Grafana contact point's incoming
+webhook in `AYE_SLACK_WEBHOOK_URL` instead, as plain text with `&`, `<` and `>` escaped, and the
+host needs no Telegram bot; with `email` or `none` the sentinel stays on Telegram.
 
 The sentinel shares the fate of its own host. When it and the host it watches sit with one
 provider (or in one zone of it), turn on the status Worker's [notices](status.md#notices) as
@@ -1377,10 +1529,11 @@ problems, and the stale and failed lines come first. The verdicts are those of t
 
 When the query fails, the digest still goes out and names the reason (`Cannot read the backup
 metrics from central: HTTP 503`); with no backup series at all it says `No backups reported`.
-A digest longer than Telegram allows (4096 characters) drops lines from the end, the fresh ones
-first, and says `• and N more`. The query reads up to 1 MiB, about 4000 series.
+A digest longer than Telegram allows (4096 characters, kept with Slack too) drops lines from
+the end, the fresh ones first, and says `• and N more`. With contact `slack` it goes to the same
+webhook as the other messages, with `&`, `<` and `>` escaped. The query reads up to 1 MiB, about 4000 series.
 
-A digest that Telegram did not accept is sent again next round, and counts in
+A digest that Telegram or Slack did not accept is sent again next round, and counts in
 `ayeops_sentinel_last_notice_ok` like any other message (`sentinel-notify-failing`). The time
 of the next digest is `ayeops_sentinel_digest_due_timestamp_seconds`; it moves to the next day
 only once a digest is delivered, and `sentinel-digest-overdue` fires when it is 2 hours in the
@@ -1429,10 +1582,10 @@ connection error while the central host's own alerts keep arriving.
 `ayeops_sentinel_digest_last_sent_timestamp_seconds` and the `kind="digest"` counters. With
 `metrics` on the sentinel's host vmagent scrapes it and ships it to the central storage, so the
 central Grafana watches the sentinel in turn: `target-down`, `sentinel-notify-failing` (the
-last message did not reach Telegram), `sentinel-ping-failing` (15m), `sentinel-stalled` (no
-finished round for 5 minutes), `sentinel-digest-overdue` (with `digest`, 2 hours past its
-time). `/health` answers 503 once rounds stop. `node` on the same host adds `host-down` for the
-sentinel's machine.
+last message did not reach Telegram or Slack), `sentinel-ping-failing` (15m),
+`sentinel-stalled` (no finished round for 5 minutes), `sentinel-digest-overdue` (with
+`digest`, 2 hours past its time). `/health` answers 503 once rounds stop. `node` on the same
+host adds `host-down` for the sentinel's machine.
 
 Each check logs one JSON line when it starts failing, when its error changes and when it
 passes again, not every minute.
@@ -1452,8 +1605,8 @@ Restart=always
 ```
 
 `sentinel.env` holds the `AYE_SENTINEL_*` lines of the rendered `compose.yaml` plus the two
-`AYE_TELEGRAM_*` values and `AYE_SENTINEL_PING_URL`. `aye deploy` and the config hash do not
-cover this path.
+`AYE_TELEGRAM_*` values (or `AYE_SLACK_WEBHOOK_URL`) and `AYE_SENTINEL_PING_URL`. `aye deploy`
+and the config hash do not cover this path.
 
 ## oncall
 
@@ -1500,7 +1653,9 @@ hosts:
 to the `oncall` contact point with `continue: true`, then a catch-all to the ops contact. So a
 critical alert reaches both, and a stopped GoAlert, bridge or Telegram bot never means silence:
 the ops channel still gets it. `aye check` refuses the module with `alerting.contact: none`
-(rule `oncall-fallback`). `warning` and `info` never reach GoAlert.
+(rule `oncall-fallback`). `warning` and `info` never reach GoAlert. With
+[`alerting.contact: slack`](manifest.md#slack) the ops channel is Slack, while the messages to
+the person on call and the topics stay in Telegram: the acknowledge button needs a bot.
 
 **How a message travels.** Grafana posts to `http://oncall-bridge:8080/grafana` with
 `Authorization: Bearer $AYE_ONCALL_WEBHOOK_SECRET`. The bridge adds `dashboard_url` from
@@ -2158,10 +2313,12 @@ one host.
 | `locale` | `portal.locale` | language of the titles and legends of the AyeOps dashboards, `en` or `uk` |
 
 Provisioned: the VictoriaMetrics datasource (uid `victoriametrics`), the dashboards and alert
-rules of every module enabled on any host plus the alerts of your services, and with
+rules of every module enabled on any host plus the alerts of your services and, with
+[`duties`](manifest.md#duties), the rule `duty-overdue` in a group `duties`, and with
 `alerting.contact: telegram` a Telegram contact point and the default notification policy.
 With `alerting.contact: email` the contact point is an `email` one that sends to
-`alerting.emails`. Both carry a link to the dashboard panel of the alert, see
+`alerting.emails`; with `alerting.contact: slack` a `slack` one that posts to the incoming
+webhook in `AYE_SLACK_WEBHOOK_URL` ([Slack](manifest.md#slack)). All three carry a link to the dashboard panel of the alert, see
 [alerts](#modules); the links point at `root_url`, so without one they lead to Grafana's
 `localhost`. With [`mail`](manifest.md#mail) Grafana sends through that relay
 (`GF_SMTP_*`; `tls: starttls` becomes `GF_SMTP_STARTTLS_POLICY=MandatoryStartTLS`, `tls` and
@@ -2176,7 +2333,9 @@ series has one, else its `host`, else none
 Grafana `13.2.3` expands label templates per alert instance and drops a label whose value comes
 out empty). The notification policy groups by `grafana_folder`, `alertname` and `scope`, not by
 `host`: 14 of 20 workers going down is one notification of the group `workers`, a host without
-a group still gets its own, and an alert without a host groups by its name alone. Grafana's
+a group still gets its own, and an alert without a host groups by its name alone. The
+`duty-overdue` rule sets `scope` to the duty's name instead, so each late duty is a notification
+of its own with its summary. Grafana's
 defaults hold: it waits 30 seconds after the first alert of a group, sends what joined later
 after 5 minutes, and repeats an unchanged group every 4 hours. `scope` is a label of its own
 because a rule label wins over a query label of the same name in Grafana, so a rule label
@@ -2191,7 +2350,11 @@ worker-01, worker-02, worker-03, ...
 with the hosts of the firing alerts (their `instance` for an alert without a host), or each
 alert's summary when they all are on one host (two full disks of one host name their mount
 points), and a `✅ 3 x Host down` part for the alerts that resolved since. A single alert reads
-as before. Grafana cuts a Telegram message at 4096 characters, about 300 host names. The email
+as before. Grafana cuts a Telegram message at 4096 characters, about 300 host names. A Slack
+message has the same lines with Slack links (`<url|runbook>`) instead of HTML and `&`, `<` and
+`>` escaped in alert names, scopes and summaries; its title is the mark, the alert name and, for
+a group, the scope (`🔴 Host down · workers`), and links to the alert rule. Slack collapses a text
+of more than 700 characters or 5 lines behind "Show more". The email
 contact point uses Grafana's default template, which already lists every alert of the group;
 [oncall](#oncall) folds the group into one GoAlert alert.
 
@@ -2222,8 +2385,11 @@ at 0 instead of vanishing:
 | Rule | Guard |
 |---|---|
 | `host-down` | `unless on (host) (label_replace(vector(1), "host", "<volatile host>", "", "") or ...)`: the volatile hosts are left out |
+| `host-down`, with [`probes.links`](#links-between-hosts) | also `unless on (host) (label_replace(max by (peer) (<link> unless on (zone) (max by (zone) (<link>) > 0)), "host", "$1", "peer", "(.+)"))` with `<link>` `probe_success{job="blackbox-link"}`: the probed hosts of a zone none of whose probes succeed |
+| `link-down` | none from it; with windows its query drops the peers in an open window, `<link> unless on (peer) (label_replace(<windows>, "peer", "<host>", "", "") or ...)` |
 | `host-gone` | none from the hold: it judges the volatile hosts itself, by `1 - ((max by (host) (max_over_time(<up>[<volatile>])) + on (host) group_right () (0 * last_over_time(<up>[<volatile> + 7d]))) or 0 * last_over_time(<up>[<volatile> + 7d]))` with `<up>` `up{job="node", host=~"<hosts>"}`, one term per duration |
-| every rule, both of these included | `unless on (host) (label_replace(<windows>, "host", "<host>", "", "") or ...)` for every host with a window |
+| every rule, both of these included, but `duty-overdue` | `unless on (host) (label_replace(<windows>, "host", "<host>", "", "") or ...)` for every host with a window |
+| `duty-overdue` | none, neither from the hold nor from a window: a [duty](manifest.md#duties) is done by a person, not on a host, and its series carry no `host` label, so a host guard could never match them |
 | a service rule of a service whose `host` is volatile | also `unless on () (max by (host) (<node up of that host over <volatile> + 7d>) == 0)` |
 | a service rule of a service whose `host` has windows | also `unless on () (<windows of that host>)` |
 
@@ -2326,6 +2492,76 @@ With [`auth`](#auth) on the same host Grafana signs people in itself with the sa
 `admins` get `GrafanaAdmin`, the other `emails` get `Viewer`, and `role_attribute_strict` refuses
 every other account. The admin password form stays as break-glass.
 
+### Dashboards drawn in Grafana
+
+Every provisioned dashboard is read-only (`allowUiUpdates: false`), so a dashboard someone
+needs is drawn in the UI or saved as a copy of a provisioned one, and then lives only in
+Grafana's database: nobody reviews it, the repository has no copy, and it goes with the
+`grafana-data` volume. Two commands bring it back to the repository; both read Grafana with the
+admin credentials and change nothing in it.
+
+```sh
+aye secrets run -- aye dashboards drift ops/ayeops.yaml
+aye secrets run -- aye dashboards pull ops/ayeops.yaml
+```
+
+`aye dashboards drift <manifest>` runs the check, lists every dashboard of Grafana's search
+(`GET /api/search?type=dash-db`, 5000 a page), reads each one (`GET /api/dashboards/uid/<uid>`)
+for its `meta.provisioned`, and compares the uids with the dashboards the render provisions,
+the modules' and the `dashboards` directory's:
+
+```text
+unmanaged sales-funnel "Sales funnel" in Shared: no file provisions it, aye dashboards pull writes it
+stale old-board "Old board" in AyeOps: provisioned, but the render no longer has it, a deploy removes it
+not-deployed acme-orders "Acme / Orders": rendered, but Grafana does not provision it yet, deploy the Grafana host
+ops/ayeops.yaml: 1 unmanaged, 1 stale, 1 not-deployed among the 14 dashboard(s) in https://grafana.ops.acme.example
+```
+
+It exits 1 when any line is printed, so CI or cron can run it, 0 with
+`... all 13 dashboard(s) in <url> are provisioned from the render`, and 2 when Grafana cannot be
+read. `--format json` prints `{"grafana": <url>, "dashboards": <count>, "drift": [{"kind",
+"uid", "title", "folder"}, ...]}` instead, with the same exit codes. It compares uids, not
+contents: Grafana refuses to save a provisioned dashboard from the UI, so a provisioned copy
+differs from its file only when the host runs an older render, which
+[`aye diff`](deploy.md#diff) shows file by file.
+
+`aye dashboards pull <manifest> [--uid <uid> ...] [-o <dir>] [--force]` writes every
+dashboard that is not provisioned (or the `--uid` ones, which must exist and not be
+provisioned) into `dashboards`, as `<uid>.json`, or into the file there that already has that
+uid:
+
+- the top-level `id`, `version`, `iteration`, `folderId` and `folderUid` are dropped; the
+  `uid`, the title, the panels and their ids stay;
+- every `datasource` is written the way the module dashboards write it: a reference to
+  `victoriametrics`, `loki` or a `datasources` uid stays, a datasource name becomes
+  `{"type": ..., "uid": ...}` of the provisioned one, and a uid Grafana knows under a
+  provisioned name (`GET /api/datasources`) becomes that name's uid; a built-in or a
+  `${variable}` stays; anything else stays as it is with a `warning`, since `aye check` refuses
+  it until it is declared;
+- the JSON is written with sorted keys and an indent of two, the form of the render, so a
+  second pull of the same dashboard writes nothing (`unchanged`) and a diff shows what changed;
+- a file that differs is `refused` (exit 1) unless `--force`; a uid that is not 1 to 40 of
+  `A-Z a-z 0-9 - _` is refused, since it names the file.
+
+`dashboards` must be set and hold a `*.json` for the check to pass, so on a manifest without it
+pull into a new directory with `-o dashboards` first and then set `dashboards: dashboards`.
+After a render and a deploy, Grafana provisions each pulled dashboard under its uid in the
+project's folder: file provisioning saves with overwrite, so the UI copy becomes the provisioned
+one and its links keep working.
+
+The URL is `--url`, else `AYE_GRAFANA_URL`, else `root_url` (or the ingress route that the
+`auth` module makes it). The credentials are `AYE_GRAFANA_ADMIN_USER` and
+`AYE_GRAFANA_ADMIN_PASSWORD`, the generated pair Grafana starts with, taken from the
+environment only (for example under `aye secrets run`); they go out as basic auth and never into
+output or an error message. Plain `http` is refused unless the host is a loopback address, for
+an ssh tunnel to the published `127.0.0.1:3000`; redirects are not followed.
+
+With the [`grafana-reader`](#grafana-reader) rendered, the reader also counts these dashboards
+every 5 minutes as `ayeops_grafana_reader_dashboards_unmanaged`, and the `info` alert
+[`dashboards-unmanaged`](runbooks/dashboards-unmanaged.md) fires when the count has been above
+zero for a day. Without the reader there is no count and no alert; `aye dashboards drift` and
+its exit code are the signal.
+
 ### grafana-reader
 
 Agents that read Grafana (the `status` reporter, the `incidents` journal, the autopilot, the
@@ -2349,7 +2585,12 @@ then, every 5 minutes:
    (temporary file, `fsync`, rename) and then deletes every other token of the account, so a
    token that leaked before stops working;
 4. compares what the token sees with what the admin sees, and serves the result on 9137
-   (not published, scraped as `grafana-reader`).
+   (not published, scraped as `grafana-reader`);
+5. with the admin password, lists the dashboards and reads the `meta.provisioned` of each, and
+   serves the number of those no file provisions as `ayeops_grafana_reader_dashboards_unmanaged`
+   (left out while that fails, which the log says once), for the alert
+   [`dashboards-unmanaged`](runbooks/dashboards-unmanaged.md), see
+   [dashboards drawn in Grafana](#dashboards-drawn-in-grafana).
 
 The token is never logged or printed; logs name the endpoint and the HTTP status. Tokens do not
 expire: a time limit would break the consumers between the expiry and the next pass. To rotate
@@ -3176,7 +3417,8 @@ Garage: [runbook](runbooks/offsite-append-only.md).
 ## backups
 
 The metrics contract of a host's dump jobs: the host's own `pg_dump`, `mysqldump` or `tar`, and
-the built-in dumps of [secrets](#secrets) and [errors](#errors). Every job runs its command
+the built-in dumps of [secrets](#secrets), [errors](#errors) and the
+[metrics store](#backup-of-the-store). Every job runs its command
 through the wrapper `backups/backup_run.sh` (POSIX sh), which writes start, end, success, size
 and duration into the [node](#node) textfile directory; the manifest declares the job with its
 cron schedule, and `aye check` turns the schedule into the age after which a job without a
@@ -3301,15 +3543,19 @@ the last successful run, kept across failed runs). The file is written to a temp
 renamed, so a scrape never reads half of it.
 
 **Built-in dumps.** A module that dumps its own database declares the job in its
-`module.yaml` (`backup_jobs`: name, service, schedule over its settings, zone, grace), and its
-dump container runs `pg_dump` through the same wrapper, mounted from `backups/backup_run.sh`.
-So `secrets` and `errors` require `backups` on their host (`backups: {}` is enough), and their
-dumps report under the label of the module:
+`module.yaml` (`backup_jobs`: name, service, schedule over its settings, zone, grace, and
+`when`, a setting that must be true for the job to exist), and its dump container runs
+`pg_dump`, or `tar` of a snapshot for the metrics store, through the same wrapper, mounted from
+`backups/backup_run.sh`.
+So `secrets` and `errors` require `backups` on their host (`backups: {}` is enough), as does
+`metrics` with `backup: true` (rule `metrics-backup`), and their dumps report under the label
+of the module:
 
 | Job | Service | Schedule | Threshold |
 |---|---|---|---|
 | `secrets` | `infisical-backup` | `0 <backup_hour> * * *` UTC | `93600` (26 hours) |
 | `errors` | `glitchtip-backup` | `0 <backup_hour> * * *` UTC | `93600` (26 hours) |
+| `metrics` | `victoriametrics-backup` | `0 <backup_hour> * * *` UTC, only with `backup: true` | `93600` (26 hours) |
 
 The container still decides when to dump (today's dump missing and the UTC hour at
 `backup_hour`, checked every 5 minutes) and still writes `<dump>-<YYYYmmddTHHMMZ>.dump` through
@@ -3622,6 +3868,67 @@ With at least one baseline alert Grafana gets `AyeOps / Flow baselines` (uid
 `below` to `above` shaded, the actual window against the dashed usual level, and the weeks of
 history per series, blue while learning. Every rule of the alert links to its share panel, so
 the alert opens on the series that tripped it. Runbook: [flow-baseline](runbooks/flow-baseline.md).
+
+## Database replication
+
+A service with a [`replication`](manifest.md#replication) block is a PostgreSQL streaming
+replica of its `primary`, and gets three alerts in the `services` group, named after the
+replica. Every one returns a series while healthy, so missing data never fires them by itself;
+`replication-broken` is the one that says when a node reports nothing.
+
+| Alert | Severity, for | Fires when |
+|---|---|---|
+| `<replica>-replication-lag` | warning, 5m | the replica has not replayed the WAL position the primary had `max_lag` ago |
+| `<replica>-replication-broken` | critical, 5m | the replica left recovery or reports nothing, or the primary is up and writable and lists no standby of that `application_name` in state `streaming`; or the primary reports nothing |
+| `<replica>-replication-two-primaries` | critical, 2m | neither node is in recovery: both accept writes |
+
+The series come from postgres_exporter (default collectors, checked against v0.20.1) on both
+nodes, each scrape target labelled `service: <service name>`. A module of your own that scrapes
+two exporters on the vmagent network:
+
+```yaml
+- job_name: postgres
+  static_configs:
+    - targets: ["orders-exporter:9187"]
+      labels: {service: orders}
+    - targets: ["orders-replica-exporter:9187"]
+      labels: {service: orders-replica}
+```
+
+| Series | Node | From |
+|---|---|---|
+| `pg_replication_is_replica` | both | `pg_is_in_recovery()`: 1 on a standby, 0 on a writable node |
+| `pg_stat_replication_pg_current_wal_lsn_bytes` | primary | one series per row of `pg_stat_replication`, labelled `application_name`, `client_addr`, `state`, `slot_name`: the primary's current WAL position in bytes |
+| `pg_stat_replication_pg_wal_lsn_diff` | primary | the same rows: bytes the standby has not replayed yet, the current position minus its `replay_lsn` |
+
+**Why the lag is measured on the primary.** The usual replica-side lag,
+`now() - pg_last_xact_replay_timestamp()`, is the age of the last replayed transaction, so it
+grows while the primary is idle and a quiet night looks like a replica hours behind.
+postgres_exporter's `pg_replication_lag_seconds` reports 0 once the replica has replayed all it
+received, which fixes the idle case but reads 0 for a replica that receives nothing, and it
+jumps to the idle time for the moment between receiving the first write after a pause and
+replaying it. The rule compares positions instead: it fires when the bytes the replica has not
+replayed exceed what the primary wrote within the last `max_lag`, that is when its replay
+position is older than the oldest position the primary reported in that window
+(`min_over_time` of the current position over `max_lag`). An idle primary writes nothing and
+its standby has replayed everything, so both sides are 0 and the rule stays quiet; a replica
+that stops replaying while the primary keeps writing crosses it after `max_lag`, and one that
+was behind before the primary fell idle still counts. The window starts at the oldest sample
+it holds, up to one scrape interval inside `max_lag`. For the first `max_lag` after the standby
+connects the window is shorter, and the `for` of 5 minutes keeps that from firing on its own.
+
+**Broken and two primaries.** A replica that left recovery (promoted, or restarted without its
+standby signal) is broken; so is one that stays in recovery but does not stream: the primary
+lists it under another state, or not at all, as when it restores from the archive or cannot
+connect. While both nodes are writable only `two-primaries` fires, not `broken` as well. A
+primary whose PostgreSQL is down reports nothing, and `broken` fires with `side="primary"`; a
+replica that reports nothing fires it with `side="replica"`. Each series carries the `host` of
+its node in the manifest, not the host that scraped it, so while a whole host is down
+`host-down` holds back the series of that host only.
+
+Runbooks: [replication-lag](runbooks/replication-lag.md),
+[replication-broken](runbooks/replication-broken.md) and
+[replication-two-primaries](runbooks/replication-two-primaries.md).
 
 ## Write your own module
 

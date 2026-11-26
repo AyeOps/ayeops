@@ -122,6 +122,26 @@ scrape_configs:
     - https://mcp.acme.example
     - https://grafana.ops.acme.example
     - https://portal.ops.acme.example
+- job_name: blackbox-link
+  metrics_path: /probe
+  params:
+    module:
+    - link
+  relabel_configs:
+  - source_labels:
+    - __address__
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: blackbox:9115
+    target_label: __address__
+  static_configs:
+  - labels:
+      peer: edge
+      zone: office
+    targets:
+    - 10.8.0.2
 - job_name: blackbox
   static_configs:
   - targets:

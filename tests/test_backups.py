@@ -25,6 +25,9 @@ from ayeops.backups import (
     longest_gap,
     manifest_jobs,
     max_age,
+    metrics_backup_problems,
+    metrics_backup_warnings,
+    metrics_settings,
     on_calendar,
     parse_cron,
     unit_files,
@@ -32,7 +35,7 @@ from ayeops.backups import (
 from ayeops.deploy import REMOTE_ROOT
 from ayeops.registry import MODULES_DIR, Module
 from ayeops.render import grafana_rules, host_compose, render_tree
-from tests.conftest import WAIT, manifest_from, pinned, rules_hit, tag_of
+from tests.conftest import WAIT, manifest_from, pinned, rules_hit, tag_of, warnings_hit
 
 RUN = MODULES_DIR / "backups" / "files" / "backup_run.sh"
 JOBS = MODULES_DIR / "backups" / "files" / "backup_jobs.sh"
@@ -907,3 +910,141 @@ def test_a_command_without_an_output_renders_no_unit() -> None:
         "backups/systemd/ayeops-edge-backup-a.service",
         "backups/systemd/ayeops-edge-backup-a.timer",
     ]
+
+
+METRICS_JOB = Job(
+    "metrics", "0 3 * * *", "UTC", "2h", module="metrics", service="victoriametrics-backup"
+)
+
+
+def test_a_built_in_dump_with_when_exists_only_while_its_setting_is_true() -> None:
+    assert builtin_jobs({"metrics": {"backup": False, "backup_hour": 3}}) == []
+    assert builtin_jobs({"metrics": {"backup_hour": 3}}) == []
+    assert builtin_jobs({"metrics": {"backup": True, "backup_hour": 3}}) == [METRICS_JOB]
+    secrets = Job("secrets", "0 5 * * *", "UTC", "2h", module="secrets", service="infisical-backup")
+    later = {"metrics": {"backup": False, "backup_hour": 3}, "secrets": {"backup_hour": 5}}
+    assert builtin_jobs(later) == [secrets]
+    both = {"metrics": {"backup": True, "backup_hour": 3}, "secrets": {"backup_hour": 5}}
+    assert builtin_jobs(both) == [METRICS_JOB, secrets]
+    assert job_ages([METRICS_JOB]) == {"metrics": 26 * HOUR}
+
+
+FAKE_JOBS = [
+    {
+        "name": "fake-a",
+        "service": "fake-dump",
+        "schedule": "0 {{ settings.hour }} * * *",
+        "timezone": "UTC",
+        "grace": "30m",
+        "when": "on",
+    },
+    {
+        "name": "fake-b",
+        "service": "fake-dump",
+        "schedule": "0 1 * * *",
+        "timezone": "Europe/Berlin",
+    },
+]
+
+
+def test_each_built_in_job_keeps_its_own_grace_zone_and_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = Module("fake", MODULES_DIR / "fake", {"backup_jobs": FAKE_JOBS})
+    monkeypatch.setattr("ayeops.backups.load_modules", lambda: {"fake": fake})
+    second = Job("fake-b", "0 1 * * *", "Europe/Berlin", "2h", module="fake", service="fake-dump")
+    first = Job("fake-a", "0 4 * * *", "UTC", "30m", module="fake", service="fake-dump")
+    assert builtin_jobs({"aaa": {}, "fake": {"on": False, "hour": 4}}) == [second]
+    assert builtin_jobs({"aaa": {}, "fake": {"on": True, "hour": 4}}) == [first, second]
+    assert builtin_jobs({"zzz": {}}) == []
+
+
+def modules_of(data: dict[str, Any], host: str) -> dict[str, Any]:
+    modules: dict[str, Any] = data["hosts"][host]["modules"]
+    return modules
+
+
+def with_metrics_backup(data: dict[str, Any]) -> dict[str, Any]:
+    modules_of(data, "central")["metrics"]["backup"] = True
+    modules_of(data, "central")["backups"] = {}
+    return data
+
+
+AGENT_BACKUP = "only role server keeps a store to back up; an agent ships its samples away"
+BACKUPS_NEEDED = (
+    "the archive reports as the backup job metrics, declared and alerted on by the backups"
+    " module: add backups: {} to this host"
+)
+NO_BACKUP = (
+    "this host backs up its dumps but not its metrics store: set backup: true for a daily"
+    " snapshot archive and a weekly restore test of it"
+)
+
+
+def test_the_example_has_no_metrics_backup_finding_with_or_without_the_backup(
+    data: dict[str, Any],
+) -> None:
+    assert "backup" not in modules_of(data, "central")["metrics"]
+    assert metrics_backup_problems(manifest_from(data)) == []
+    assert metrics_backup_warnings(manifest_from(data)) == []
+    with_metrics_backup(data)
+    assert metrics_backup_problems(manifest_from(data)) == []
+    assert metrics_backup_warnings(manifest_from(data)) == []
+    assert "metrics-backup" not in rules_hit(data)
+    assert "metrics-backup" not in warnings_hit(data)
+
+
+def test_the_metrics_backup_needs_the_backups_module_on_its_host(data: dict[str, Any]) -> None:
+    modules_of(data, "central")["metrics"]["backup"] = True
+    assert metrics_backup_problems(manifest_from(data)) == [
+        ("hosts.central.modules.metrics.backup", "metrics-backup", BACKUPS_NEEDED)
+    ]
+    assert "metrics-backup" in rules_hit(data)
+
+
+def test_an_agent_has_no_store_to_back_up(data: dict[str, Any]) -> None:
+    modules_of(data, "edge")["metrics"]["backup"] = True
+    assert metrics_backup_problems(manifest_from(data)) == [
+        ("hosts.edge.modules.metrics.backup", "metrics-backup", AGENT_BACKUP)
+    ]
+    with_metrics_backup(data)
+    del modules_of(data, "edge")["backups"]
+    del modules_of(data, "edge")["offsite"]
+    assert metrics_backup_problems(manifest_from(data)) == [
+        ("hosts.edge.modules.metrics.backup", "metrics-backup", AGENT_BACKUP),
+        ("hosts.edge.modules.metrics.backup", "metrics-backup", BACKUPS_NEEDED),
+    ]
+
+
+def test_a_server_that_backs_up_its_dumps_but_not_its_store_warns(data: dict[str, Any]) -> None:
+    modules_of(data, "central")["backups"] = {}
+    assert metrics_backup_problems(manifest_from(data)) == []
+    assert metrics_backup_warnings(manifest_from(data)) == [
+        ("hosts.central.modules.metrics", "metrics-backup", NO_BACKUP)
+    ]
+    assert "metrics-backup" in warnings_hit(data)
+    assert "metrics-backup" not in rules_hit(data)
+    modules_of(data, "central")["metrics"]["backup"] = False
+    assert len(metrics_backup_warnings(manifest_from(data))) == 1
+    edge = modules_of(data, "edge")["metrics"]
+    edge["role"] = "server"
+    del edge["remote_write"]
+    assert [path for path, _, _ in metrics_backup_warnings(manifest_from(data))] == [
+        "hosts.central.modules.metrics",
+        "hosts.edge.modules.metrics",
+    ]
+    del modules_of(data, "central")["backups"]
+    assert [path for path, _, _ in metrics_backup_warnings(manifest_from(data))] == [
+        "hosts.edge.modules.metrics"
+    ]
+
+
+def test_only_hosts_with_the_metrics_module_are_looked_at(data: dict[str, Any]) -> None:
+    with_metrics_backup(data)
+    data["hosts"]["bare"] = {"arch": "amd64", "modules": {"node": {}}}
+    found = metrics_settings(manifest_from(data))
+    assert [host for host, _, _ in found] == ["central", "edge"]
+    _, modules, settings = found[0]
+    assert "backups" in modules
+    assert (settings["role"], settings["backup"], settings["backup_hour"]) == ("server", True, 2)
+    assert found[1][2]["backup"] is False

@@ -34,6 +34,7 @@ def expr(rule: dict[str, Any]) -> str:
 def test_a_fleet_without_downtime_renders_no_host_gone_and_the_plain_host_down(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
+    del data["hosts"]["central"]["modules"]["probes"]["links"]
     rules = rendered_rules(data, modules)
     assert "aye-host-gone" not in rules
     plain = str(modules["node"].alerts[0]["expr"]).strip()
@@ -86,6 +87,9 @@ def test_a_maintenance_window_holds_every_rule_of_the_fleet_on_that_host(
 ) -> None:
     edge(data)["maintenance"] = [SUNDAY_NIGHT]
     rules = rendered_rules(data, modules)
+    duty = rules.pop("aye-duty-overdue")
+    assert unheld(expr(duty)) == expr(duty)
+    assert "unless" not in expr(duty)
     assert len(rules) > 40
     for uid, rule in rules.items():
         assert f" unless on (host) ({EDGE_WINDOW}) " in expr(rule), uid

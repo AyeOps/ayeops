@@ -76,12 +76,14 @@ def all_rules(rules: dict[str, Any]) -> list[dict[str, Any]]:
     return [rule for group in rules["groups"] for rule in group["rules"]]
 
 
-def test_every_rule_carries_a_scope_of_its_group_else_its_host(
+def test_every_rule_carries_a_scope_of_its_group_else_its_host_and_a_duty_of_its_duty(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
     rules = all_rules(rendered_alerting(data, modules)["rules"])
     assert rules
-    assert {rule["labels"]["scope"] for rule in rules} == {
+    scopes = {rule["uid"]: rule["labels"]["scope"] for rule in rules}
+    assert scopes.pop("aye-duty-overdue") == "{{ $$labels.duty }}"
+    assert set(scopes.values()) == {
         "{{ if $$labels.group }}{{ $$labels.group }}"
         "{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}"
     }
@@ -116,10 +118,13 @@ def rule_expr(rule: dict[str, Any]) -> str:
 def test_a_down_host_holds_back_every_other_alert_of_that_host_in_the_rendered_rules(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
+    del data["hosts"]["central"]["modules"]["probes"]["links"]
     alerting = rendered_alerting(data, modules)
     rules = {rule["uid"]: rule for rule in all_rules(alerting["rules"])}
     sources = source_exprs(data, modules)
     host_down = rules.pop("aye-host-down")
+    duty = rules.pop("aye-duty-overdue")
+    assert HOSTS_DOWN not in rule_expr(duty)
     assert rule_expr(host_down) == sources["aye-host-down"]
     assert f"1 - (max by (host) ({NODE_UP})" in rule_expr(host_down)
     assert f"max by (host) ({NODE_UP}) == 0" == HOSTS_DOWN

@@ -24,6 +24,7 @@ DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 DAY = 86400
 DETAIL_LIMIT = 200
 TELEGRAM_API = "https://api.telegram.org"
+SLACK_WEBHOOK_ENV = "AYE_SLACK_WEBHOOK_URL"
 FRESH_QUERY = "time() - max(timestamp(up))"
 NOTICES = ("alert", "reminder", "recovery")
 DIGEST = "digest"
@@ -548,26 +549,50 @@ def certificate_expiry(host: str, port: int, timeout: float) -> float:
     return float(ssl.cert_time_to_seconds(str(certificate["notAfter"])))
 
 
+def post_json(url: str, payload: dict[str, Any], event: str, timeout: float) -> bool:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return 200 <= int(response.status) < 300
+    except urllib.error.HTTPError as error:
+        log_json({"event": event, "status": error.code})
+    except (OSError, ValueError) as error:
+        log_json({"event": event, "error": type(error).__name__})
+    return False
+
+
 def telegram_sender(token: str, chat: str, timeout: float = 15) -> Send:
     url = f"{TELEGRAM_API}/bot{token}/sendMessage"
 
     def send(text: str) -> bool:
-        body = json.dumps(
-            {"chat_id": chat, "text": text, "disable_web_page_preview": True}
-        ).encode()
-        request = urllib.request.Request(
-            url, data=body, headers={"Content-Type": "application/json"}, method="POST"
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                return 200 <= int(response.status) < 300
-        except urllib.error.HTTPError as error:
-            log_json({"event": "telegram_failed", "status": error.code})
-        except (OSError, ValueError) as error:
-            log_json({"event": "telegram_failed", "error": type(error).__name__})
-        return False
+        payload: dict[str, Any] = {"chat_id": chat, "text": text, "disable_web_page_preview": True}
+        return post_json(url, payload, "telegram_failed", timeout)
 
     return send
+
+
+def slack_text(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def slack_sender(url: str, timeout: float = 15) -> Send:
+    def send(text: str) -> bool:
+        payload: dict[str, Any] = {"text": slack_text(text), "mrkdwn": False}
+        return post_json(url, payload, "slack_failed", timeout)
+
+    return send
+
+
+def sender_from(env: Mapping[str, str]) -> Send:
+    webhook = env.get(SLACK_WEBHOOK_ENV, "").strip()
+    if webhook:
+        return slack_sender(webhook)
+    return telegram_sender(env["AYE_TELEGRAM_BOT_TOKEN"], env["AYE_TELEGRAM_CHAT_ID"])
 
 
 class Sentinel:
@@ -840,7 +865,7 @@ def run_forever(sentinel: Sentinel) -> None:
 def main() -> None:
     env = os.environ
     config = config_from(env)
-    send = telegram_sender(env["AYE_TELEGRAM_BOT_TOKEN"], env["AYE_TELEGRAM_CHAT_ID"])
+    send = sender_from(env)
     sentinel = Sentinel(config, http_fetch, certificate_expiry, send, time.time, query_fetch)
     log_json(
         {

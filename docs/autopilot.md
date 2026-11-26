@@ -65,6 +65,7 @@ cut in half and slips through) goes through these steps, in order. Each match be
 | `custom` | a match of the install's own `mask` patterns |
 | `jwt` | three base64url segments, the first starting `eyJ` |
 | `anthropic-key`, `openai-key`, `github-token`, `gitlab-token`, `slack-token`, `stripe-key`, `google-key`, `aws-key`, `telegram-token` | `sk-ant-`, `sk-` (with `proj-`, `svcacct-`, `admin-`), `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`/`github_pat_`, `glpat-`, `xoxb-`/`xoxp-`/`xoxa-`/`xoxo-`/`xoxr-`/`xoxs-`, `sk_live_`/`rk_live_`/`sk_test_`, `AIza`, `AKIA`/`ASIA`, and the `<digits>:AA...` token of a bot (also inside `/bot<token>/` URLs) |
+| `slack-webhook` | a whole Slack incoming webhook URL, `https://hooks.slack.com/...` or `https://hooks.slack-gov.com/...` |
 | `url-password` | the password of `scheme://user:password@host`; the user and the host stay |
 | `authorization` | the value of an `Authorization` or `Proxy-Authorization` header (the scheme word stays), and a `Bearer` or `Basic` credential anywhere |
 | `cookie` | the value of a `Cookie` or `Set-Cookie` header |

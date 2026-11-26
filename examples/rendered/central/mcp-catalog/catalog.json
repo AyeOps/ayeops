@@ -231,6 +231,17 @@
       "summary": "Line coverage of {{ .Labels.project }} is more than 2 points below its 30-day median",
       "title": "Line coverage dropped more than 2 pp"
     },
+    "dashboards-unmanaged": {
+      "expr": "max by (host, project, group) (ayeops_grafana_reader_dashboards_unmanaged) > bool 0",
+      "for": "1d",
+      "module": "grafana",
+      "name": "dashboards-unmanaged",
+      "runbook": "dashboards-unmanaged",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/dashboards-unmanaged.md",
+      "severity": "info",
+      "summary": "Grafana on {{ .Labels.host }} has held dashboards for a day that no file provisions: they are not reviewed and go with the grafana-data volume; run aye dashboards pull",
+      "title": "Dashboards drawn in Grafana, not in the repository"
+    },
     "delivery-silent": {
       "expr": "aye:delivery_overdue == bool 1",
       "for": "15m",
@@ -560,6 +571,17 @@
       "severity": "warning",
       "summary": "{{ .Labels.device }} on {{ .Labels.host }} has been down for 5 minutes",
       "title": "Network interface down"
+    },
+    "link-down": {
+      "expr": "max by (host, project, group, zone) (probe_success{job=\"blackbox-link\"}) == bool 0",
+      "for": "3m",
+      "module": "probes",
+      "name": "link-down",
+      "runbook": "link-down",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/link-down.md",
+      "severity": "critical",
+      "summary": "{{ .Labels.host }} gets no ping back from any probed host of {{ .Labels.zone }} over the private network",
+      "title": "Private network link down"
     },
     "link-speed-degraded": {
       "expr": "(node_network_speed_bytes{job=\"network\"} > 0) < bool max_over_time(node_network_speed_bytes{job=\"network\"}[7d])",
@@ -922,7 +944,7 @@
       "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-notify-failing.md",
       "severity": "critical",
       "summary": "The sentinel on {{ .Labels.host }} failed to send its last message about {{ .Labels.watch }}",
-      "title": "Sentinel cannot reach Telegram"
+      "title": "Sentinel cannot deliver its messages"
     },
     "sentinel-ping-failing": {
       "expr": "ayeops_sentinel_ping_success == bool 0",
@@ -1194,12 +1216,12 @@
     },
     "backup-failed": {
       "name": "backup-failed",
-      "text": "# Backup job failed\n\nThe last run of a dump job (label `backup`) exited with an error, or exited 0 without leaving\na fresh, non-empty file at its output. The previous dump is still there; what is at risk is\ntoday's copy, and the off-site copy of tonight copies yesterday's file again. Setup:\n[backups](../modules.md#backups).\n\nThe label names either a job of the manifest (`backups.jobs.<name>`, run by its systemd timer\nor by your own cron) or a built-in dump: `secrets` (the `infisical-backup` service) or `errors`\n(`glitchtip-backup`), see [Built-in dumps](#built-in-dumps).\n\n## What to do\n\n1. On the host, `cat /var/lib/ayeops/textfile/ayeops_backup_job_<backup>.prom` (the node\n   `textfile_dir`; for a built-in dump on a host without one,\n   `docker compose exec node-exporter cat /textfile/ayeops_backup_job_<backup>.prom`):\n   `ayeops_backup_last_exit_code` is the exit code of the dump command, `0` with\n   `last_size_bytes 0` means it wrote nothing, `0` with a size means the output was not newer\n   than the start of the run (the command wrote somewhere else).\n2. The command's own output: `journalctl -u ayeops-<host>-backup-<backup>.service` for a job\n   with a `command` in the manifest, the cron mail or `grep CRON /var/log/syslog` for your own\n   cron line. The wrapper adds one line, `backup_run.sh: <backup> failed with exit code <n>`.\n3. Usual causes: the database refused the login (a changed password), the disk is full\n   (`df -h` and the `disk-full` alert), the job ran as a user that cannot write the output\n   directory, the dump tool is a major version older than the server.\n4. Run the job once: `systemctl start ayeops-<host>-backup-<backup>.service` for a job with a\n   timer, the same line as the cron otherwise. The wrapper writes the metrics again, and a\n   success clears the alert at the next scrape.\n\nThe alert clears once a run of the job succeeds. If the job left the manifest, its old file is\nignored: alerts only cover declared jobs. If it fails again by the next scheduled run,\n[backup-missing](backup-missing.md) follows after the job's `grace`.\n\n## Built-in dumps\n\n`infisical-backup` and `glitchtip-backup` look for today's dump every 5 minutes and retry a\nfailed one on the next pass, so one failure right after a restart of the database is normal.\n\n1. `docker compose ps infisical-backup infisical-db` (or `glitchtip-backup glitchtip-db`): both\n   up and healthy?\n2. `docker compose logs --tail 50 infisical-backup`: the output of `pg_dump` and of the\n   wrapper. A wrong `AYE_SECRETS_DB_PASSWORD` (`AYE_ERRORS_DB_PASSWORD`) in `.env`, changed\n   after the volume was created, is the usual lasting cause; the password of an existing volume\n   changes only with `ALTER USER infisical PASSWORD '...'` inside `infisical-db`.\n3. To dump now instead of waiting for the next pass:\n   `docker compose exec -e AYE_BACKUP_ONCE=1 -e AYE_BACKUP_HOUR=0 infisical-backup sh /backup.sh`\n   writes a dump only when today has none; delete today's file first to force one. Restore:\n   [infisical](infisical.md#restore), [glitchtip](glitchtip.md#restore).\n",
+      "text": "# Backup job failed\n\nThe last run of a dump job (label `backup`) exited with an error, or exited 0 without leaving\na fresh, non-empty file at its output. The previous dump is still there; what is at risk is\ntoday's copy, and the off-site copy of tonight copies yesterday's file again. Setup:\n[backups](../modules.md#backups).\n\nThe label names either a job of the manifest (`backups.jobs.<name>`, run by its systemd timer\nor by your own cron) or a built-in dump: `secrets` (the `infisical-backup` service), `errors`\n(`glitchtip-backup`) or `metrics` (`victoriametrics-backup`), see\n[Built-in dumps](#built-in-dumps).\n\n## What to do\n\n1. On the host, `cat /var/lib/ayeops/textfile/ayeops_backup_job_<backup>.prom` (the node\n   `textfile_dir`; for a built-in dump on a host without one,\n   `docker compose exec node-exporter cat /textfile/ayeops_backup_job_<backup>.prom`):\n   `ayeops_backup_last_exit_code` is the exit code of the dump command, `0` with\n   `last_size_bytes 0` means it wrote nothing, `0` with a size means the output was not newer\n   than the start of the run (the command wrote somewhere else).\n2. The command's own output: `journalctl -u ayeops-<host>-backup-<backup>.service` for a job\n   with a `command` in the manifest, the cron mail or `grep CRON /var/log/syslog` for your own\n   cron line. The wrapper adds one line, `backup_run.sh: <backup> failed with exit code <n>`.\n3. Usual causes: the database refused the login (a changed password), the disk is full\n   (`df -h` and the `disk-full` alert), the job ran as a user that cannot write the output\n   directory, the dump tool is a major version older than the server.\n4. Run the job once: `systemctl start ayeops-<host>-backup-<backup>.service` for a job with a\n   timer, the same line as the cron otherwise. The wrapper writes the metrics again, and a\n   success clears the alert at the next scrape.\n\nThe alert clears once a run of the job succeeds. If the job left the manifest, its old file is\nignored: alerts only cover declared jobs. If it fails again by the next scheduled run,\n[backup-missing](backup-missing.md) follows after the job's `grace`.\n\n## Built-in dumps\n\n`infisical-backup` and `glitchtip-backup` look for today's dump every 5 minutes and retry a\nfailed one on the next pass, so one failure right after a restart of the database is normal.\n\n1. `docker compose ps infisical-backup infisical-db` (or `glitchtip-backup glitchtip-db`): both\n   up and healthy?\n2. `docker compose logs --tail 50 infisical-backup`: the output of `pg_dump` and of the\n   wrapper. A wrong `AYE_SECRETS_DB_PASSWORD` (`AYE_ERRORS_DB_PASSWORD`) in `.env`, changed\n   after the volume was created, is the usual lasting cause; the password of an existing volume\n   changes only with `ALTER USER infisical PASSWORD '...'` inside `infisical-db`.\n3. To dump now instead of waiting for the next pass:\n   `docker compose exec -e AYE_BACKUP_ONCE=1 -e AYE_BACKUP_HOUR=0 infisical-backup sh /backup.sh`\n   writes a dump only when today has none; delete today's file first to force one. Restore:\n   [infisical](infisical.md#restore), [glitchtip](glitchtip.md#restore).\n\n## The metrics store\n\n`victoriametrics-backup` archives a snapshot of VictoriaMetrics once a day, see\n[backup of the store](../modules.md#backup-of-the-store), and retries a failed run on the next\npass, 5 minutes later.\n\n1. `docker compose logs --tail 50 victoriametrics-backup`: every failure is a `backup:` line.\n   - `/snapshot/create answered without a snapshot` or a `wget` error: the store did not take a\n     snapshot. `docker compose ps victoriametrics` must be healthy; with `-snapshotAuthKey` set\n     by hand the API refuses the call. A store whose disk is full cannot snapshot either.\n   - `tar of the snapshot <name> failed`: usually `No space left on device` on `backup_dir`\n     (`df -h /var/backups/ayeops/metrics`): an archive needs room for a full copy of the store.\n     Lower `backup_keep_days`, or give `backup_dir` a larger disk.\n   - `cannot delete the snapshot <name> yet`: the archive may be fine; the snapshot stays until\n     a later pass deletes it, or VictoriaMetrics after `-snapshotsMaxAge`. `vm_snapshots` above\n     1 for a day means they pile up: `curl -s http://127.0.0.1:8428/snapshot/list` on the host\n     and `curl -s 'http://127.0.0.1:8428/snapshot/delete?snapshot=<name>'` for each.\n2. To archive now: `docker compose restart victoriametrics-backup` takes one 2 minutes later\n   when today has none; delete today's file in `backup_dir` first to force one.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/backup-failed.md"
     },
     "backup-missing": {
       "name": "backup-missing",
-      "text": "# Backup job missed its schedule\n\nA dump job (label `backup`) has no successful run within the longest gap of its cron\n`schedule` plus `grace`: it failed every time since, it hangs, it never ran since it was\ndeclared, or it runs and its metrics do not arrive. Silence counts as failure: there may be no\ndump younger than the schedule promises. Setup: [backups](../modules.md#backups).\n\nThe label names a job of the manifest or a built-in dump, `secrets` (`infisical-backup`) or\n`errors` (`glitchtip-backup`); for those two, start with\n[backup-failed, built-in dumps](backup-failed.md#built-in-dumps).\n\n## What to do\n\n1. On the host, `cat /var/lib/ayeops/textfile/ayeops_backup_job_<backup>.prom` (the node\n   `textfile_dir`):\n   - no file: the job never ran through the wrapper. For a job with a `command`,\n     `systemctl list-timers 'ayeops-*'` must list `ayeops-<host>-backup-<backup>.timer` with a\n     next run; when it does not, the deploy did not install it (its output says\n     `backup timers not installed`, and `aye doctor` names the reason: no systemd, or a helper\n     host whose host-init predates the `timers` step). For your own cron line, `crontab -l -u\n     root` must call `/opt/ayeops/<host>/backups/backup_run.sh ... <backup> ...` with exactly\n     the name in the manifest.\n   - `ayeops_backup_running 1` with an old `last_start_timestamp_seconds`: the run hangs or was\n     killed. `systemctl status ayeops-<host>-backup-<backup>.service`, or\n     `ps -ef | grep <dump tool>`; a killed run stays `running` until the next one, and a timer\n     does not start a run while the previous one is still active.\n   - `last_run_success 0`: the runs fail, see [backup-failed](backup-failed.md).\n   - a recent success in the file but not in Grafana: node-exporter does not read that\n     directory. `textfile_dir` of the node module must be the directory the wrapper writes to\n     (`-d` or `AYE_TEXTFILE_DIR`, `/var/lib/ayeops/textfile` by default).\n2. `cat /var/lib/ayeops/textfile/ayeops_backups.prom` lists the declared jobs with their\n   `max_age_seconds`; `docker compose ps backup-jobs` must be up. A job with its own cron line\n   whose schedule changed on the host but not in the manifest gives the wrong age: keep both the\n   same, or give the job a `command` so the kit installs the schedule.\n3. Run the job once: `systemctl start ayeops-<host>-backup-<backup>.service`, or the cron line.\n\nThe alert clears once a run succeeds and node-exporter has scraped the file.\n",
+      "text": "# Backup job missed its schedule\n\nA dump job (label `backup`) has no successful run within the longest gap of its cron\n`schedule` plus `grace`: it failed every time since, it hangs, it never ran since it was\ndeclared, or it runs and its metrics do not arrive. Silence counts as failure: there may be no\ndump younger than the schedule promises. Setup: [backups](../modules.md#backups).\n\nThe label names a job of the manifest or a built-in dump, `secrets` (`infisical-backup`),\n`errors` (`glitchtip-backup`) or `metrics` (`victoriametrics-backup`); for those, start with\n[backup-failed, built-in dumps](backup-failed.md#built-in-dumps) or\n[backup-failed, the metrics store](backup-failed.md#the-metrics-store).\n\n## What to do\n\n1. On the host, `cat /var/lib/ayeops/textfile/ayeops_backup_job_<backup>.prom` (the node\n   `textfile_dir`):\n   - no file: the job never ran through the wrapper. For a job with a `command`,\n     `systemctl list-timers 'ayeops-*'` must list `ayeops-<host>-backup-<backup>.timer` with a\n     next run; when it does not, the deploy did not install it (its output says\n     `backup timers not installed`, and `aye doctor` names the reason: no systemd, or a helper\n     host whose host-init predates the `timers` step). For your own cron line, `crontab -l -u\n     root` must call `/opt/ayeops/<host>/backups/backup_run.sh ... <backup> ...` with exactly\n     the name in the manifest.\n   - `ayeops_backup_running 1` with an old `last_start_timestamp_seconds`: the run hangs or was\n     killed. `systemctl status ayeops-<host>-backup-<backup>.service`, or\n     `ps -ef | grep <dump tool>`; a killed run stays `running` until the next one, and a timer\n     does not start a run while the previous one is still active.\n   - `last_run_success 0`: the runs fail, see [backup-failed](backup-failed.md).\n   - a recent success in the file but not in Grafana: node-exporter does not read that\n     directory. `textfile_dir` of the node module must be the directory the wrapper writes to\n     (`-d` or `AYE_TEXTFILE_DIR`, `/var/lib/ayeops/textfile` by default).\n2. `cat /var/lib/ayeops/textfile/ayeops_backups.prom` lists the declared jobs with their\n   `max_age_seconds`; `docker compose ps backup-jobs` must be up. A job with its own cron line\n   whose schedule changed on the host but not in the manifest gives the wrong age: keep both the\n   same, or give the job a `command` so the kit installs the schedule.\n3. Run the job once: `systemctl start ayeops-<host>-backup-<backup>.service`, or the cron line.\n\nThe alert clears once a run succeeds and node-exporter has scraped the file.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/backup-missing.md"
     },
     "battery-low": {
@@ -1256,6 +1278,11 @@
       "name": "coverage-dropped",
       "text": "# Line coverage dropped more than 2 points\n\nThe latest line coverage reported on the watched branches is more than two percentage points\nbelow its 30-day median.\n\n## What to do\n\n1. «Coverage trend» on `AyeOps / Quality` names the suite and the day it dropped.\n2. The commit of that report is on «Latest runs» (`report=\"coverage\"`).\n3. Usual causes: new code merged without tests, tests that are now skipped, or a coverage\n   configuration that started counting a new directory.\n4. A deliberate change, such as counting a new package, settles once it becomes the median.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/coverage-dropped.md"
+    },
+    "dashboards-unmanaged": {
+      "name": "dashboards-unmanaged",
+      "text": "# Dashboards drawn in Grafana, not in the repository\n\nFor a day, Grafana has held at least one dashboard that no file provisions: someone drew it in\nthe UI, or saved a copy of a provisioned one. It lives only in Grafana's database, in the\n`grafana-data` volume: nobody reviewed it, the manifest's repository has no copy, and a lost\nvolume or a fresh Grafana loses it. Nothing is broken now. `grafana-reader` counts these\ndashboards every 5 minutes as `ayeops_grafana_reader_dashboards_unmanaged`. Background:\n[modules](../modules.md#dashboards-drawn-in-grafana).\n\n1. See which dashboards, from a machine with the repository and the Grafana admin credentials:\n\n   ```sh\n   aye secrets run -- aye dashboards drift ops/ayeops.yaml\n   ```\n\n   Each `unmanaged` line names a uid, a title and a folder. `stale` and `not-deployed` lines mean\n   the Grafana host runs an older render: deploy it.\n\n2. Keep the ones worth keeping: run `aye dashboards pull`.\n\n   ```sh\n   aye secrets run -- aye dashboards pull ops/ayeops.yaml\n   aye secrets run -- aye dashboards pull ops/ayeops.yaml --uid <uid>\n   ```\n\n   It writes each one as `<uid>.json` into the manifest's `grafana.dashboards` directory, without\n   `id` and `version`, with the datasource uids of the manifest. It refuses to replace a file that\n   differs unless `--force`. A `warning` line names a datasource the manifest does not provision:\n   declare it under `grafana.datasources` or point the panels at one that is.\n\n3. Review the files, run `aye check`, commit, render and deploy the Grafana host. Grafana then\n   provisions each dashboard under the same uid, in the folder named after `project`, and the UI\n   copy becomes that provisioned dashboard: links and bookmarks keep working.\n\n4. A dashboard nobody needs: delete it in Grafana (Dashboard settings, Delete).\n\nThe alert clears on the next pass of the reader once `ayeops_grafana_reader_dashboards_unmanaged`\nis `0`.\n",
+      "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/dashboards-unmanaged.md"
     },
     "delivery-silent": {
       "name": "delivery-silent",
@@ -1354,7 +1381,7 @@
     },
     "host-down": {
       "name": "host-down",
-      "text": "# Host down\n\nNo fresh node metrics from the host for three minutes: the machine is off or asleep, vmagent cannot reach storage, or node-exporter is down.\n\n## What to do\n\n1. Is the host reachable at all (ping, ssh)? A laptop that sleeps fires this by design. If the\n   host is expected to disappear (a workstation switched off at night, a machine on an\n   unreliable link), mark it `volatile: true` in the manifest: `host-down` then leaves it out\n   and [host-gone](host-gone.md) warns only after it has been away for a day, or the duration\n   given. If the outage is planned and recurs (an update night, a weekly backup run that takes\n   the box down), declare a `maintenance` window on the host instead of a silence in Grafana:\n   it lives in the manifest, so nobody forgets it ([manifest](../manifest.md#volatile-hosts-and-maintenance-windows)).\n2. On the host: `docker compose ps`; vmagent buffers to disk while storage is unreachable and replays when it is back. The buffer lasts until `queue_max` is full, then [metrics-shipping-dropped](metrics-shipping-dropped.md) follows; `curl -s http://127.0.0.1:8429/metrics | grep pending_data_bytes` on the host shows its size in bytes.\n3. On the central host: is VictoriaMetrics up and is port 8428 reachable from the edge over the private address?\n4. While the host is down its other alerts are held back (value 0 in Grafana, see `docs/modules.md`, grafana). Once `host-down` resolves, look at what fires on the host in the next minutes: that is what was hidden.\n5. Fired right after a maintenance window of the host ended? The window holds the alert back\n   only while it is open; a host still down two minutes after its end is down.\n",
+      "text": "# Host down\n\nNo fresh node metrics from the host for three minutes: the machine is off or asleep, vmagent cannot reach storage, or node-exporter is down.\n\n## What to do\n\n1. Is the host reachable at all (ping, ssh)? A laptop that sleeps fires this by design. If the\n   host is expected to disappear (a workstation switched off at night, a machine on an\n   unreliable link), mark it `volatile: true` in the manifest: `host-down` then leaves it out\n   and [host-gone](host-gone.md) warns only after it has been away for a day, or the duration\n   given. If the outage is planned and recurs (an update night, a weekly backup run that takes\n   the box down), declare a `maintenance` window on the host instead of a silence in Grafana:\n   it lives in the manifest, so nobody forgets it ([manifest](../manifest.md#volatile-hosts-and-maintenance-windows)).\n2. On the host: `docker compose ps`; vmagent buffers to disk while storage is unreachable and replays when it is back. The buffer lasts until `queue_max` is full, then [metrics-shipping-dropped](metrics-shipping-dropped.md) follows; `curl -s http://127.0.0.1:8429/metrics | grep pending_data_bytes` on the host shows its size in bytes.\n3. On the central host: is VictoriaMetrics up and is port 8428 reachable from the edge over the private address?\n   A host that `probes.links` pings is held back while none of its zone answers: then\n   [link-down](link-down.md) fires once for the zone instead. A `host-down` of such a host means\n   the host still answers ping, or another host of its zone does, so the link is up and the host\n   itself stopped reporting.\n4. While the host is down its other alerts are held back (value 0 in Grafana, see `docs/modules.md`, grafana). Once `host-down` resolves, look at what fires on the host in the next minutes: that is what was hidden.\n5. Fired right after a maintenance window of the host ended? The window holds the alert back\n   only while it is open; a host still down two minutes after its end is down.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/host-down.md"
     },
     "host-drift": {
@@ -1396,6 +1423,11 @@
       "name": "interface-down",
       "text": "# Network interface down\n\nA declared network interface has been down (no carrier, no association, or not present) for 5\nminutes. Only the interfaces listed in `network.interfaces` are watched.\n\n## What to do\n\n1. `ip -br link` and `ip -br addr` on the host.\n2. Wired: cable, switch port, and `ethtool <device>` for link detection and negotiated speed.\n3. Wi-Fi: `iw dev <device> link`, `nmcli device status`; is the access point up?\n4. If the interface is gone on purpose (an undocked laptop, a removed USB adapter), remove it\n   from `network.interfaces`.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/interface-down.md"
+    },
+    "link-down": {
+      "name": "link-down",
+      "text": "# Private network link down\n\nThe host in the `host` label has pinged every host of `zone` it probes over the private network\n(`probes.links`, the `address` of each host) for 3 minutes and none answered. A host without a\n`zone` is a zone of its own, named after the host. While the zone is unreachable, `host-down` of\nits probed hosts is held back, so a tunnel or a site that drops shows as this one alert instead\nof a `host-down` per host.\n\nIt reads the same for three causes: the tunnel between the sites is down (WireGuard, Tailscale,\nany VPN), the site lost its uplink, or the site lost power. From the probing host they look\nalike; the steps below tell them apart.\n\n## What to do\n\n1. Look at the dashboard `AyeOps / Probes`, panel \"Private network links\": does the probing host\n   reach the other zones? If every zone is red at once, the problem is on the probing host's\n   side: its own VPN interface (`ip -br addr`, `wg show` or `tailscale status` there) or its\n   uplink.\n2. Only this zone is red: is the site on the internet at all? Its public services (the\n   `probe-failing` alerts of services on its hosts), the [sentinel](../modules.md#sentinel) on a\n   host there, or someone on site tell. A site that is online with the tunnel down is a VPN\n   problem: on a host of the zone, `wg show` (latest handshake older than about two minutes with\n   traffic flowing means the peer is not answering), `tailscale status`, or the VPN client's log;\n   then the firewall, a changed public address of the endpoint, an expired key or login.\n3. The site is offline too: power or the provider. Nothing in the fleet can help from outside;\n   the hosts' vmagent queues hold their metrics and replay them when the link is back, so the\n   dashboards fill in the gap afterwards.\n4. The hosts answer `ssh` over the private address but not ping: ICMP is filtered on the VPN\n   interface. Allow echo requests from the probing host there, or drop the host from\n   `probes.links`; with only ICMP blocked this alert fires while everything works.\n5. When the alert resolves, `host-down` of the zone's hosts evaluates again: a host that still\n   does not report two minutes later is down by itself, not by the link.\n",
+      "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/link-down.md"
     },
     "link-speed-degraded": {
       "name": "link-speed-degraded",
@@ -1529,7 +1561,7 @@
     },
     "sentinel-notify-failing": {
       "name": "sentinel-notify-failing",
-      "text": "# Sentinel cannot reach Telegram\n\nThe last message of the sentinel was not accepted by Telegram. The next time the central host\ndies, the sentinel will notice but you will not hear it, except through the dead-man ping.\n\n## What to do\n\n1. `docker compose logs sentinel` on the sentinel's host: `telegram_failed` lines carry the\n   HTTP status (the token is never logged).\n2. `401`: the bot token in `AYE_TELEGRAM_BOT_TOKEN` is wrong or was revoked; `400 chat not\n   found` or `403`: `AYE_TELEGRAM_CHAT_ID` is wrong, or the bot was removed from the chat.\n   Compare with the values of the Grafana contact point, which should be the same.\n3. A connection error: the sentinel's host cannot reach `api.telegram.org`; check its DNS and\n   outbound firewall.\n4. After fixing the `.env`, `docker compose up -d sentinel`. The message is retried every round\n   until it is delivered, and the alert clears with the next delivered one.\n",
+      "text": "# Sentinel cannot deliver its messages\n\nThe last message of the sentinel was not accepted by Telegram, or by Slack with\n`alerting.contact: slack`. The next time the central host\ndies, the sentinel will notice but you will not hear it, except through the dead-man ping.\n\n## What to do\n\n1. `docker compose logs sentinel` on the sentinel's host: `telegram_failed` lines carry the\n   HTTP status (the token is never logged).\n2. `401`: the bot token in `AYE_TELEGRAM_BOT_TOKEN` is wrong or was revoked; `400 chat not\n   found` or `403`: `AYE_TELEGRAM_CHAT_ID` is wrong, or the bot was removed from the chat.\n   Compare with the values of the Grafana contact point, which should be the same.\n3. A connection error: the sentinel's host cannot reach `api.telegram.org`; check its DNS and\n   outbound firewall.\n4. With contact `slack`: `slack_failed` lines carry the status (the webhook URL is never\n   logged). `403`: a workspace admin restricts the webhook, or it was revoked; `404`: the\n   webhook, its app or its channel is gone; `410`: the channel was archived. Make a new webhook\n   and put it into `AYE_SLACK_WEBHOOK_URL` in the `.env` of the sentinel's and of the Grafana\n   host. A connection error: the host cannot reach `hooks.slack.com`.\n5. After fixing the `.env`, `docker compose up -d sentinel`. The message is retried every round\n   until it is delivered, and the alert clears with the next delivered one.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-notify-failing.md"
     },
     "sentinel-ping-failing": {
@@ -1710,9 +1742,10 @@
       "alerts": [
         "target-down",
         "probe-failing",
-        "tls-expiring"
+        "tls-expiring",
+        "link-down"
       ],
-      "description": "Probes the configured URLs for a 2xx answer and their TLS certificate expiry, and pings the gateway and public addresses and asks public resolvers from the host.",
+      "description": "Probes the configured URLs for a 2xx answer and their TLS certificate expiry, pings the gateway and public addresses and asks public resolvers from the host, and pings the private address of other hosts.",
       "host": "central",
       "id": "central/blackbox",
       "logs": "docker",
@@ -1907,9 +1940,10 @@
     "central/grafana-reader": {
       "alerts": [
         "grafana-reader-failing",
+        "dashboards-unmanaged",
         "target-down"
       ],
-      "description": "Keeps a Grafana service account with role Viewer and a token for it in the grafana-reader volume, so agents on the Grafana host read alert rules, silences, alerts and alert annotations without the admin password; checks the token every 5 minutes, writes a new one only when the file is missing or Grafana refuses it, and serves the result on 9137.",
+      "description": "Keeps a Grafana service account with role Viewer and a token for it in the grafana-reader volume, so agents on the Grafana host read alert rules, silences, alerts and alert annotations without the admin password; checks the token every 5 minutes, writes a new one only when the file is missing or Grafana refuses it, counts the dashboards that no file provisions, and serves the result on 9137.",
       "host": "central",
       "id": "central/grafana-reader",
       "logs": "docker",
@@ -1917,7 +1951,8 @@
         "ayeops_grafana_reader_ok",
         "ayeops_grafana_reader_endpoint_ok",
         "ayeops_grafana_reader_last_success_timestamp_seconds",
-        "ayeops_grafana_reader_rotations_total"
+        "ayeops_grafana_reader_rotations_total",
+        "ayeops_grafana_reader_dashboards_unmanaged"
       ],
       "name": "grafana-reader",
       "source": "module grafana",
@@ -2467,9 +2502,10 @@
       "alerts": [
         "target-down",
         "probe-failing",
-        "tls-expiring"
+        "tls-expiring",
+        "link-down"
       ],
-      "description": "Probes the configured URLs for a 2xx answer and their TLS certificate expiry, and pings the gateway and public addresses and asks public resolvers from the host.",
+      "description": "Probes the configured URLs for a 2xx answer and their TLS certificate expiry, pings the gateway and public addresses and asks public resolvers from the host, and pings the private address of other hosts.",
       "host": "edge",
       "id": "edge/blackbox",
       "logs": "docker",
@@ -2764,7 +2800,7 @@
         "sentinel-stalled",
         "sentinel-digest-overdue"
       ],
-      "description": "Checks Grafana, VictoriaMetrics and the freshness of up on the watched host every minute and tells Telegram when they stop answering.",
+      "description": "Checks Grafana, VictoriaMetrics and the freshness of up on the watched host every minute and tells Telegram, or Slack with contact slack, when they stop answering.",
       "host": "edge",
       "id": "edge/sentinel",
       "logs": "docker",

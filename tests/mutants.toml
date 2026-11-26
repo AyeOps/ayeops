@@ -10,6 +10,9 @@ score = 97.9
 tests = ["tests/test_sql_checks.py"]
 score = 100.0
 
+[modules."src/ayeops/dashboard_sync.py"]
+tests = ["tests/test_dashboard_sync.py"]
+
 [modules."src/ayeops/dashboards.py"]
 tests = ["tests/test_dashboards.py"]
 score = 98.9
@@ -30,6 +33,9 @@ score = 78.6
 tests = ["tests/test_downtime.py"]
 score = 100.0
 
+[modules."src/ayeops/duties.py"]
+tests = ["tests/test_duties.py"]
+
 [modules."src/ayeops/eol.py"]
 tests = ["tests/test_eol.py"]
 score = 94.9
@@ -41,6 +47,10 @@ score = 98.4
 [modules."src/ayeops/inventory.py"]
 tests = ["tests/test_inventory.py"]
 score = 85.5
+
+[modules."src/ayeops/links.py"]
+tests = ["tests/test_links.py"]
+score = 100.0
 
 [modules."src/ayeops/modules/eol/files/eol_agent.py"]
 tests = ["tests/test_eol.py"]
@@ -93,6 +103,10 @@ score = 100.0
 [modules."src/ayeops/render_index.py"]
 tests = ["tests/test_render_index.py"]
 score = 97.4
+
+[modules."src/ayeops/replication.py"]
+tests = ["tests/test_replication.py"]
+score = 100.0
 
 [modules."src/ayeops/sentinel.py"]
 tests = ["tests/test_sentinel_module.py"]
