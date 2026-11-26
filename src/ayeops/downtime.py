@@ -186,7 +186,7 @@ def module_alert(alert: dict[str, Any], hold: bool, down: Downtime) -> dict[str,
 
 
 def hostless_alert(alert: dict[str, Any]) -> dict[str, Any]:
-    return guarded(alert, [])
+    return alert
 
 
 def service_guards(host: str, hold: bool, down: Downtime) -> list[Guard]:
