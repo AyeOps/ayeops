@@ -217,9 +217,10 @@ their metrics and logs; set `group` on the profile or the host to name the group
 | `state` | no | `live` (default), `planned` or `disabled`, see [reserved services](#reserved-services) |
 | `criticality` | no | `critical`, `high`, `normal` or `low`: how much a minute of its downtime weighs, 100, 10, 1 and 0.1 on the [`Incidents` dashboard](modules.md#incidents); without it a service with a public [status mark](#status-mark) counts as `high`, any other as `normal` |
 | `data` | `data-backup`, `backup-rpo`, `backup-rto`, `backup-placement` | the data the service keeps and what its backups promise: engine, dump job, `rpo`, `rto`, copies, see [data](#data) |
+| `replication` | `replication-primary`, `replication-engine`, `replication-metrics`, `replication-name` | the database this one is a streaming replica of, and how far behind it may fall; generates the lag, broken and two-primaries alerts, see [replication](#replication) |
 | `description` | `service-description` | one sentence on what it does for whom; a [text](#text-in-several-languages) |
 | `metrics` | `service-metrics` | list of metric names, or `{none: <reason>}`; the reason is a [waiver](#waivers) and may be `{reason, until}` |
-| `alerts` | `service-alerts` | at least one alert, see below |
+| `alerts` | `service-alerts` | at least one alert, see below; a `replication` block brings its own |
 | `logs` | `service-logs` | `docker`, `journald`, `syslog` or `file:<path>` |
 | `status` | `service-status` | `{public: <status page component>}` or `{internal: <reason>}`; a public mark may add `id` and `probe`, see below; the internal reason is a [waiver](#waivers) |
 | `cloud` | `cloud-limit` | cloud dependencies: `{name, limit, on_exceed}` each |
@@ -279,6 +280,45 @@ A `criticality: critical` service with `data` needs two copies in different zone
 with another provider when the manifest names them, and one that is append-only; see
 [`backup-placement`](rules.md#data-rules). A critical service that runs on a database image or
 unit and declares no `data` gets the warning `data-declared`.
+
+### Replication
+
+A replica is otherwise monitored as one more database: nobody hears when it falls behind, stops
+streaming, or is promoted while its primary still takes writes. A service declares the pair on
+the replica, and AyeOps writes the alerts for it:
+
+```yaml
+services:
+  orders:
+    host: db-1
+    data: {engine: postgres, backup: orders}
+    metrics:
+      - pg_replication_is_replica
+      - pg_stat_replication_pg_current_wal_lsn_bytes
+      - pg_stat_replication_pg_wal_lsn_diff
+  orders-replica:
+    host: db-2
+    replication:
+      primary: orders
+      max_lag: 5m
+    metrics: [pg_replication_is_replica]
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| `primary` | yes | the service it streams from: a live service that is not itself a replica (rule `replication-primary`) |
+| `max_lag` | no | how far behind the replica may fall, as minutes, hours or days (`5m`, `2h`), default `5m` |
+| `application_name` | no | the name the replica connects with, set as `application_name=` in its `primary_conninfo`, default the replica's service name; the primary tells its standbys apart by it (rule `replication-name`) |
+
+Replication is watched for PostgreSQL only for now: the primary declares [`data`](#data) with
+`engine: postgres`, and so does the replica when it declares `data` (rule `replication-engine`).
+The alerts read [postgres_exporter](https://github.com/prometheus-community/postgres_exporter)
+(its default `replication` and `stat_replication` collectors, checked against v0.20.1) on both
+nodes, with each scrape target labelled `service: <service name>`, which a
+[module of your own](modules.md#write-your-own-module) does in its `scrape.yaml.j2`. The two
+services list the series the alerts read in `metrics` (rule `replication-metrics`). A
+replication block counts as the replica's alerts for `service-alerts`. The alerts and the
+reasons behind their expressions are in [modules](modules.md#database-replication).
 
 ### Reserved services
 
