@@ -1,0 +1,207 @@
+{
+  "rules": {
+    "aye-ai-budget-exceeded": {
+      "expr": "sum by (provider) (ayeops_ai_cost_month_usd) / on (provider) ayeops_ai_budget_usd > bool 1",
+      "module": "ai-usage",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/ai-budget.md",
+      "service": null,
+      "severity": "critical",
+      "title": "AI provider budget exceeded"
+    },
+    "aye-backup-missing": {
+      "expr": "max by (host, project, group, backup) (time() - (max by (host, project, group, backup) (ayeops_backup_last_success_timestamp_seconds) or max by (host, project, group, backup) (ayeops_backup_declared_timestamp_seconds)) > bool on (host, project, group, backup) max by (host, project, group, backup) (ayeops_backup_max_age_seconds))",
+      "module": "backups",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/backup-missing.md",
+      "service": null,
+      "severity": "critical",
+      "title": "Backup job missed its schedule"
+    },
+    "aye-deploy-failed": {
+      "expr": "aye:step_success:last{step=\"deploy\"} == bool 0",
+      "module": "delivery",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/deploy-failed.md",
+      "service": null,
+      "severity": "critical",
+      "title": "Deploy failed"
+    },
+    "aye-disk-critical": {
+      "expr": "(1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs\"}) * 100 > bool 90",
+      "module": "hygiene",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/disk-critical.md",
+      "service": null,
+      "severity": "critical",
+      "title": "Disk above 90 %"
+    },
+    "aye-domain-expiring-7d": {
+      "expr": "ayeops_domain_expiry_days < bool 7",
+      "module": "probes",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/domain-expiring.md",
+      "service": null,
+      "severity": "critical",
+      "title": "Domain expires in less than 7 days"
+    },
+    "aye-gpu-collect-failing": {
+      "expr": "nvidia_smi_last_collect_success == bool 0",
+      "module": "gpu",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/gpu-collect-failing.md",
+      "service": null,
+      "severity": "critical",
+      "title": "nvidia-smi failing"
+    },
+    "aye-host-down": {
+      "expr": "1 - (max by (host) (last_over_time(up{job=\"node\"}[1d]) * (lag(up{job=\"node\"}[1d]) < bool 180)) + on (host) group_right () (0 * last_over_time(up{job=\"node\"}[1d])))",
+      "module": "node",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/host-down.md",
+      "service": null,
+      "severity": "critical",
+      "title": "Host down"
+    },
+    "aye-link-down": {
+      "expr": "max by (host, project, group, zone) (probe_success{job=\"blackbox-link\"}) == bool 0",
+      "module": "probes",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/link-down.md",
+      "service": null,
+      "severity": "critical",
+      "title": "Private network link down"
+    },
+    "aye-mcp-calls-flow-zero": {
+      "expr": "(((((sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h])) or (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 1w)), \"aye_week\", \"1\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 2w)), \"aye_week\", \"2\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 3w)), \"aye_week\", \"3\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 4w)), \"aye_week\", \"4\", \"\", \"\"))) * 0)) == bool 0) * (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 1w)), \"aye_week\", \"1\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 2w)), \"aye_week\", \"2\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 3w)), \"aye_week\", \"3\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 4w)), \"aye_week\", \"4\", \"\", \"\"))) > bool 5) * (count by (tool) ((label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 1w)), \"aye_week\", \"1\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 2w)), \"aye_week\", \"2\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 3w)), \"aye_week\", \"3\", \"\", \"\") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service=\"mcp\"}[1h] offset 4w)), \"aye_week\", \"4\", \"\", \"\"))) >= bool 2)) * on() group_left() (1 - clamp_max(((((hour() * 60 + minute()) >= bool 180) * ((hour() * 60 + minute()) < bool 240)) * ((day_of_week() == bool 0))), 1))) unless on(tool) label_replace(vector(1), \"tool\", \"legacy-search\", \"\", \"\")) or on() vector(0)",
+      "module": null,
+      "runbook_url": "https://runbooks.acme.example/mcp-calls-flow",
+      "service": "mcp",
+      "severity": "critical",
+      "title": "MCP tool calls: stopped"
+    },
+    "aye-mcp-down": {
+      "expr": "probe_success{instance=\"https://mcp.acme.example\"} == bool 0",
+      "module": null,
+      "runbook_url": "https://runbooks.acme.example/mcp-down",
+      "service": "mcp",
+      "severity": "critical",
+      "title": "MCP endpoint down"
+    },
+    "aye-metrics-shipping-dropped": {
+      "expr": "sum by (host, project, group) (increase(vm_persistentqueue_blocks_dropped_total[1h])) + sum by (host, project, group) (increase(vmagent_remotewrite_packets_dropped_total[1h])) > bool 0",
+      "module": "metrics",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-shipping-dropped.md",
+      "service": null,
+      "severity": "critical",
+      "title": "vmagent drops metrics"
+    },
+    "aye-objectstore-down": {
+      "expr": "min by (host, project, group) (up{job=\"garage\"}) == bool 0",
+      "module": "objectstore",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/objectstore-down.md",
+      "service": null,
+      "severity": "critical",
+      "title": "Object store down"
+    },
+    "aye-offsite-stale": {
+      "expr": "time() - max by (host, project, group) (ayeops_offsite_last_success_timestamp_seconds) > bool on (host, project, group) (max by (host, project, group) (ayeops_offsite_max_age_seconds) or max by (host, project, group) (ayeops_offsite_last_success_timestamp_seconds) * 0 + 93600)",
+      "module": "offsite",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/offsite-stale.md",
+      "service": null,
+      "severity": "critical",
+      "title": "No off-site backup within 26 hours or the rpo"
+    },
+    "aye-probe-failing": {
+      "expr": "probe_success{job=\"blackbox-http\"} == bool 0",
+      "module": "probes",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/probe-failing.md",
+      "service": null,
+      "severity": "critical",
+      "title": "Probe failing"
+    },
+    "aye-sentinel-notify-failing": {
+      "expr": "ayeops_sentinel_last_notice_ok == bool 0",
+      "module": "sentinel",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-notify-failing.md",
+      "service": null,
+      "severity": "critical",
+      "title": "Sentinel cannot deliver its messages"
+    },
+    "aye-smart-failing": {
+      "expr": "smartctl_device_smart_status == bool 0",
+      "module": "smart",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/smart-failing.md",
+      "service": null,
+      "severity": "critical",
+      "title": "SMART health check failing"
+    },
+    "aye-web-down": {
+      "expr": "probe_success{instance=\"https://acme.example\"} == bool 0",
+      "module": null,
+      "runbook_url": "https://runbooks.acme.example/web-down",
+      "service": "web",
+      "severity": "critical",
+      "title": "Website down"
+    }
+  },
+  "secret_names": [
+    "AYE_ANTHROPIC_ADMIN_KEY",
+    "AYE_AUTH_CLIENT_ID",
+    "AYE_AUTH_CLIENT_SECRET",
+    "AYE_AUTH_COOKIE_SECRET",
+    "AYE_AUTOPILOT_API_KEY",
+    "AYE_AUTOPILOT_OAUTH_TOKEN",
+    "AYE_AUTOPILOT_WEBHOOK_SECRET",
+    "AYE_CLOUDFLARE_ANALYTICS_TOKEN",
+    "AYE_CLOUDFLARE_DNS_API_TOKEN",
+    "AYE_GITHUB_TOKEN",
+    "AYE_GRAFANA_ADMIN_PASSWORD",
+    "AYE_GRAFANA_ADMIN_USER",
+    "AYE_GRAFANA_PG_PASSWORD",
+    "AYE_IMAGE_UPDATES_GHCR_TOKEN",
+    "AYE_MCP_GRAFANA_SERVER_TOKEN",
+    "AYE_MCP_SESSION_KEY",
+    "AYE_OBJECTSTORE_ACCESS_KEY_ID",
+    "AYE_OBJECTSTORE_ADMIN_TOKEN",
+    "AYE_OBJECTSTORE_RPC_SECRET",
+    "AYE_OBJECTSTORE_SECRET_ACCESS_KEY",
+    "AYE_OFFSITE_ACCESS_KEY_ID",
+    "AYE_OFFSITE_RESTIC_PASSWORD",
+    "AYE_OFFSITE_REST_PASSWORD",
+    "AYE_OFFSITE_SECRET_ACCESS_KEY",
+    "AYE_ONCALL_ACKS_SECRET",
+    "AYE_ONCALL_ADMIN_PASSWORD",
+    "AYE_ONCALL_DB_PASSWORD",
+    "AYE_ONCALL_ENCRYPTION_KEY",
+    "AYE_ONCALL_TELEGRAM_TOKEN",
+    "AYE_ONCALL_TWILIO_ACCOUNT_SID",
+    "AYE_ONCALL_TWILIO_AUTH_TOKEN",
+    "AYE_ONCALL_TWILIO_FROM_NUMBER",
+    "AYE_ONCALL_WEBHOOK_SECRET",
+    "AYE_OPENAI_ADMIN_KEY",
+    "AYE_RESTSTORE_METRICS_PASSWORD",
+    "AYE_SENTINEL_PING_URL",
+    "AYE_SLACK_WEBHOOK_URL",
+    "AYE_SMTP_PASSWORD",
+    "AYE_SMTP_USER",
+    "AYE_STATUS_PUSH_SECRET",
+    "AYE_TELEGRAM_BOT_TOKEN",
+    "AYE_TELEGRAM_CHAT_ID",
+    "AYE_UPDATES_TOKEN"
+  ],
+  "services": {
+    "acme-db": {
+      "container": null,
+      "depends_on": [],
+      "description": "PostgreSQL database of the acme shop on the office server, dumped every night and copied to central.",
+      "host": "edge"
+    },
+    "mcp": {
+      "container": "acme-apps[-_]mcp[-_][0-9]+",
+      "depends_on": [],
+      "description": "Public MCP endpoint that lets AI assistants read the acme catalog.",
+      "host": "central"
+    },
+    "web": {
+      "container": "acme-apps[-_]web[-_][0-9]+",
+      "depends_on": [
+        "cdn"
+      ],
+      "description": "Public website of acme, served by nginx behind the CDN.",
+      "host": "central"
+    }
+  }
+}

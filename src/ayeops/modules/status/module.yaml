@@ -1,0 +1,59 @@
+name: status
+summary: The status page reporter. Reads the firing alerts and maintenance silences of the Grafana next to it once a minute, turns them into the states of the public components that wait for pushes and posts them, signed, to the status page Worker.
+requires:
+  grafana: {}
+defaults:
+  interval: 1m
+  timeout: 10s
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    interval:
+      enum: [1m, 2m]
+    timeout:
+      type: string
+      pattern: "^([1-9]|1[0-9]|20)s$"
+services:
+  status-reporter:
+    description: Turns the alerts of the services behind each public status page component into a signed push of operational, degraded, outage, maintenance or no data to the status page Worker, once a minute.
+    memory: 48m
+    cpus: 0.05
+    metrics:
+      - ayeops_status_push_success
+      - ayeops_status_last_push_timestamp_seconds
+      - ayeops_status_push_failures_total
+      - ayeops_status_query_success
+      - ayeops_status_component
+    alerts:
+      - target-down
+      - status-push-failing
+      - status-query-failing
+    logs: docker
+    grafana_reader: true
+    status:
+      internal: feeds the status page, which shows its silence as no data
+alerts:
+  - name: status-push-failing
+    title: Status page reporter cannot push
+    expr: time() - max by (host, project, group) (ayeops_status_last_push_timestamp_seconds) > bool 300
+    for: 1m
+    severity: warning
+    summary: "The status reporter on {{ .Labels.host }} has not pushed to the status page for 5 minutes, so its components show no data there"
+    runbook: status-push-failing
+    no_data: alerting
+  - name: status-query-failing
+    title: Status page reporter cannot read Grafana
+    expr: ayeops_status_query_success == bool 0
+    for: 5m
+    severity: warning
+    summary: "The status reporter on {{ .Labels.host }} cannot read the alerts from Grafana, so it pushes no data for every component"
+    runbook: status-query-failing
+files:
+  - src: files/status_reporter.py
+    dest: status/status_reporter.py
+generated:
+  - env: [AYE_STATUS_PUSH_SECRET]
+    format: hex
+    bytes: 32

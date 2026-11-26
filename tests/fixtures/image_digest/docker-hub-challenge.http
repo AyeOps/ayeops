@@ -1,0 +1,8 @@
+HTTP/1.1 401 Unauthorized
+Date: Thu, 05 Nov 2026 20:21:45 GMT
+Content-Type: application/json
+Content-Length: 156
+Connection: keep-alive
+docker-distribution-api-version: registry/2.0
+www-authenticate: Bearer realm="https://auth.docker.io/token",service="registry.docker.io",scope="repository:aquasec/trivy:pull"
+strict-transport-security: max-age=31536000

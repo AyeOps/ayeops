@@ -1,0 +1,91 @@
+{% if settings.http %}
+- job_name: blackbox-http
+  metrics_path: /probe
+  params:
+    module: [http_2xx]
+  static_configs:
+    - targets: {{ settings.http | tojson }}
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: "blackbox:9115"
+{% endif %}
+{% if settings.internet or settings.gateway %}
+- job_name: blackbox-icmp
+  scrape_interval: {{ settings.internet_interval | tojson }}
+  scrape_timeout: {{ settings.internet_interval | tojson }}
+  metrics_path: /probe
+  params:
+    module: [icmp]
+  static_configs:
+{% if settings.gateway %}
+    - targets: [{{ settings.gateway | tojson }}]
+      labels:
+        layer: gateway
+{% endif %}
+{% if settings.internet %}
+    - targets: {{ settings.internet_targets | tojson }}
+      labels:
+        layer: internet
+{% endif %}
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: "blackbox:9115"
+{% endif %}
+{% if links %}
+- job_name: blackbox-link
+  metrics_path: /probe
+  params:
+    module: [link]
+  static_configs:
+{% for link in links %}
+    - targets: [{{ link.address | tojson }}]
+      labels:
+        peer: {{ link.peer | tojson }}
+        zone: {{ link.zone | tojson }}
+{% endfor %}
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: "blackbox:9115"
+{% endif %}
+{% if settings.internet %}
+- job_name: blackbox-dns
+  scrape_interval: {{ settings.internet_interval | tojson }}
+  scrape_timeout: {{ settings.internet_interval | tojson }}
+  metrics_path: /probe
+  params:
+    module: [dns]
+  static_configs:
+    - targets: {{ settings.dns_servers | tojson }}
+      labels:
+        layer: dns
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: "blackbox:9115"
+{% endif %}
+{% if blackbox %}
+- job_name: blackbox
+  static_configs:
+    - targets: ["blackbox:9115"]
+{% endif %}
+{% if settings.domains %}
+- job_name: rdap
+  scrape_interval: 5m
+  static_configs:
+    - targets: ["rdap-exporter:9130"]
+{% endif %}

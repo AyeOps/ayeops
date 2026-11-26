@@ -1,0 +1,144 @@
+{
+  "object": "page",
+  "data": [
+    {
+      "object": "bucket",
+      "start_time": 1767225600,
+      "end_time": 1767312000,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1767312000,
+      "end_time": 1767398400,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1767398400,
+      "end_time": 1767484800,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1767484800,
+      "end_time": 1767571200,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1767571200,
+      "end_time": 1767657600,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1767657600,
+      "end_time": 1767744000,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1767744000,
+      "end_time": 1767830400,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1767830400,
+      "end_time": 1767916800,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1767916800,
+      "end_time": 1768003200,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1768003200,
+      "end_time": 1768089600,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1768089600,
+      "end_time": 1768176000,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1768176000,
+      "end_time": 1768262400,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1768262400,
+      "end_time": 1768348800,
+      "results": []
+    },
+    {
+      "object": "bucket",
+      "start_time": 1768348800,
+      "end_time": 1768435200,
+      "results": [
+        {
+          "object": "organization.costs.result",
+          "amount": {
+            "value": 0.5,
+            "currency": "usd"
+          },
+          "line_item": "gpt-5-mini, input",
+          "project_id": null
+        },
+        {
+          "object": "organization.costs.result",
+          "amount": {
+            "value": 1.25,
+            "currency": "usd"
+          },
+          "line_item": "gpt-5-mini, output",
+          "project_id": null
+        }
+      ]
+    },
+    {
+      "object": "bucket",
+      "start_time": 1768435200,
+      "end_time": 1768521600,
+      "results": [
+        {
+          "object": "organization.costs.result",
+          "amount": {
+            "value": 0.75,
+            "currency": "usd"
+          },
+          "line_item": "gpt-5-mini, output",
+          "project_id": null
+        },
+        {
+          "object": "organization.costs.result",
+          "amount": {
+            "value": 0.1,
+            "currency": "usd"
+          },
+          "line_item": "web search tool calls",
+          "project_id": null
+        },
+        {
+          "object": "organization.costs.result",
+          "amount": {
+            "value": 0.05,
+            "currency": "usd"
+          },
+          "line_item": null,
+          "project_id": null
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}

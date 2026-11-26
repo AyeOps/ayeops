@@ -1,0 +1,1741 @@
+{
+  "editable": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "panels": [],
+      "title": {
+        "en": "Overview",
+        "uk": "Огляд"
+      },
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": {
+                    "en": "Down",
+                    "uk": "Лежить"
+                  }
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": {
+                    "en": "Up",
+                    "uk": "Працює"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "up{job=\"node\",host=~\"$host\"}",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Up",
+        "uk": "Стан"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "time() - node_boot_time_seconds{host=~\"$host\"}",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Uptime",
+        "uk": "Аптайм"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "count(node_cpu_seconds_total{mode=\"idle\",host=~\"$host\"})",
+          "legendFormat": "cores",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "CPU cores",
+        "uk": "Ядер CPU"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_memory_MemTotal_bytes{host=~\"$host\"}",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Memory",
+        "uk": "Памʼять"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": {
+                    "en": "No",
+                    "uk": "Ні"
+                  }
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": {
+                    "en": "Yes",
+                    "uk": "Так"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_timex_sync_status{host=~\"$host\"}",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Clock in sync",
+        "uk": "Годинник синхронізовано"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "node.reboot"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "index": 0,
+                  "text": {
+                    "en": "No",
+                    "uk": "Ні"
+                  }
+                },
+                "1": {
+                  "color": "orange",
+                  "index": 1,
+                  "text": {
+                    "en": "Yes",
+                    "uk": "Так"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max(ayeops_reboot_required{host=~\"$host\"})",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Reboot required",
+        "uk": "Потрібне перезавантаження"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_os_info{host=~\"$host\"}",
+          "legendFormat": "{{pretty_name}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Operating system",
+        "uk": "Операційна система"
+      },
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_uname_info{host=~\"$host\"}",
+          "legendFormat": "{{release}} {{machine}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Kernel",
+        "uk": "Ядро"
+      },
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 10,
+      "panels": [],
+      "title": {
+        "en": "CPU",
+        "uk": "CPU"
+      },
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 20,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            }
+          },
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 11,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * sum by (mode) (rate(node_cpu_seconds_total{mode!=\"idle\",host=~\"$host\"}[5m])) / scalar(count(node_cpu_seconds_total{mode=\"idle\",host=~\"$host\"}))",
+          "legendFormat": "{{mode}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "CPU busy by mode, %",
+        "uk": "CPU зайнято за режимами, %"
+      },
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 12,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_load1{host=~\"$host\"}",
+          "legendFormat": "load1",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_load5{host=~\"$host\"}",
+          "legendFormat": "load5",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_load15{host=~\"$host\"}",
+          "legendFormat": "load15",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "count(node_cpu_seconds_total{mode=\"idle\",host=~\"$host\"})",
+          "legendFormat": {
+            "en": "cores",
+            "uk": "ядер"
+          },
+          "refId": "D"
+        }
+      ],
+      "title": {
+        "en": "Load and cores",
+        "uk": "Навантаження і ядра"
+      },
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "description": {
+        "en": "Share of wall time in which at least one task waited for CPU, memory or IO.",
+        "uk": "Частка часу, коли хоча б одна задача чекала на CPU, памʼять чи диск."
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 13,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * rate(node_pressure_cpu_waiting_seconds_total{host=~\"$host\"}[5m])",
+          "legendFormat": "CPU",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * rate(node_pressure_memory_waiting_seconds_total{host=~\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "memory",
+            "uk": "памʼять"
+          },
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * rate(node_pressure_io_waiting_seconds_total{host=~\"$host\"}[5m])",
+          "legendFormat": "IO",
+          "refId": "C"
+        }
+      ],
+      "title": {
+        "en": "Time spent waiting (pressure), %",
+        "uk": "Час в очікуванні (pressure), %"
+      },
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "description": {
+        "en": "Sensors the kernel exposes under /sys/class/hwmon; a virtual machine has none.",
+        "uk": "Датчики, які ядро показує в /sys/class/hwmon; у віртуальної машини їх немає."
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 14,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_hwmon_temp_celsius{host=~\"$host\"}",
+          "legendFormat": "{{chip}} {{sensor}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Hardware temperatures",
+        "uk": "Температури заліза"
+      },
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 15,
+      "panels": [],
+      "title": {
+        "en": "Memory",
+        "uk": "Памʼять"
+      },
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "id": 16,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_memory_MemTotal_bytes{host=~\"$host\"} - node_memory_MemAvailable_bytes{host=~\"$host\"}",
+          "legendFormat": {
+            "en": "used",
+            "uk": "зайнято"
+          },
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_memory_Cached_bytes{host=~\"$host\"} + node_memory_Buffers_bytes{host=~\"$host\"}",
+          "legendFormat": {
+            "en": "page cache",
+            "uk": "кеш сторінок"
+          },
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_memory_MemTotal_bytes{host=~\"$host\"}",
+          "legendFormat": {
+            "en": "total",
+            "uk": "усього"
+          },
+          "refId": "C"
+        }
+      ],
+      "title": {
+        "en": "Memory",
+        "uk": "Памʼять"
+      },
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 26
+      },
+      "id": 17,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_memory_SwapTotal_bytes{host=~\"$host\"} - node_memory_SwapFree_bytes{host=~\"$host\"}",
+          "legendFormat": {
+            "en": "used",
+            "uk": "зайнято"
+          },
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_memory_SwapTotal_bytes{host=~\"$host\"}",
+          "legendFormat": {
+            "en": "total",
+            "uk": "усього"
+          },
+          "refId": "B"
+        }
+      ],
+      "title": {
+        "en": "Swap used",
+        "uk": "Своп зайнято"
+      },
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 26
+      },
+      "id": 18,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "rate(node_vmstat_pswpin{host=~\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "pages in/s",
+            "uk": "сторінок in/с"
+          },
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "rate(node_vmstat_pswpout{host=~\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "pages out/s",
+            "uk": "сторінок out/с"
+          },
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "increase(node_vmstat_oom_kill{host=~\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "OOM kills",
+            "uk": "OOM-вбивства"
+          },
+          "refId": "C"
+        }
+      ],
+      "title": {
+        "en": "Swap and OOM",
+        "uk": "Своп і OOM"
+      },
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "id": 19,
+      "panels": [],
+      "title": {
+        "en": "Disks",
+        "uk": "Диски"
+      },
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 35
+      },
+      "id": 20,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * (1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs\",host=~\"$host\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs\",host=~\"$host\"})",
+          "legendFormat": "{{mountpoint}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Filesystems used, %",
+        "uk": "Файлові системи заповнені, %"
+      },
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 35
+      },
+      "id": 21,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs\",host=~\"$host\"}",
+          "legendFormat": {
+            "en": "{{mountpoint}} now",
+            "uk": "{{mountpoint}} зараз"
+          },
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "clamp_min(predict_linear(node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs\",host=~\"$host\"}[1d], 7 * 86400), 0)",
+          "legendFormat": {
+            "en": "{{mountpoint}} in 7 days",
+            "uk": "{{mountpoint}} через 7 днів"
+          },
+          "refId": "B"
+        }
+      ],
+      "title": {
+        "en": "Free now and in 7 days at the last day's pace",
+        "uk": "Вільно зараз і через 7 днів у темпі останньої доби"
+      },
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 35
+      },
+      "id": 22,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * (1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs\",host=~\"$host\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs\",host=~\"$host\"})",
+          "legendFormat": "{{mountpoint}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Filesystems used over time, %",
+        "uk": "Заповнення файлових систем, %"
+      },
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 43
+      },
+      "id": 23,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "rate(node_disk_read_bytes_total{host=~\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "{{device}} read",
+            "uk": "{{device}} читання"
+          },
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "rate(node_disk_written_bytes_total{host=~\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "{{device}} write",
+            "uk": "{{device}} запис"
+          },
+          "refId": "B"
+        }
+      ],
+      "title": {
+        "en": "Disk throughput",
+        "uk": "Диск: читання і запис"
+      },
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 43
+      },
+      "id": 24,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "100 * rate(node_disk_io_time_seconds_total{host=~\"$host\"}[5m])",
+          "legendFormat": "{{device}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Disk busy, %",
+        "uk": "Диск зайнятий, %"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "network"
+      ],
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "id": 25,
+      "panels": [],
+      "title": {
+        "en": "Network",
+        "uk": "Мережа"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "network"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 52
+      },
+      "id": 26,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "8 * rate(node_network_receive_bytes_total{job=\"network\",host=~\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "{{device}} in",
+            "uk": "{{device}} вхідний"
+          },
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "8 * rate(node_network_transmit_bytes_total{job=\"network\",host=~\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "{{device}} out",
+            "uk": "{{device}} вихідний"
+          },
+          "refId": "B"
+        }
+      ],
+      "title": {
+        "en": "Traffic",
+        "uk": "Трафік"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "network"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 52
+      },
+      "id": 27,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "rate(node_network_receive_errs_total{job=\"network\",host=~\"$host\"}[5m]) + rate(node_network_transmit_errs_total{job=\"network\",host=~\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "{{device}} errors",
+            "uk": "{{device}} помилки"
+          },
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "rate(node_network_receive_drop_total{job=\"network\",host=~\"$host\"}[5m]) + rate(node_network_transmit_drop_total{job=\"network\",host=~\"$host\"}[5m])",
+          "legendFormat": {
+            "en": "{{device}} drops",
+            "uk": "{{device}} відкинуто"
+          },
+          "refId": "B"
+        }
+      ],
+      "title": {
+        "en": "Errors and drops per second",
+        "uk": "Помилки й відкинуті пакети за секунду"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "smart"
+      ],
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 60
+      },
+      "id": 28,
+      "panels": [],
+      "title": {
+        "en": "Drives (SMART)",
+        "uk": "Накопичувачі (SMART)"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "smart"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": {
+                    "en": "Failing",
+                    "uk": "Збій"
+                  }
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": {
+                    "en": "Passed",
+                    "uk": "Гаразд"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 61
+      },
+      "id": 29,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "smartctl_device_smart_status{host=~\"$host\"}",
+          "legendFormat": "{{device}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "SMART health",
+        "uk": "SMART-стан"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "smart"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 61
+      },
+      "id": 30,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "smartctl_device_temperature{temperature_type=\"current\",host=~\"$host\"}",
+          "legendFormat": "{{device}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Drive temperature",
+        "uk": "Температура накопичувачів"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "smart"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 61
+      },
+      "id": 31,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "smartctl_device_percentage_used{host=~\"$host\"}",
+          "legendFormat": "{{device}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "NVMe wear, %",
+        "uk": "Знос NVMe, %"
+      },
+      "type": "bargauge"
+    },
+    {
+      "ayeopsRequires": [
+        "smart"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 61
+      },
+      "id": 32,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "smartctl_device_power_on_seconds{host=~\"$host\"}",
+          "legendFormat": "{{device}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Power-on time",
+        "uk": "Відпрацьовано"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "node.battery"
+      ],
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 69
+      },
+      "id": 33,
+      "panels": [],
+      "title": {
+        "en": "Battery",
+        "uk": "Батарея"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "node.battery"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 18,
+        "x": 0,
+        "y": 70
+      },
+      "id": 34,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "ayeops_battery_capacity_percent{host=~\"$host\"}",
+          "legendFormat": "{{battery}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Battery charge",
+        "uk": "Заряд батареї"
+      },
+      "type": "timeseries"
+    },
+    {
+      "ayeopsRequires": [
+        "node.battery"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": {
+                    "en": "No",
+                    "uk": "Ні"
+                  }
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": {
+                    "en": "Yes",
+                    "uk": "Так"
+                  }
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 70
+      },
+      "id": 35,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "ayeops_power_on_ac{host=~\"$host\"}",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "On AC",
+        "uk": "Від мережі"
+      },
+      "type": "stat"
+    },
+    {
+      "ayeopsRequires": [
+        "image-updates"
+      ],
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 76
+      },
+      "id": 36,
+      "panels": [],
+      "title": {
+        "en": "Images",
+        "uk": "Образи"
+      },
+      "type": "row"
+    },
+    {
+      "ayeopsRequires": [
+        "image-updates"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "description": {
+        "en": "Containers on a floating tag (latest, a bare major, no version) whose tag in the registry now points to a newer image than the one they run. Pull and recreate them; pinned versions are Renovate's.",
+        "uk": "Контейнери на плаваючому тезі (latest, лише мажорна версія, без версії), чий тег у реєстрі вже вказує на новіший образ, ніж той, на якому вони працюють. Підтягнути й перестворити; закріплені версії веде Renovate."
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 77
+      },
+      "id": 37,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "max by (container, image, tag) (ayeops_image_update_available{host=~\"$host\"}) == 1",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Containers with a newer image",
+        "uk": "Контейнери з новішим образом"
+      },
+      "type": "table"
+    },
+    {
+      "ayeopsRequires": [
+        "image-updates"
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 77
+      },
+      "id": 38,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "sum by (state) (ayeops_image_updates_containers{host=~\"$host\"})",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        }
+      ],
+      "title": {
+        "en": "Containers by image state",
+        "uk": "Контейнери за станом образу"
+      },
+      "type": "stat"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "ayeops"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "victoriametrics"
+        },
+        "definition": "label_values(node_uname_info, group)",
+        "includeAll": true,
+        "label": {
+          "en": "Group",
+          "uk": "Група"
+        },
+        "multi": false,
+        "name": "group",
+        "query": {
+          "query": "label_values(node_uname_info, group)",
+          "refId": "group"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "victoriametrics"
+        },
+        "definition": "label_values(node_uname_info{group=~\"$group\"}, host)",
+        "includeAll": false,
+        "label": {
+          "en": "Host",
+          "uk": "Хост"
+        },
+        "multi": false,
+        "name": "host",
+        "query": {
+          "query": "label_values(node_uname_info{group=~\"$group\"}, host)",
+          "refId": "host"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": {
+    "en": "AyeOps / Hosts",
+    "uk": "AyeOps / Хости"
+  },
+  "uid": "ayeops-host",
+  "version": 1
+}

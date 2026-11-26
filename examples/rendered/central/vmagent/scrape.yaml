@@ -1,0 +1,157 @@
+global:
+  scrape_interval: 30s
+scrape_configs:
+- job_name: ai-usage
+  scrape_interval: 1m
+  static_configs:
+  - targets:
+    - ai-usage-exporter:9147
+- job_name: oauth2-proxy
+  static_configs:
+  - targets:
+    - oauth2-proxy:9180
+- job_name: autopilot
+  static_configs:
+  - targets:
+    - autopilot:8080
+- job_name: cloudflare
+  scrape_interval: 1m
+  static_configs:
+  - targets:
+    - cloudflare-exporter:9131
+- job_name: cadvisor
+  static_configs:
+  - targets:
+    - cadvisor:8080
+- job_name: vmalert
+  static_configs:
+  - targets:
+    - vmalert:8880
+- job_name: github
+  scrape_interval: 1m
+  static_configs:
+  - targets:
+    - github-exporter:9135
+- job_name: grafana
+  static_configs:
+  - targets:
+    - grafana:3000
+- job_name: grafana-reader
+  static_configs:
+  - targets:
+    - grafana-reader:9137
+- job_name: incidents
+  scrape_interval: 1m
+  static_configs:
+  - targets:
+    - incidents-agent:9136
+- job_name: traefik
+  static_configs:
+  - targets:
+    - traefik:8082
+- job_name: alloy
+  static_configs:
+  - targets:
+    - alloy:12345
+- job_name: loki
+  static_configs:
+  - targets:
+    - loki:3100
+- job_name: agentgateway
+  static_configs:
+  - targets:
+    - agentgateway:15020
+- job_name: mcp-grafana
+  static_configs:
+  - targets:
+    - mcp-grafana:9090
+- job_name: mcp-victoriametrics
+  static_configs:
+  - targets:
+    - mcp-victoriametrics:8080
+- job_name: mcp-catalog
+  static_configs:
+  - targets:
+    - mcp-catalog:8000
+- job_name: vmagent
+  static_configs:
+  - targets:
+    - vmagent:8429
+- job_name: victoriametrics
+  static_configs:
+  - targets:
+    - victoriametrics:8428
+- job_name: node
+  static_configs:
+  - targets:
+    - node-exporter:9100
+- job_name: garage
+  static_configs:
+  - targets:
+    - garage:3903
+- job_name: garage-admin
+  static_configs:
+  - targets:
+    - garage-admin:9132
+- job_name: goalert
+  static_configs:
+  - targets:
+    - goalert:9105
+- job_name: oncall-bridge
+  static_configs:
+  - targets:
+    - oncall-bridge:8080
+- job_name: blackbox-http
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  relabel_configs:
+  - source_labels:
+    - __address__
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: blackbox:9115
+    target_label: __address__
+  static_configs:
+  - targets:
+    - https://acme.example
+    - https://status.acme.example
+    - https://mcp.acme.example
+    - https://grafana.ops.acme.example
+    - https://portal.ops.acme.example
+- job_name: blackbox-link
+  metrics_path: /probe
+  params:
+    module:
+    - link
+  relabel_configs:
+  - source_labels:
+    - __address__
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: blackbox:9115
+    target_label: __address__
+  static_configs:
+  - labels:
+      peer: edge
+      zone: office
+    targets:
+    - 10.8.0.2
+- job_name: blackbox
+  static_configs:
+  - targets:
+    - blackbox:9115
+- job_name: rdap
+  scrape_interval: 5m
+  static_configs:
+  - targets:
+    - rdap-exporter:9130
+- job_name: status-reporter
+  static_configs:
+  - targets:
+    - status-reporter:9136

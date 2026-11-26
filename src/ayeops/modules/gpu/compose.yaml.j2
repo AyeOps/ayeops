@@ -1,0 +1,19 @@
+services:
+  nvidia-gpu-exporter:
+    image: utkuozdemir/nvidia_gpu_exporter:1.16.0@sha256:cec17e3ddfce7baefbdf116d1a259e208bb1519e4e0b18b7b0879bde0fcad5a2
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports: [9835]
+    healthcheck:
+      test: ["CMD", "nvidia-smi", "-L"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+volumes: {}

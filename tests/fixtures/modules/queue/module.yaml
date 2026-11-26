@@ -1,0 +1,43 @@
+name: acme-queue
+summary: Exporter for the acme job queue, written outside the kit.
+requires:
+  metrics: {}
+defaults:
+  queue_url: http://queue:8080
+  backlog_max: 1000
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    queue_url:
+      type: string
+      pattern: "^https?://"
+    backlog_max:
+      type: integer
+      minimum: 1
+    expose:
+      type: array
+      items:
+        enum: [9140]
+services:
+  queue-exporter:
+    description: Reports the length and the oldest job age of the acme job queue.
+    memory: 32m
+    cpus: 0.1
+    metrics: [acme_queue_backlog, acme_queue_oldest_seconds]
+    alerts: [target-down, queue-backlog]
+    logs: docker
+    status:
+      internal: queue telemetry, the jobs themselves carry the public marks
+alerts:
+  - name: queue-backlog
+    title: Queue backlog too long
+    expr: acme_queue_backlog > bool 1000
+    for: 10m
+    severity: warning
+    summary: "The acme queue holds more than 1000 jobs"
+    runbook: queue-backlog
+dashboards: [queue.json]
+files: []

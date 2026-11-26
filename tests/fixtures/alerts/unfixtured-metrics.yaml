@@ -1,0 +1,25 @@
+agentgateway_config_synchronized: >-
+  agentgateway 1.7.0 on 15020/metrics; the hub trial in docs/mcp.md saw it at 1 and at 0 after a
+  CEL error, but no /metrics output was kept, and the metrics.rs of the gateway crate at v1.7.0
+  does not register a name with config in it, so capture agentgateway.txt from a running hub
+cluster_healthy: >-
+  Garage 2.5.0 on its admin port; listed in the Garage monitoring reference, but no /metrics
+  output of a running Garage is captured yet
+loki_discarded_samples_total: >-
+  Loki 3.7.8 on 3100/metrics; defined in pkg/validation/validate.go with a reason label, but no
+  /metrics output of a running Loki is captured yet
+loki_write_dropped_entries_total: >-
+  Alloy 1.21.3, component loki.write; defined in internal/component/common/loki/client/metrics.go
+  with a reason label, but no /metrics output of a running Alloy is captured yet
+nvidia_smi_last_collect_success: >-
+  nvidia_gpu_exporter 1.16.0, a gauge of internal/exporter/exporter.go; the exporter needs a host
+  with an NVIDIA GPU and driver, and no /metrics output of one is captured yet
+nvidia_smi_memory_total_bytes: >-
+  nvidia_gpu_exporter 1.16.0 names it after the nvidia-smi field memory.total [MiB] (the unit
+  becomes _bytes); no /metrics output of a host with an NVIDIA GPU is captured yet
+nvidia_smi_memory_used_bytes: >-
+  nvidia_gpu_exporter 1.16.0 names it after the nvidia-smi field memory.used [MiB] (the unit
+  becomes _bytes); no /metrics output of a host with an NVIDIA GPU is captured yet
+nvidia_smi_temperature_gpu: >-
+  nvidia_gpu_exporter 1.16.0 names it after the nvidia-smi field temperature.gpu; no /metrics
+  output of a host with an NVIDIA GPU is captured yet

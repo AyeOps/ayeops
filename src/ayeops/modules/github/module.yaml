@@ -1,0 +1,110 @@
+name: github
+summary: GitHub exporter for the Actions minutes and other billed usage of organizations and users, and the importer of aye report artifacts from GitHub-hosted runners.
+requires:
+  metrics:
+    role: server
+defaults:
+  accounts: []
+  reports: []
+  refresh_seconds: 300
+  lookback_hours: 72
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  anyOf:
+    - required: [accounts]
+      properties: {accounts: {minItems: 1}}
+    - required: [reports]
+      properties: {reports: {minItems: 1}}
+  properties:
+    accounts:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        oneOf:
+          - required: [org]
+          - required: [user]
+        properties:
+          org:
+            type: string
+            pattern: "^[A-Za-z0-9-]{1,39}$"
+          user:
+            type: string
+            pattern: "^[A-Za-z0-9-]{1,39}$"
+          included_minutes:
+            type: number
+            minimum: 0
+    reports:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        pattern: "^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$"
+    refresh_seconds:
+      type: integer
+      minimum: 60
+    lookback_hours:
+      type: integer
+      minimum: 1
+      maximum: 720
+    expose:
+      type: array
+      items:
+        enum: [9135]
+services:
+  github-exporter:
+    description: Polls the GitHub billing usage of the configured accounts and imports the aye report artifacts of the configured repositories into storage.
+    memory: 64m
+    cpus: 0.1
+    metrics:
+      - ayeops_github_usage
+      - ayeops_github_included_minutes_used
+      - ayeops_github_query_success
+      - ayeops_github_report_import_success
+    alerts:
+      - target-down
+      - github-minutes-limit
+      - github-query-failing
+      - github-report-import-failing
+    logs: docker
+    status:
+      internal: billing and CI telemetry for the team, not a user-facing component
+alerts:
+  - name: github-minutes-limit
+    title: GitHub Actions minutes 80% used
+    expr: ayeops_github_included_minutes_used / ayeops_github_included_minutes > bool 0.8
+    for: 15m
+    severity: warning
+    summary: "{{ .Labels.account }} used more than 80% of its included Actions minutes this month"
+    runbook: github-minutes-limit
+  - name: github-query-failing
+    title: GitHub billing query failing
+    expr: ayeops_github_query_success == bool 0
+    for: 30m
+    severity: warning
+    summary: "The billing usage query of {{ .Labels.account }} has failed for 30 minutes"
+    runbook: github-query-failing
+    dashboard: {uid: ayeops-delivery, panel: 18}
+  - name: github-report-import-failing
+    title: aye report artifacts not imported
+    expr: ayeops_github_report_import_success == bool 0
+    for: 30m
+    severity: warning
+    summary: "The aye report artifacts of {{ .Labels.repo }} have not been imported for 30 minutes"
+    runbook: github-report-import-failing
+    dashboard: {uid: ayeops-delivery, panel: 20}
+dashboards: []
+files:
+  - src: files/github_exporter.py
+    dest: github/github_exporter.py
+permissions:
+  - issuer: GitHub
+    credential: personal access token
+    env: [AYE_GITHUB_TOKEN]
+    grants:
+      - "{% for account in settings.accounts %}{% if account.org %}fine-grained, organization {{ account.org }}: Administration read, for billing usage; the token's user is an owner or billing manager\n{% endif %}{% endfor %}"
+      - "{% for account in settings.accounts %}{% if account.user %}classic scope user, for the billing usage of {{ account.user }}\n{% endif %}{% endfor %}"
+      - "{% if settings.reports %}fine-grained, repositories {{ settings.reports | join(', ') }}: Actions read and Metadata read, for the report artifacts{% endif %}"

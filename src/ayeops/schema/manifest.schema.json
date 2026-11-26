@@ -1,0 +1,626 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ayeops.dev/schema/manifest.schema.json",
+  "title": "AyeOps manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "project", "hosts"],
+  "properties": {
+    "version": {"const": 1},
+    "ayeops": {"type": "string", "minLength": 1},
+    "project": {"$ref": "#/$defs/name"},
+    "runbook_base_url": {"type": "string", "pattern": "^https?://"},
+    "timezone": {"type": "string", "pattern": "^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$"},
+    "module_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "waivers_need_until": {"type": "boolean"}
+      }
+    },
+    "alerting": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contact": {"enum": ["telegram", "email", "slack", "none"]},
+        "emails": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "pattern": "^[^@\\s'\"\\\\]+@[^@\\s'\"\\\\]+$"}
+        }
+      }
+    },
+    "mail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "from"],
+      "properties": {
+        "host": {"type": "string", "pattern": "^[A-Za-z0-9.-]+$"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "from": {"type": "string", "pattern": "^[^@\\s'\"\\\\]+@[^@\\s'\"\\\\]+$"},
+        "from_name": {"type": "string", "minLength": 1},
+        "tls": {"enum": ["starttls", "tls", "none"]}
+      }
+    },
+    "status_page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostname"],
+      "properties": {
+        "hostname": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?[.])+[a-z]{2,63}$"
+        },
+        "title": {"type": "string", "minLength": 1},
+        "locale": {"enum": ["uk", "en", "ru"]},
+        "notify": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["telegram_chat_id"],
+          "properties": {
+            "telegram_chat_id": {"type": "string", "pattern": "^-?[0-9]{3,20}$"},
+            "min_state": {"enum": ["outage", "degraded", "no_data"]}
+          }
+        },
+        "access": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["team", "aud"],
+          "properties": {
+            "team": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"},
+            "aud": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      }
+    },
+    "portal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "locale": {"enum": ["en", "uk"]}
+      }
+    },
+    "brand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "logo": {"type": "string", "minLength": 1},
+        "logo_dark": {"type": "string", "minLength": 1},
+        "favicon": {"type": "string", "minLength": 1},
+        "color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+      }
+    },
+    "hosts": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"$ref": "#/$defs/name"},
+      "additionalProperties": {"$ref": "#/$defs/host"}
+    },
+    "profiles": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/name"},
+      "additionalProperties": {"$ref": "#/$defs/profile"}
+    },
+    "services": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/name"},
+      "additionalProperties": {"$ref": "#/$defs/service"}
+    },
+    "externals": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/name"},
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title"],
+        "properties": {
+          "title": {"type": "string", "minLength": 1},
+          "url": {"type": "string", "pattern": "^https?://"},
+          "icon": {"$ref": "#/$defs/icon"}
+        }
+      }
+    },
+    "flows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to"],
+        "properties": {
+          "from": {"type": "string", "minLength": 1},
+          "to": {"type": "string", "minLength": 1},
+          "label": {"$ref": "#/$defs/text"},
+          "state": {"enum": ["live", "planned", "disabled"]}
+        }
+      }
+    },
+    "duties": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/name"},
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "every", "last_done"],
+        "properties": {
+          "title": {"type": "string", "pattern": "^[^\\s\"\\\\$][^\"\\\\$\\r\\n]{0,119}$"},
+          "every": {"type": "string", "pattern": "^[1-9][0-9]{0,3}d$"},
+          "last_done": true,
+          "owner": {"type": "string", "pattern": "^[^\\s\"\\\\$][^\"\\\\$\\r\\n]{0,79}$"},
+          "runbook": {"type": "string", "pattern": "^[^\\s\"\\\\$]+$"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,39}$"},
+    "duration": {"type": "string", "pattern": "^[1-9][0-9]{0,4}[mhd]$"},
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "backup"],
+      "properties": {
+        "engine": {"enum": ["postgres", "mysql", "mariadb", "mongo", "sqlite", "redis", "files"]},
+        "backup": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,39}$"},
+        "rpo": {"$ref": "#/$defs/duration"},
+        "rto": {"$ref": "#/$defs/duration"},
+        "copies": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["host", "offsite"]}
+        }
+      }
+    },
+    "size": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?[kmg]$"},
+    "icon": {"type": "string", "pattern": "^[a-z0-9.-]{1,40}$"},
+    "text": {
+      "oneOf": [
+        {"type": "string"},
+        {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"pattern": "^[a-z]{2}$"},
+          "additionalProperties": {"type": "string"}
+        }
+      ]
+    },
+    "until": true,
+    "waiver": {
+      "oneOf": [
+        {"type": "string"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason"],
+          "properties": {"reason": {"type": "string"}, "until": {"$ref": "#/$defs/until"}}
+        }
+      ]
+    },
+    "waiver_text": {
+      "oneOf": [
+        {"$ref": "#/$defs/text"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason"],
+          "properties": {"reason": {"$ref": "#/$defs/text"}, "until": {"$ref": "#/$defs/until"}}
+        }
+      ]
+    },
+    "host": {
+      "$ref": "#/$defs/host_fields",
+      "unevaluatedProperties": false,
+      "required": ["arch", "modules"],
+      "properties": {
+        "profile": {"$ref": "#/$defs/name"}
+      }
+    },
+    "profile": {
+      "$ref": "#/$defs/host_fields",
+      "unevaluatedProperties": false
+    },
+    "host_fields": {
+      "type": "object",
+      "properties": {
+        "group": {"$ref": "#/$defs/name"},
+        "arch": {"enum": ["amd64", "arm64"]},
+        "address": {"type": "string", "minLength": 1},
+        "public_bind": {"type": "string", "pattern": "^[0-9a-fA-F.:]+$"},
+        "memory": {"$ref": "#/$defs/size"},
+        "zone": {"type": "string", "minLength": 1},
+        "provider": {"type": "string", "minLength": 1},
+        "icon": {"$ref": "#/$defs/icon"},
+        "volatile": {"oneOf": [{"type": "boolean"}, {"$ref": "#/$defs/duration"}]},
+        "maintenance": {"type": "array", "items": {"$ref": "#/$defs/maintenance_window"}},
+        "connect": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ssh": {"type": "string", "minLength": 1, "pattern": "^[^\\s-]\\S*$"},
+            "sudo": {"type": "boolean"},
+            "helper": {"type": "boolean"},
+            "dir": {"type": "string", "pattern": "^/\\S+$"}
+          },
+          "not": {
+            "required": ["sudo", "helper"],
+            "properties": {"sudo": {"const": true}, "helper": {"const": true}}
+          }
+        },
+        "memory_budget_pct": {"type": "integer", "minimum": 1, "maximum": 100},
+        "reserved": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/name"},
+          "additionalProperties": {"$ref": "#/$defs/size"}
+        },
+        "compose": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {"type": "string", "minLength": 1},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["file"],
+                "properties": {
+                  "file": {"type": "string", "minLength": 1},
+                  "name": {"type": "string", "minLength": 1}
+                }
+              }
+            ]
+          }
+        },
+        "units": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/name"},
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9@_.:-]+\\.(service|timer|socket|path)$"
+          }
+        },
+        "modules": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["object", "null", "boolean"],
+            "if": {"type": "boolean"},
+            "then": {"const": false}
+          }
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host"],
+      "properties": {
+        "host": {"$ref": "#/$defs/name"},
+        "state": {"enum": ["live", "planned", "disabled"]},
+        "criticality": {"enum": ["critical", "high", "normal", "low"]},
+        "data": {"$ref": "#/$defs/data"},
+        "replication": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["primary"],
+          "properties": {
+            "primary": {"$ref": "#/$defs/name"},
+            "max_lag": {"$ref": "#/$defs/duration"},
+            "application_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,63}$"}
+          }
+        },
+        "description": {"$ref": "#/$defs/text"},
+        "url": {"type": "string", "pattern": "^https?://"},
+        "login": {"type": "string"},
+        "depends_on": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "clients": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "icon": {"$ref": "#/$defs/icon"},
+        "metrics": {
+          "oneOf": [
+            {"type": "array", "items": {"type": "string", "minLength": 1}},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["none"],
+              "properties": {"none": {"$ref": "#/$defs/waiver"}}
+            }
+          ]
+        },
+        "alerts": {"type": "array", "items": {"$ref": "#/$defs/alert"}},
+        "checks": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/name"},
+          "additionalProperties": {"$ref": "#/$defs/check"}
+        },
+        "logs": {"type": "string", "pattern": "^(docker|journald|syslog|file:.+)$"},
+        "status": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["public"],
+              "properties": {
+                "public": {"$ref": "#/$defs/text"},
+                "id": {"$ref": "#/$defs/name"},
+                "probe": {"type": "string", "pattern": "^https://[a-z0-9.-]+[a-z0-9](:[0-9]+)?(/[^ ]*)?$"}
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["internal"],
+              "properties": {"internal": {"$ref": "#/$defs/waiver_text"}}
+            }
+          ]
+        },
+        "cloud": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "limit": {"type": "string"},
+              "on_exceed": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "env_name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+    "seconds": {"type": "integer", "minimum": 1, "maximum": 300},
+    "interval": {"type": "integer", "minimum": 15, "maximum": 86400},
+    "check_alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"$ref": "#/$defs/name"},
+        "title": {"type": "string"},
+        "for": {"type": "string", "pattern": "^[0-9]+[smhd]$"},
+        "severity": {"enum": ["page", "critical", "warning", "info"]},
+        "summary": {"type": "string"},
+        "runbook": {"type": "string"},
+        "dashboard": {"$ref": "#/$defs/dashboard"}
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": ["type", "alert"],
+      "properties": {
+        "type": {"enum": ["http", "tcp", "smtp", "dns", "script", "sql"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"const": "http"}}},
+          "then": {
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+              "type": true,
+              "alert": {"$ref": "#/$defs/check_alert"},
+              "from": {"$ref": "#/$defs/name"},
+              "timeout": {"$ref": "#/$defs/seconds"},
+              "interval": {"type": "integer", "minimum": 15, "maximum": 3600},
+              "url": {"type": "string", "pattern": "^https?://[^\\s]+$"},
+              "method": {"enum": ["GET", "HEAD", "POST"]},
+              "expect_status": {
+                "oneOf": [
+                  {"type": "integer", "minimum": 100, "maximum": 599},
+                  {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {"type": "integer", "minimum": 100, "maximum": 599}
+                  }
+                ]
+              },
+              "expect_body": {"type": "string", "minLength": 1},
+              "via_proxy": {"$ref": "#/$defs/name"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "tcp"}}},
+          "then": {
+            "additionalProperties": false,
+            "required": ["address"],
+            "properties": {
+              "type": true,
+              "alert": {"$ref": "#/$defs/check_alert"},
+              "from": {"$ref": "#/$defs/name"},
+              "timeout": {"$ref": "#/$defs/seconds"},
+              "interval": {"type": "integer", "minimum": 15, "maximum": 3600},
+              "address": {"type": "string", "pattern": "^([A-Za-z0-9.-]+|\\[[0-9a-fA-F:]+\\]):[0-9]{1,5}$"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "smtp"}}},
+          "then": {
+            "additionalProperties": false,
+            "required": ["address"],
+            "properties": {
+              "type": true,
+              "alert": {"$ref": "#/$defs/check_alert"},
+              "from": {"$ref": "#/$defs/name"},
+              "timeout": {"$ref": "#/$defs/seconds"},
+              "interval": {"type": "integer", "minimum": 15, "maximum": 3600},
+              "address": {"type": "string", "pattern": "^([A-Za-z0-9.-]+|\\[[0-9a-fA-F:]+\\]):[0-9]{1,5}$"},
+              "tls": {"enum": ["starttls", "tls", "none"]},
+              "ehlo": {"type": "string", "pattern": "^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?[.])+[A-Za-z]{2,63}$"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "dns"}}},
+          "then": {
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "type": true,
+              "alert": {"$ref": "#/$defs/check_alert"},
+              "from": {"$ref": "#/$defs/name"},
+              "timeout": {"$ref": "#/$defs/seconds"},
+              "interval": {"type": "integer", "minimum": 15, "maximum": 3600},
+              "name": {"type": "string", "pattern": "^([A-Za-z0-9_-]+[.])*[A-Za-z0-9-]+[.]?$"},
+              "record_type": {"enum": ["A", "AAAA", "CNAME", "MX", "NS", "TXT", "SRV", "CAA"]},
+              "expect": {"type": "string", "minLength": 1},
+              "server": {"type": "string", "pattern": "^[A-Za-z0-9.:\\[\\]-]+$"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "script"}}},
+          "then": {
+            "additionalProperties": false,
+            "required": ["command"],
+            "properties": {
+              "type": true,
+              "alert": {"$ref": "#/$defs/check_alert"},
+              "from": {"$ref": "#/$defs/name"},
+              "timeout": {"$ref": "#/$defs/seconds"},
+              "interval": {"$ref": "#/$defs/interval"},
+              "command": {"type": "string", "minLength": 1},
+              "network": {"type": "boolean"},
+              "mounts": {
+                "type": "array",
+                "items": {"type": "string", "pattern": "^[^:\\s]+:/[^:\\s]*$"}
+              },
+              "env": {"type": "array", "items": {"$ref": "#/$defs/env_name"}}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "sql"}}},
+          "then": {
+            "additionalProperties": false,
+            "required": ["datasource", "query"],
+            "properties": {
+              "type": true,
+              "alert": {"$ref": "#/$defs/sql_alert"},
+              "from": {"$ref": "#/$defs/name"},
+              "timeout": {"type": "integer", "minimum": 2, "maximum": 300},
+              "interval": {"$ref": "#/$defs/interval"},
+              "datasource": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,40}$"},
+              "query": {"type": "string", "minLength": 1},
+              "label": {"type": "string", "pattern": "^[a-z_][a-z0-9_]{0,62}$"}
+            }
+          }
+        }
+      ]
+    },
+    "sql_alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [
+        {"required": ["op", "threshold"], "not": {"required": ["baseline"]}},
+        {"required": ["baseline"], "not": {"anyOf": [{"required": ["op"]}, {"required": ["threshold"]}, {"required": ["no_data"]}]}}
+      ],
+      "properties": {
+        "baseline": {"$ref": "#/$defs/baseline_level"},
+        "name": {"$ref": "#/$defs/name"},
+        "title": {"type": "string"},
+        "for": {"type": "string", "pattern": "^[0-9]+[smhd]$"},
+        "severity": {"enum": ["page", "critical", "warning", "info"]},
+        "summary": {"type": "string"},
+        "runbook": {"type": "string"},
+        "op": {"enum": [">", ">=", "<", "<=", "==", "!="]},
+        "threshold": {"type": "number"},
+        "no_data": {"enum": ["ok", "alerting"]},
+        "dashboard": {"$ref": "#/$defs/dashboard"}
+      }
+    },
+    "baseline_level": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "window": {"type": "string", "pattern": "^[0-9]+[mh]$"},
+        "below": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+        "floor": {"type": "number", "minimum": 0},
+        "above": {"type": "number", "exclusiveMinimum": 1},
+        "quiet": {"type": "array", "items": {"$ref": "#/$defs/baseline_quiet"}},
+        "skip": {"type": "array", "items": {"$ref": "#/$defs/baseline_skip"}}
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric"],
+      "properties": {
+        "metric": {"type": "string", "pattern": "^[A-Za-z_:][A-Za-z0-9_:]*(\\{[^{}]*\\})?$"},
+        "kind": {"enum": ["counter", "gauge"]},
+        "by": {"type": "array", "items": {"type": "string", "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"}, "uniqueItems": true},
+        "window": {"type": "string", "pattern": "^[0-9]+[mh]$"},
+        "below": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+        "floor": {"type": "number", "minimum": 0},
+        "above": {"type": "number", "exclusiveMinimum": 1},
+        "empty_share": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "quiet": {"type": "array", "items": {"$ref": "#/$defs/baseline_quiet"}},
+        "skip": {"type": "array", "items": {"$ref": "#/$defs/baseline_skip"}}
+      }
+    },
+    "baseline_quiet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "days": {"type": "array", "items": {"enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]}, "uniqueItems": true},
+        "from": {"type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"},
+        "to": {"type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"}
+      }
+    },
+    "maintenance_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "duration"],
+      "properties": {
+        "days": {"type": "array", "minItems": 1, "items": {"enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]}, "uniqueItems": true},
+        "start": {"type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"},
+        "duration": {"type": "string", "pattern": "^[0-9]{1,5}[mhd]$"}
+      }
+    },
+    "baseline_skip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["match", "reason"],
+      "properties": {
+        "match": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"},
+          "additionalProperties": {"type": "string"}
+        },
+        "reason": {"type": "string", "minLength": 1},
+        "until": {"$ref": "#/$defs/until"}
+      }
+    },
+    "dashboard": {
+      "oneOf": [
+        {"const": false},
+        {"type": "string", "minLength": 1},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["uid"],
+          "properties": {"uid": {"type": "string", "minLength": 1}, "panel": {"type": "integer", "minimum": 1}}
+        }
+      ]
+    },
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "oneOf": [{"required": ["expr"]}, {"required": ["baseline"]}],
+      "properties": {
+        "name": {"$ref": "#/$defs/name"},
+        "title": {"type": "string"},
+        "expr": {"type": "string", "minLength": 1},
+        "baseline": {"$ref": "#/$defs/baseline"},
+        "for": {"type": "string", "pattern": "^[0-9]+[smhd]$"},
+        "severity": {"enum": ["page", "critical", "warning", "info"]},
+        "summary": {"type": "string"},
+        "runbook": {"type": "string"},
+        "dashboard": {"$ref": "#/$defs/dashboard"}
+      }
+    }
+  }
+}

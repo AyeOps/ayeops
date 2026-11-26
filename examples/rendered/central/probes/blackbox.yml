@@ -1,0 +1,13 @@
+modules:
+  http_2xx:
+    http:
+      follow_redirects: true
+      preferred_ip_protocol: ip4
+    prober: http
+    timeout: 10s
+  link:
+    icmp:
+      ip_protocol_fallback: true
+      preferred_ip_protocol: ip4
+    prober: icmp
+    timeout: 5s

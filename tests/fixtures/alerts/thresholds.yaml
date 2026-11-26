@@ -1,0 +1,66 @@
+ai-query-failing: {when: "== 0", healthy: 1, failing: 0}
+ai-key-expiring: {when: "< 14", healthy: 60, failing: 7, why: days left on a key rotated quarterly}
+autopilot-failing: {when: "> 0", healthy: 0, failing: 1, why: failed runs in the last hour}
+autopilot-cap-reached: {when: "== 1", healthy: 0, failing: 1}
+check-runner-stale: {when: "> 300", healthy: 30, failing: 600, why: the runner writes its heartbeat every 15 s}
+cloudflare-origin-errors: {when: "> 0", healthy: 0, failing: 3}
+cloudflare-query-failing: {when: "== 0", healthy: 1, failing: 0}
+container-restarting: {when: "> 2", healthy: 1, failing: 3, why: one recreate by a deploy in 15 minutes stays quiet}
+deploy-failed: {when: "== 0", healthy: 1, failing: 0}
+delivery-silent: {when: "== 1", healthy: 0, failing: 1}
+eol-soon: {when: "< 90", healthy: 365, failing: 30, why: days of security support left}
+eol-passed: {when: "> 0", healthy: 0, failing: 1}
+eol-cycle-unknown: {when: "== 0", healthy: 1, failing: 0}
+eol-data-stale: {when: "> 259200", healthy: 90000, failing: 345600, why: the agent runs once a day at 05:30}
+github-query-failing: {when: "== 0", healthy: 1, failing: 0}
+github-report-import-failing: {when: "== 0", healthy: 1, failing: 0}
+gpu-temperature-high: {when: "> 85", healthy: 65, failing: 90, why: degrees Celsius under load}
+gpu-collect-failing: {when: "== 0", healthy: 1, failing: 0}
+grafana-reader-failing: {when: "> 900", healthy: 330, failing: 1200, why: the reader checks its token every 300 s}
+hygiene-stale: {when: "> 172800", healthy: 90000, failing: 259200, why: hygiene runs once a day at 03:30}
+image-update-available: {when: "> 0", healthy: 0, failing: 1}
+image-updates-scan-stale: {when: "> 900", healthy: 120, failing: 1200, why: the agent scans every 60 s}
+image-updates-check-stale: {when: "> 180000", healthy: 90000, failing: 259200, why: diun checks the registries once a day at 04:15}
+incidents-failing: {when: "== 0", healthy: 1, failing: 0}
+incidents-stale: {when: "> 600", healthy: 120, failing: 900, why: the agent runs a round every 60 s}
+logs-ingestion-errors: {when: "> 0", healthy: 0, failing: 5, why: samples Loki discarded in 10 minutes}
+logs-shipping-failing: {when: "> 0", healthy: 0, failing: 5, why: entries Alloy dropped in 10 minutes}
+mcp-hub-down: {when: "== 0", healthy: 1, failing: 0}
+mcp-hub-config: {when: "== 0", healthy: 1, failing: 0}
+target-down: {when: "== 0", healthy: 1, failing: 0}
+wifi-signal-weak: {when: "< -75", healthy: -55, failing: -82, why: dBm of a usable and of a dropping link}
+swap-out-sustained: {when: "> 256", healthy: 10, failing: 1000, why: pages swapped out per second}
+reboot-pending: {when: "== 1", healthy: 0, failing: 1}
+objectstore-down: {when: "== 0", healthy: 1, failing: 0}
+objectstore-unhealthy: {when: "== 0", healthy: 1, failing: 0}
+reststore-down: {when: "== 0", healthy: 1, failing: 0}
+offsite-retention: {when: "== 0", healthy: 1, failing: 0}
+oncall-telegram-silent: {when: "> 600", healthy: 40, failing: 900, why: a long poll waits at most 25 s}
+oncall-failing: {when: "> 2", healthy: 1, failing: 5, why: failures of one operation in 15 minutes}
+oncall-topics-unavailable: {when: "== 0", healthy: 1, failing: 0}
+probe-failing: {when: "== 0", healthy: 1, failing: 0}
+tls-expiring: {when: "< 14", healthy: 30, failing: 7, why: ACME renews a certificate 30 days before it ends}
+domain-expiring-60d: {when: "< 60", healthy: 365, failing: 45}
+domain-expiring-30d: {when: "< 30", healthy: 365, failing: 20}
+domain-expiring-7d: {when: "< 7", healthy: 365, failing: 3}
+domain-expiry-unknown: {when: "== 0", healthy: 1, failing: 0}
+reconciler-gave-up: {when: "> 0", healthy: 0, failing: 1}
+reconciler-stale: {when: "> 300", healthy: 60, failing: 600, why: the reconciler runs every 30 s}
+host-drift: {when: "> 0", healthy: 0, failing: 2, why: containers no manifest declares}
+sentinel-digest-overdue: {when: "> 7200", healthy: -3600, failing: 10800, why: the due time moves a day ahead after each delivered digest}
+sentinel-notify-failing: {when: "== 0", healthy: 1, failing: 0}
+sentinel-ping-failing: {when: "== 0", healthy: 1, failing: 0}
+sentinel-stalled: {when: "> 300", healthy: 70, failing: 600, why: a round every 60 s with a 10 s timeout}
+smart-failing: {when: "== 0", healthy: 1, failing: 0}
+nvme-wear: {when: "> 80", healthy: 20, failing: 90, why: percent of the rated endurance used}
+disk-temperature-high: {when: "> 60", healthy: 40, failing: 65, why: degrees Celsius}
+status-push-failing: {when: "> 300", healthy: 70, failing: 600, why: the reporter pushes every minute with a 10 s timeout}
+status-query-failing: {when: "== 0", healthy: 1, failing: 0}
+updates-stale: {when: "> 172800", healthy: 93600, failing: 259200, why: Renovate runs once a day for at most 120 minutes}
+updates-pending-old: {when: "> 2592000", healthy: 604800, failing: 3456000, why: a release waiting a week and one waiting 40 days}
+vulns-critical-fixable: {when: "> 0", healthy: 0, failing: 1}
+vulns-scan-failed: {when: "== 0", healthy: 1, failing: 0}
+vulns-scan-stale: {when: "> 180000", healthy: 87300, failing: 259200, why: the scan runs once a day for at most 15 minutes}
+check-tls-expiring: {when: "< 14", healthy: 60, failing: 7, why: days until the certificate of a check expires}
+link-down: {when: "== 0", healthy: 1, failing: 0}
+dashboards-unmanaged: {when: "> 0", healthy: 0, failing: 2, why: dashboards no file provisions}

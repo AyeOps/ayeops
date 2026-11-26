@@ -1,0 +1,21 @@
+{
+  "errors": [],
+  "messages": [],
+  "result": [
+    {
+      "account": {
+        "id": "0123456789abcdef0123456789abcdef",
+        "name": "Acme"
+      },
+      "id": "00000000000000000000000000000001",
+      "name": "acme.example",
+      "plan": {
+        "id": "0feeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "legacy_id": "free",
+        "name": "Free Website"
+      },
+      "status": "active"
+    }
+  ],
+  "success": true
+}

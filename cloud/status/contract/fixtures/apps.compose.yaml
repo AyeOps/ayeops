@@ -1,0 +1,14 @@
+name: acme-apps
+services:
+  web:
+    image: nginx:1.29.2-alpine
+  api:
+    image: nginx:1.29.2-alpine
+  api-worker:
+    image: nginx:1.29.2-alpine
+  checkout:
+    image: nginx:1.29.2-alpine
+  docs:
+    image: nginx:1.29.2-alpine
+  billing-cron:
+    image: nginx:1.29.2-alpine

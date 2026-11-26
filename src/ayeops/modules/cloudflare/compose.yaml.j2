@@ -1,0 +1,25 @@
+services:
+  cloudflare-exporter:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/cloudflare_exporter.py"]
+    user: "65534:65534"
+    environment:
+      AYE_CLOUDFLARE_ANALYTICS_TOKEN: "${AYE_CLOUDFLARE_ANALYTICS_TOKEN:?set AYE_CLOUDFLARE_ANALYTICS_TOKEN}"
+      AYE_CLOUDFLARE_ZONES: {{ settings.zones | join(",") | tojson }}
+      AYE_CLOUDFLARE_ACCOUNTS: {{ settings.accounts | join(",") | tojson }}
+      AYE_CLOUDFLARE_REFRESH_SECONDS: {{ settings.refresh_seconds | string | tojson }}
+      AYE_CLOUDFLARE_WINDOW_SECONDS: {{ settings.window_seconds | string | tojson }}
+      AYE_CLOUDFLARE_LAG_SECONDS: {{ settings.lag_seconds | string | tojson }}
+      AYE_CLOUDFLARE_TOP_HOSTS: {{ settings.top_hosts | string | tojson }}
+      AYE_CLOUDFLARE_TOP_COUNTRIES: {{ settings.top_countries | string | tojson }}
+      AYE_CLOUDFLARE_LIMITS: {{ settings.limits | tojson | tojson }}
+      AYE_CLOUDFLARE_PORT: "9131"
+    volumes:
+      - "./cloudflare/cloudflare_exporter.py:/app/cloudflare_exporter.py:ro"
+    ports: [9131]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9131/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+volumes: {}

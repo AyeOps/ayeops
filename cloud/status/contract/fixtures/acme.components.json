@@ -1,0 +1,46 @@
+{
+  "tenant": "acme",
+  "hostname": "status.acme.example",
+  "title": "Acme",
+  "locale": "uk",
+  "notify": {
+    "telegram_chat_id": "-1001234567890",
+    "min_state": "no_data"
+  },
+  "access": {
+    "team": "acme",
+    "aud": "fb52298607fa036764eb5e6e31b89bab96294fddc185ce6324890af471c374f0"
+  },
+  "components": [
+    {
+      "id": "website",
+      "title": "Website",
+      "probes": [
+        "https://acme.example"
+      ],
+      "push": false
+    },
+    {
+      "id": "api",
+      "title": "API",
+      "probes": [
+        "https://api.acme.example/health"
+      ],
+      "push": true
+    },
+    {
+      "id": "payments-checkout",
+      "title": "Payments & checkout",
+      "probes": [],
+      "push": true
+    },
+    {
+      "id": "docs",
+      "title": "Документація",
+      "probes": [
+        "https://docs.acme.example"
+      ],
+      "push": false
+    }
+  ]
+}

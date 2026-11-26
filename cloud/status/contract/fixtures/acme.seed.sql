@@ -1,0 +1,11 @@
+INSERT INTO tenants (id, hostname, title, locale, notify_chat, notify_min, access_team, access_aud) VALUES ('acme', 'status.acme.example', 'Acme', 'uk', '-1001234567890', 'no_data', 'acme', 'fb52298607fa036764eb5e6e31b89bab96294fddc185ce6324890af471c374f0') ON CONFLICT (id) DO UPDATE SET hostname = excluded.hostname, title = excluded.title, locale = excluded.locale, notify_chat = excluded.notify_chat, notify_min = excluded.notify_min, access_team = excluded.access_team, access_aud = excluded.access_aud;
+DELETE FROM probes WHERE tenant_id = 'acme';
+DELETE FROM components WHERE tenant_id = 'acme' AND id NOT IN ('website', 'api', 'payments-checkout', 'docs');
+DELETE FROM notices WHERE tenant_id = 'acme' AND component_id NOT IN ('website', 'api', 'payments-checkout', 'docs');
+INSERT INTO components (tenant_id, id, title, position, push) VALUES ('acme', 'website', 'Website', 0, 0) ON CONFLICT (tenant_id, id) DO UPDATE SET title = excluded.title, position = excluded.position, push = excluded.push;
+INSERT INTO probes (tenant_id, component_id, url) VALUES ('acme', 'website', 'https://acme.example');
+INSERT INTO components (tenant_id, id, title, position, push) VALUES ('acme', 'api', 'API', 1, 1) ON CONFLICT (tenant_id, id) DO UPDATE SET title = excluded.title, position = excluded.position, push = excluded.push;
+INSERT INTO probes (tenant_id, component_id, url) VALUES ('acme', 'api', 'https://api.acme.example/health');
+INSERT INTO components (tenant_id, id, title, position, push) VALUES ('acme', 'payments-checkout', 'Payments & checkout', 2, 1) ON CONFLICT (tenant_id, id) DO UPDATE SET title = excluded.title, position = excluded.position, push = excluded.push;
+INSERT INTO components (tenant_id, id, title, position, push) VALUES ('acme', 'docs', 'Документація', 3, 0) ON CONFLICT (tenant_id, id) DO UPDATE SET title = excluded.title, position = excluded.position, push = excluded.push;
+INSERT INTO probes (tenant_id, component_id, url) VALUES ('acme', 'docs', 'https://docs.acme.example');

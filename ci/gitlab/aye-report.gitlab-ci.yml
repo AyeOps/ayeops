@@ -1,0 +1,55 @@
+variables:
+  AYE_REPORT_SCRIPT: "ci/aye-report.py"
+  AYE_REPORT_SCRIPT_URL: ""
+
+.aye-report-fetch: &aye-report-fetch
+  - |
+    if [ -n "$AYE_REPORT_SCRIPT_URL" ]; then
+      curl -fsSL "$AYE_REPORT_SCRIPT_URL" -o .aye-report.py || wget -qO .aye-report.py "$AYE_REPORT_SCRIPT_URL" || echo "aye report could not fetch $AYE_REPORT_SCRIPT_URL" >&2
+    elif [ -s "$AYE_REPORT_SCRIPT" ]; then
+      cp "$AYE_REPORT_SCRIPT" .aye-report.py
+    else
+      echo "aye report: $AYE_REPORT_SCRIPT is missing; vendor ci/aye-report.py or set AYE_REPORT_SCRIPT_URL" >&2
+    fi
+
+.aye-report:
+  variables:
+    AYE_STEP: ci
+    AYE_JUNIT: ""
+    AYE_COVERAGE: ""
+    AYE_MUTANTS: ""
+    AYE_SUITE: ""
+  before_script:
+    - date +%s > .aye-started
+    - *aye-report-fetch
+  after_script:
+    - |
+      python=$(command -v python3 || command -v python || true)
+      if [ -z "$python" ] || [ ! -s .aye-report.py ]; then
+        echo "aye report: python3 or .aye-report.py is missing, nothing reported" >&2
+        exit 0
+      fi
+      started=$(cat .aye-started 2>/dev/null || date +%s)
+      case "$CI_JOB_STATUS" in
+        success) result=ok ;;
+        failed) result=fail ;;
+        *) result="" ;;
+      esac
+      if [ -n "$result" ]; then
+        "$python" -I .aye-report.py step --name "$AYE_STEP" --duration "$(( $(date +%s) - started ))" --result "$result"
+      fi
+      suite=""
+      if [ -n "$AYE_SUITE" ]; then suite="--suite=$AYE_SUITE"; fi
+      if [ -n "$AYE_JUNIT" ]; then "$python" -I .aye-report.py junit $suite $AYE_JUNIT; fi
+      if [ -n "$AYE_COVERAGE" ]; then "$python" -I .aye-report.py coverage $suite "$AYE_COVERAGE"; fi
+      if [ -n "$AYE_MUTANTS" ]; then "$python" -I .aye-report.py mutants $suite "$AYE_MUTANTS"; fi
+      exit 0
+
+.aye-report-pr:
+  variables:
+    GIT_DEPTH: "0"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - *aye-report-fetch
+    - if [ -s .aye-report.py ]; then python3 -I .aye-report.py pr || true; fi

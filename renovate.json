@@ -1,0 +1,87 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "ignorePresets": [":ignoreModulesAndTests"],
+  "ignorePaths": ["**/node_modules/**", "tests/fixtures/**", "cloud/status/contract/fixtures/**"],
+  "schedule": ["* * * * 1"],
+  "minimumReleaseAge": "14 days",
+  "internalChecksFilter": "strict",
+  "automerge": false,
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 10,
+  "labels": ["dependencies"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Images in the module compose templates and in the committed rendered example, pinned by tag and index digest, one dependency so a bump moves the tag and the digest of both in one branch",
+      "managerFilePatterns": [
+        "/^src/ayeops/modules/[^/]+/compose\\.yaml\\.j2$/",
+        "/^examples/rendered/[^/]+/compose\\.yaml$/"
+      ],
+      "matchStrings": [
+        "image:[ \\t]*[\"']?(?<depName>[a-z0-9][a-z0-9./_-]*):(?<currentValue>[A-Za-z0-9][A-Za-z0-9._-]*)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Images the workflows and the e2e box run with docker run, pinned by tag and digest so a bump moves both",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/", "/^tests/e2e/box\\.sh$/"],
+      "matchStrings": [
+        "\\s(?<depName>[a-z0-9][a-z0-9._-]*(?:/[a-z0-9._-]+)+):(?<currentValue>[A-Za-z0-9][A-Za-z0-9._-]*)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "The rendered example belongs to the regex manager above; the stock compose manager would bump it apart from the templates",
+      "matchManagers": ["docker-compose"],
+      "matchFileNames": ["examples/rendered/**"],
+      "enabled": false
+    },
+    {
+      "description": "The restore drill keeps one PostgreSQL image per major; a major bump would turn one line into another, a new major is a new line in the template",
+      "matchFileNames": ["src/ayeops/modules/objectstore/compose.yaml.j2"],
+      "matchPackageNames": ["postgres"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Container images: one weekly PR for minor, patch and a new digest under the same tag, every major alone",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "container images"
+    },
+    {
+      "description": "An image bump also changes the derived parts of the committed example render (the image lists of the vulns and eol agents, the portal, the render index), so every image branch renders the example again and commits only examples/rendered; the host's Renovate runs it only when its allowedCommands lists this exact command",
+      "matchDatasources": ["docker"],
+      "postUpgradeTasks": {
+        "commands": [
+          "uv run --frozen --no-dev aye render examples/acme.yaml -o examples/rendered --build-time \"2026-01-01 00:00 UTC\" --commit example"
+        ],
+        "fileFilters": ["examples/rendered/**"],
+        "executionMode": "branch",
+        "installTools": { "uv": {} }
+      }
+    },
+    {
+      "description": "Python packages and uv.lock: one weekly PR for minor and patch",
+      "matchManagers": ["pep621"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "python packages"
+    },
+    {
+      "description": "GitHub Actions stay pinned by commit SHA with the version tag after it",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "github actions"
+    },
+    {
+      "description": "npm packages of the status worker: one weekly PR for minor and patch",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm packages"
+    }
+  ]
+}

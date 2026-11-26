@@ -1,0 +1,12 @@
+{% if settings.provider == "garage" %}
+- job_name: garage
+  static_configs:
+    - targets: ["garage:3903"]
+- job_name: garage-admin
+  static_configs:
+    - targets: ["garage-admin:9132"]
+{% elif settings.provider == "rest-server" %}
+- job_name: reststore-admin
+  static_configs:
+    - targets: ["reststore-admin:9133"]
+{% endif %}

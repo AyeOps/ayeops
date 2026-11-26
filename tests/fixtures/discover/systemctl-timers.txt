@@ -1,0 +1,4 @@
+Fri 2026-10-23 19:00:00 UTC 41min left Fri 2026-10-23 18:00:00 UTC 18min ago backup.timer            backup.service
+Sat 2026-10-24 00:00:00 UTC 5h left    Fri 2026-10-23 00:00:00 UTC 18h ago   logrotate.timer         logrotate.service
+Sat 2026-10-24 06:12:00 UTC 11h left   Fri 2026-10-23 06:40:01 UTC 11h ago   apt-daily-upgrade.timer apt-daily-upgrade.service
+-                           -          Fri 2026-10-23 03:00:00 UTC 15h ago   certbot.timer           certbot.service

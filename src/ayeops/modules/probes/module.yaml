@@ -1,0 +1,157 @@
+name: probes
+summary: blackbox-exporter for HTTP 2xx, TLS expiry, the host's own internet (ping and DNS from the host) and the private network links to other hosts, plus an RDAP exporter for domain expiry.
+requires:
+  metrics: {}
+defaults:
+  http: []
+  internet: false
+  internet_targets: [1.1.1.1, 8.8.8.8]
+  dns_servers: [1.1.1.1, 8.8.8.8]
+  dns_query: example.com
+  gateway: null
+  internet_interval: 15s
+  links: []
+  domains: []
+  rdap_bootstrap_url: https://data.iana.org/rdap/dns.json
+  rdap_refresh_seconds: 21600
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    http:
+      type: array
+      items:
+        type: string
+        pattern: "^https?://"
+    internet:
+      type: boolean
+    internet_targets:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        type: string
+        pattern: '^[A-Za-z0-9.-]+$'
+    dns_servers:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        type: string
+        pattern: '^[A-Za-z0-9.-]+$'
+    dns_query:
+      type: string
+      pattern: '^[a-z0-9.-]+\.[a-z]{2,}$'
+    gateway:
+      type: [string, "null"]
+      pattern: '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'
+    internet_interval:
+      type: string
+      pattern: "^[0-9]+[sm]$"
+    links:
+      oneOf:
+        - type: boolean
+        - type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^[a-z][a-z0-9-]{0,39}$"
+    domains:
+      type: array
+      items:
+        type: string
+        pattern: '^[a-z0-9.-]+\.[a-z]{2,}$'
+    rdap_bootstrap_url:
+      type: string
+      pattern: "^https://"
+    rdap_refresh_seconds:
+      type: integer
+      minimum: 300
+    expose:
+      type: array
+      items:
+        enum: [9115, 9130]
+services:
+  blackbox:
+    description: Probes the configured URLs for a 2xx answer and their TLS certificate expiry, pings the gateway and public addresses and asks public resolvers from the host, and pings the private address of other hosts.
+    memory: 64m
+    cpus: 0.25
+    metrics: [probe_success, probe_duration_seconds, probe_ssl_earliest_cert_expiry, probe_icmp_duration_seconds]
+    alerts: [target-down, probe-failing, tls-expiring, link-down]
+    logs: docker
+    status:
+      internal: the probes themselves, their targets carry the public marks
+  rdap-exporter:
+    description: Looks up domain expiry dates over RDAP, choosing the registry from the IANA bootstrap file.
+    memory: 64m
+    cpus: 0.1
+    metrics: [ayeops_domain_expiry_days, ayeops_domain_rdap_success]
+    alerts: [target-down, domain-expiring-60d, domain-expiring-30d, domain-expiring-7d, domain-expiry-unknown]
+    logs: docker
+    status:
+      internal: registry lookups, not a user-facing component
+alerts:
+  - name: probe-failing
+    title: Probe failing
+    expr: probe_success{job="blackbox-http"} == bool 0
+    for: 5m
+    severity: critical
+    summary: "{{ .Labels.instance }} does not answer with 2xx"
+    runbook: probe-failing
+    dashboard: {uid: ayeops-probes, panel: 1}
+  - name: link-down
+    title: Private network link down
+    expr: max by (host, project, group, zone) (probe_success{job="blackbox-link"}) == bool 0
+    for: 3m
+    severity: critical
+    summary: "{{ .Labels.host }} gets no ping back from any probed host of {{ .Labels.zone }} over the private network"
+    runbook: link-down
+    only_with: links
+    dashboard: {uid: ayeops-probes, panel: 5}
+  - name: tls-expiring
+    title: TLS certificate expires in less than 14 days
+    expr: (probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time()) / 86400 < bool 14
+    for: 1h
+    severity: warning
+    summary: "The certificate of {{ .Labels.instance }} expires in less than 14 days"
+    runbook: tls-expiring
+  - name: domain-expiring-60d
+    title: Domain expires in less than 60 days
+    expr: ayeops_domain_expiry_days < bool 60
+    for: 1h
+    severity: info
+    summary: "{{ .Labels.domain }} expires in less than 60 days"
+    runbook: domain-expiring
+  - name: domain-expiring-30d
+    title: Domain expires in less than 30 days
+    expr: ayeops_domain_expiry_days < bool 30
+    for: 1h
+    severity: warning
+    summary: "{{ .Labels.domain }} expires in less than 30 days"
+    runbook: domain-expiring
+  - name: domain-expiring-7d
+    title: Domain expires in less than 7 days
+    expr: ayeops_domain_expiry_days < bool 7
+    for: 1h
+    severity: critical
+    summary: "{{ .Labels.domain }} expires in less than 7 days"
+    runbook: domain-expiring
+  - name: domain-expiry-unknown
+    title: Domain expiry unknown
+    expr: ayeops_domain_rdap_success == bool 0
+    for: 1d
+    severity: warning
+    summary: "RDAP has not answered for {{ .Labels.domain }} for a day"
+    runbook: domain-expiry-unknown
+    dashboard: {uid: ayeops-probes, panel: 4}
+dashboards: [probes.json, internet.json]
+files:
+  - src: files/blackbox.yml
+    dest: probes/blackbox.yml
+    when: blackbox
+    template: true
+  - src: files/rdap_exporter.py
+    dest: probes/rdap_exporter.py
+    when: domains

@@ -1,0 +1,67 @@
+name: smart
+summary: smartctl_exporter for SMART health, wear and temperature of SATA, SAS and NVMe drives.
+requires:
+  metrics: {}
+defaults:
+  interval: 60s
+  devices: []
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    interval:
+      type: string
+      pattern: "^[0-9]+[sm]$"
+    devices:
+      type: array
+      items:
+        type: string
+        pattern: "^/dev/[a-zA-Z0-9/_-]+$"
+    expose:
+      type: array
+      items:
+        enum: [9633]
+services:
+  smartctl-exporter:
+    description: Runs smartctl against every drive of the host and exposes SMART health, attributes, NVMe wear and temperature.
+    memory: 64m
+    cpus: 0.1
+    metrics: [smartctl_device_smart_status, smartctl_device_attribute, smartctl_device_percentage_used, smartctl_device_temperature]
+    alerts: [target-down, smart-failing, smart-sectors-growing, nvme-wear, disk-temperature-high]
+    logs: docker
+    status:
+      internal: disk telemetry, not a user-facing component
+alerts:
+  - name: smart-failing
+    title: SMART health check failing
+    expr: smartctl_device_smart_status == bool 0
+    for: 5m
+    severity: critical
+    summary: "{{ .Labels.device }} on {{ .Labels.host }} fails its SMART health check"
+    runbook: smart-failing
+  - name: smart-sectors-growing
+    title: Bad sectors or media errors growing
+    expr: (increase(smartctl_device_attribute{attribute_name=~"Reallocated_Sector_Ct|Current_Pending_Sector|Offline_Uncorrectable", attribute_value_type="raw"}[1d]) > bool 0) or (increase(smartctl_device_media_errors[1d]) > bool 0)
+    for: 0m
+    severity: warning
+    summary: "{{ .Labels.device }} on {{ .Labels.host }} gained reallocated, pending or media-error sectors within a day"
+    runbook: smart-sectors-growing
+    dashboard: {uid: ayeops-host, panel: 29}
+  - name: nvme-wear
+    title: NVMe wear above 80 %
+    expr: smartctl_device_percentage_used > bool 80
+    for: 1h
+    severity: warning
+    summary: "{{ .Labels.device }} on {{ .Labels.host }} has used more than 80 % of its rated endurance"
+    runbook: nvme-wear
+  - name: disk-temperature-high
+    title: Drive above 60 °C
+    expr: smartctl_device_temperature{temperature_type="current"} > bool 60
+    for: 15m
+    severity: warning
+    summary: "{{ .Labels.device }} on {{ .Labels.host }} has been above 60 °C for 15 minutes"
+    runbook: disk-temperature-high
+dashboards: []
+files: []

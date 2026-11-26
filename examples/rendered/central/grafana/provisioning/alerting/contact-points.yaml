@@ -1,0 +1,82 @@
+apiVersion: 1
+contactPoints:
+- name: telegram
+  orgId: 1
+  receivers:
+  - settings:
+      bottoken: ${AYE_TELEGRAM_BOT_TOKEN}
+      chatid: ${AYE_TELEGRAM_CHAT_ID}
+      disable_web_page_preview: true
+      message: '{{ template "aye.telegram" . }}'
+      parse_mode: HTML
+    type: telegram
+    uid: aye-telegram
+- name: autopilot
+  orgId: 1
+  receivers:
+  - settings:
+      authorization_credentials: ${AYE_AUTOPILOT_WEBHOOK_SECRET}
+      authorization_scheme: Bearer
+      httpMethod: POST
+      url: http://autopilot:8080/grafana
+    type: webhook
+    uid: aye-autopilot
+- name: oncall
+  orgId: 1
+  receivers:
+  - settings:
+      authorization_credentials: ${AYE_ONCALL_WEBHOOK_SECRET}
+      authorization_scheme: Bearer
+      httpMethod: POST
+      url: http://oncall-bridge:8080/grafana
+    type: webhook
+    uid: aye-oncall
+policies:
+- group_by:
+  - grafana_folder
+  - alertname
+  - scope
+  orgId: 1
+  receiver: telegram
+  routes:
+  - continue: true
+    group_wait: 0s
+    object_matchers:
+    - - severity
+      - =~
+      - critical|page
+    receiver: autopilot
+  - continue: true
+    object_matchers:
+    - - severity
+      - =~
+      - critical|page
+    receiver: oncall
+  - receiver: telegram
+templates:
+- name: aye
+  orgId: 1
+  template: '{{ define "aye.host" }}{{ if .Labels.host }}{{ .Labels.host }}{{ else }}{{ .Labels.instance }}{{ end }}{{ end }}{{ define "aye.hosts" }}{{ template "aye.host" index . 0 }}{{ range slice . 1 }}, {{ template "aye.host" . }}{{ end }}{{ end }}{{ define "aye.links" }}{{ if .Annotations.runbook_url }} · <a href="{{ .Annotations.runbook_url }}">runbook</a>{{ end }}{{ if .PanelURL }} · <a href="{{ .PanelURL }}">dashboard</a>{{ else if .DashboardURL }} · <a href="{{ .DashboardURL }}">dashboard</a>{{ end }}{{ end }}{{ define "aye.telegram" }}{{ if gt (len .Alerts) 1 }}{{ if .Alerts.Firing }}🔴 <b>{{ len .Alerts.Firing }} x {{ .CommonLabels.alertname }}</b>{{ if .GroupLabels.scope }} · {{ .GroupLabels.scope }}{{ end }}{{ template "aye.links" index .Alerts.Firing 0 }}
+
+    {{ if .CommonLabels.host }}{{ range .Alerts.Firing }}{{ .Annotations.summary }}
+
+    {{ end }}{{ else }}{{ template "aye.hosts" .Alerts.Firing }}
+
+    {{ end }}
+
+    {{ end }}{{ if .Alerts.Resolved }}✅ <b>{{ len .Alerts.Resolved }} x {{ .CommonLabels.alertname }}</b>{{ if .GroupLabels.scope }} · {{ .GroupLabels.scope }}{{ end }}{{ template "aye.links" index .Alerts.Resolved 0 }}
+
+    {{ if .CommonLabels.host }}{{ range .Alerts.Resolved }}{{ .Annotations.summary }}
+
+    {{ end }}{{ else }}{{ template "aye.hosts" .Alerts.Resolved }}
+
+    {{ end }}
+
+    {{ end }}{{ else }}{{ range .Alerts }}{{ if eq .Status "firing" }}🔴{{ else }}✅{{ end }} <b>{{ .Labels.alertname }}</b>
+
+    {{ .Annotations.summary }}
+
+    {{ .Labels.host }}{{ template "aye.links" . }}
+
+
+    {{ end }}{{ end }}{{ end }}'

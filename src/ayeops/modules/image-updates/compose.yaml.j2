@@ -1,0 +1,109 @@
+{% set hour, minute = settings.schedule.split(":") %}
+services:
+  image-updates-proxy:
+    image: tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    read_only: true
+    tmpfs: ["/tmp:size=1m", "/run:size=1m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      CONTAINERS: "1"
+      IMAGES: "1"
+      PING: "1"
+      EVENTS: "0"
+      VERSION: "0"
+      POST: "0"
+      DISABLE_IPV6: "1"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - image-updates-docker
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2375/_ping"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+  image-updates-agent:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/image_updates_agent.py"]
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:size=4m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 32
+    environment:
+      AYE_IMAGES_DOCKER: "http://image-updates-proxy:2375"
+      AYE_IMAGES_LISTEN: "0.0.0.0:8098"
+      AYE_IMAGES_STATE: /data/agent-state.json
+      AYE_IMAGES_FILE: /data/images.json
+      AYE_IMAGES_TEXTFILE: /textfile/ayeops_image_updates.prom
+      AYE_IMAGES_INTERVAL: {{ settings.interval | string | tojson }}
+    volumes:
+      - "./image-updates/image_updates_agent.py:/app/image_updates_agent.py:ro"
+      - "image-updates-data:/data"
+      - {{ (textfile ~ ":/textfile") | tojson }}
+    networks:
+      - image-updates
+      - image-updates-docker
+    depends_on:
+      image-updates-proxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/image-updates.alive') > {{ settings.interval * 3 + 30 }})"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+  diun:
+    image: crazymax/diun:4.33.1@sha256:8cc638b4c54e8a0c47898a51b20dae73037ad43310168b5da543a311dc668f77
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      TZ: {{ settings.timezone | tojson }}
+      LOG_LEVEL: info
+      LOG_JSON: "true"
+      DIUN_DB_PATH: /data/diun.db
+      DIUN_WATCH_SCHEDULE: {{ (minute | int | string ~ " " ~ hour | int | string ~ " * * *") | tojson }}
+      DIUN_WATCH_JITTER: 5m
+      DIUN_WATCH_WORKERS: "2"
+      DIUN_WATCH_FIRSTCHECKNOTIF: "true"
+      DIUN_WATCH_RUNONSTARTUP: "true"
+      DIUN_WATCH_COMPAREDIGEST: "true"
+      DIUN_WATCH_HEALTHCHECKS_BASEURL: "http://image-updates-agent:8098/hc/"
+      DIUN_WATCH_HEALTHCHECKS_UUID: diun
+      DIUN_PROVIDERS_FILE_FILENAME: /data/images.json
+      DIUN_NOTIF_WEBHOOK_ENDPOINT: "http://image-updates-agent:8098/diun"
+      DIUN_NOTIF_WEBHOOK_METHOD: POST
+      DIUN_NOTIF_WEBHOOK_TIMEOUT: 10s
+{% if settings.ghcr_username %}
+      DIUN_REGOPTS_0_NAME: ghcr.io
+      DIUN_REGOPTS_0_SELECTOR: image
+      DIUN_REGOPTS_0_USERNAME: {{ settings.ghcr_username | tojson }}
+      DIUN_REGOPTS_0_PASSWORD: "${AYE_IMAGE_UPDATES_GHCR_TOKEN:?set AYE_IMAGE_UPDATES_GHCR_TOKEN}"
+{% endif %}
+    volumes:
+      - "image-updates-data:/data"
+    networks:
+      - default
+      - image-updates
+    depends_on:
+      image-updates-agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://image-updates-agent:8098/health"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+networks:
+  image-updates:
+    internal: true
+  image-updates-docker:
+    internal: true
+volumes:
+  image-updates-data: {}
+{% if textfile == "node-textfile" %}
+  node-textfile: {}
+{% endif %}

@@ -1,0 +1,31 @@
+name: portal
+summary: Two static pages generated from the manifest, where things run and how to reach every service, with live status read in the browser through a read-only proxy to the metrics server of its host, served by an unprivileged nginx behind the ingress.
+requires: {}
+defaults:
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    expose:
+      type: array
+      items:
+        enum: [8088]
+services:
+  portal:
+    icon: nginx
+    description: Serves the generated pages that show where every service runs, how to open it and where its secrets live.
+    memory: 32m
+    cpus: 0.25
+    metrics:
+      none: static files without an exporter; the ingress probe and the traefik metrics cover it
+    alerts: [target-down, probe-failing]
+    logs: docker
+    status:
+      internal: operator map of the fleet, not a user-facing component
+alerts: []
+dashboards: []
+files:
+  - src: files/default.conf
+    dest: portal-nginx/default.conf

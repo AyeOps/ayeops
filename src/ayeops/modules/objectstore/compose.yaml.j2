@@ -1,0 +1,200 @@
+{% set rest = settings.provider == "rest-server" %}
+{% set data_volume = "reststore-data" if rest else "objectstore-data" %}
+{% set data = settings.data_dir or data_volume %}
+{% set meta = settings.meta_dir or "objectstore-meta" %}
+services:
+{% if settings.provider == "garage" %}
+  garage:
+    image: dxflrs/garage:v2.5.0@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_RPC_SECRET: "${AYE_OBJECTSTORE_RPC_SECRET:?set AYE_OBJECTSTORE_RPC_SECRET}"
+      GARAGE_ADMIN_TOKEN: "${AYE_OBJECTSTORE_ADMIN_TOKEN:?set AYE_OBJECTSTORE_ADMIN_TOKEN}"
+      GARAGE_DEFAULT_ACCESS_KEY: "${AYE_OBJECTSTORE_ACCESS_KEY_ID:?set AYE_OBJECTSTORE_ACCESS_KEY_ID}"
+      GARAGE_DEFAULT_SECRET_KEY: "${AYE_OBJECTSTORE_SECRET_ACCESS_KEY:?set AYE_OBJECTSTORE_SECRET_ACCESS_KEY}"
+      GARAGE_DEFAULT_BUCKET: {{ settings.bucket | tojson }}
+      RUST_LOG: garage=info
+    volumes:
+      - "./objectstore/garage.toml:/etc/garage.toml:ro"
+      - {{ (meta ~ ":/var/lib/garage/meta") | tojson }}
+      - {{ (data ~ ":/var/lib/garage/data") | tojson }}
+    ports: [3900, 3903]
+    healthcheck:
+      test: ["CMD", "/garage", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+  garage-admin:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/objectstore_admin.py"]
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      GARAGE_ADMIN_TOKEN: "${AYE_OBJECTSTORE_ADMIN_TOKEN:?set AYE_OBJECTSTORE_ADMIN_TOKEN}"
+      AYE_GARAGE_ADMIN_URL: http://garage:3903
+      AYE_OBJECTSTORE_BUCKET: {{ settings.bucket | tojson }}
+      AYE_OBJECTSTORE_QUOTA_BYTES: {{ settings.quota | quota_bytes | string | tojson }}
+      AYE_OBJECTSTORE_ADMIN_PORT: "9132"
+    user: "65534:65534"
+    volumes:
+      - "./objectstore/objectstore_admin.py:/app/objectstore_admin.py:ro"
+    ports: [9132]
+    depends_on:
+      garage:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9132/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+{% elif rest %}
+  rest-server:
+    image: restic/rest-server:0.14.0@sha256:d2aff06f47eb38637dff580c3e6bce4af98f386c396a25d32eb6727ec96214a5
+    entrypoint: ["/bin/sh", "-c"]
+    command: [{{ reststore.start | tojson }}]
+    read_only: true
+    tmpfs: ["/run/rest-server:size=1m,mode=0700"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      AYE_RESTSTORE_METRICS_PASSWORD: "${AYE_RESTSTORE_METRICS_PASSWORD:?set AYE_RESTSTORE_METRICS_PASSWORD}"
+{% for repo in reststore.repos %}
+      {{ repo.user_env }}: {{ ("${" ~ repo.user_env ~ ":?set " ~ repo.user_env ~ "}") | tojson }}
+{% endfor %}
+    volumes:
+      - {{ (data ~ ":/data") | tojson }}
+    ports: [8000]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8000/ 2>&1 | grep -q ' 401 '"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+  reststore-restic:
+    image: restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
+    init: true
+    entrypoint: ["sh", "-c", "cp /usr/bin/restic /out/.restic.tmp && mv -f /out/.restic.tmp /out/restic && exec sleep 2147483647"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - "reststore-restic:/out"
+    healthcheck:
+      test: ["CMD", "/out/restic", "version"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+  reststore-admin:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/reststore_admin.py"]
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      AYE_RESTSTORE_REPOS: {{ reststore.repos_json | tojson }}
+      AYE_RESTSTORE_SCHEDULE: {{ settings.prune_schedule | tojson }}
+      AYE_RESTSTORE_TIMEZONE: UTC
+      TZ: UTC
+      AYE_RESTSTORE_QUOTA_BYTES: {{ settings.quota | quota_bytes | string | tojson }}
+      AYE_RESTSTORE_SERVER: http://rest-server:8000
+      AYE_RESTSTORE_ADMIN_PORT: "9133"
+      AYE_RESTSTORE_DATA: /data
+      AYE_RESTSTORE_STATE: /state/state.json
+      AYE_RESTIC: /opt/restic/restic
+      HOME: /tmp
+      RESTIC_CACHE_DIR: /cache
+      TMPDIR: /cache
+      AYE_RESTSTORE_METRICS_PASSWORD: "${AYE_RESTSTORE_METRICS_PASSWORD:?set AYE_RESTSTORE_METRICS_PASSWORD}"
+{% for repo in reststore.repos %}
+      {{ repo.password_env }}: {{ ("${" ~ repo.password_env ~ ":?set " ~ repo.password_env ~ "}") | tojson }}
+{% endfor %}
+    volumes:
+      - "./objectstore/reststore_admin.py:/app/reststore_admin.py:ro"
+      - "reststore-restic:/opt/restic:ro"
+      - {{ (data ~ ":/data") | tojson }}
+      - "reststore-state:/state"
+      - "reststore-cache:/cache"
+    ports: [9133]
+    depends_on:
+      reststore-restic:
+        condition: service_healthy
+      rest-server:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9133/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+{% if drill %}
+  offsite-drill:
+{% if drill.version == 18 %}
+    image: postgres:18.6-alpine3.24@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b
+{% elif drill.version == 17 %}
+    image: postgres:17.11-alpine3.24@sha256:e5d2edd28b1f8d40a0a6c0c9cdc545b19b56a0d5d88f94bc11a97d970d4700d0
+{% elif drill.version == 16 %}
+    image: postgres:16.15-alpine3.24@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
+{% elif drill.version == 15 %}
+    image: postgres:15.19-alpine3.24@sha256:eab009ce9447a891d9482702d370bbf132c18563bb87cfdcc2b815c6d3b0372f
+{% else %}
+    image: postgres:14.24-alpine3.24@sha256:928ce526d67711997cc5c6949b55382d4e7cb559d981d5899df132e4936ec03e
+{% endif %}
+    entrypoint: ["/bin/sh", "/app/restore_drill.sh"]
+    init: true
+    network_mode: none
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, SETGID, SETUID]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    environment:
+      AYE_DRILL_CONFIG: /app/drills.sh
+      AYE_DRILL_DATA: /data
+      AYE_DRILL_SCRATCH: /scratch
+      AYE_DRILL_TEXTFILE_DIR: /textfile
+      AYE_RESTIC: /opt/restic/restic
+      HOME: /tmp
+{% for client in drill.clients %}
+      {{ client.password_env }}: {{ ("${" ~ client.password_env ~ ":?set " ~ client.password_env ~ "}") | tojson }}
+{% endfor %}
+    volumes:
+      - "./objectstore/restore_drill.sh:/app/restore_drill.sh:ro"
+      - "./objectstore/drills.sh:/app/drills.sh:ro"
+      - "reststore-restic:/opt/restic:ro"
+      - {{ (data ~ ":/data:ro") | tojson }}
+      - {{ (textfile ~ ":/textfile") | tojson }}
+      - "/scratch"
+    depends_on:
+      reststore-restic:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "find /tmp/drill/heartbeat -mmin -3 | grep -q ."]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+{% endif %}
+{% endif %}
+volumes:
+{% if not settings.data_dir %}
+  {{ data_volume }}: {}
+{% endif %}
+{% if drill and textfile == "node-textfile" %}
+  node-textfile: {}
+{% endif %}
+{% if rest %}
+  reststore-restic: {}
+  reststore-state: {}
+  reststore-cache: {}
+{% elif not settings.meta_dir %}
+  objectstore-meta: {}
+{% endif %}

@@ -1,0 +1,58 @@
+{
+  "data": {
+    "viewer": {
+      "accounts": [
+        {
+          "r2OperationsAdaptiveGroups": [
+            {
+              "dimensions": {
+                "actionType": "PutObject",
+                "bucketName": "media"
+              },
+              "sum": {
+                "requests": 700000
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "ListObjects",
+                "bucketName": "media"
+              },
+              "sum": {
+                "requests": 150000
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "GetObject",
+                "bucketName": "media"
+              },
+              "sum": {
+                "requests": 2000000
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "DeleteObject",
+                "bucketName": "media"
+              },
+              "sum": {
+                "requests": 50000
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "PutObject",
+                "bucketName": "backups"
+              },
+              "sum": {
+                "requests": 10
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "errors": null
+}

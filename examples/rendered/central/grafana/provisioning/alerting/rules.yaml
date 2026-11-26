@@ -1,0 +1,4144 @@
+apiVersion: 1
+groups:
+- folder: AyeOps
+  interval: 1m
+  name: ai-usage
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-ai
+      __panelId__: '3'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/ai-budget.md
+      summary: '{{ .Labels.provider }} spent more than 80% of its monthly budget'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (sum by (provider) (ayeops_ai_cost_month_usd) / on (provider) ayeops_ai_budget_usd > bool 0.8) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (sum by (provider) (ayeops_ai_cost_month_usd) / on (provider) ayeops_ai_budget_usd > bool 0.8)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: ai-usage
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: AI provider budget 80% used
+    uid: aye-ai-budget-80
+  - annotations:
+      __dashboardUid__: ayeops-ai
+      __panelId__: '3'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/ai-budget.md
+      summary: '{{ .Labels.provider }} spent more than its monthly budget'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (sum by (provider) (ayeops_ai_cost_month_usd) / on (provider) ayeops_ai_budget_usd > bool 1) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (sum by (provider) (ayeops_ai_cost_month_usd) / on (provider) ayeops_ai_budget_usd > bool 1)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: ai-usage
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: AI provider budget exceeded
+    uid: aye-ai-budget-exceeded
+  - annotations:
+      __dashboardUid__: ayeops-ai
+      __panelId__: '4'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/ai-spend-spike.md
+      summary: '{{ .Labels.provider }} spent today more than three times its median day of the last week'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (sum by (provider) (ayeops_ai_cost_day_usd) > bool 3 * on (provider) ayeops_ai_cost_daily_median_7d_usd and sum by (provider) (ayeops_ai_cost_day_usd) > on (provider) ayeops_ai_spike_floor_usd) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (sum by (provider) (ayeops_ai_cost_day_usd) > bool 3 * on (provider) ayeops_ai_cost_daily_median_7d_usd and sum by (provider) (ayeops_ai_cost_day_usd) > on (provider) ayeops_ai_spike_floor_usd)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 30m
+    labels:
+      module: ai-usage
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: AI spend today far above the usual day
+    uid: aye-ai-spend-spike
+  - annotations:
+      __dashboardUid__: ayeops-ai
+      __panelId__: '16'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/ai-query-failing.md
+      summary: The {{ .Labels.dataset }} report of {{ .Labels.provider }} has failed for 3 hours
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_ai_query_success == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_ai_query_success == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 3h
+    labels:
+      module: ai-usage
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: AI provider report query failing
+    uid: aye-ai-query-failing
+  - annotations:
+      __dashboardUid__: ayeops-ai
+      __panelId__: '15'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/ai-key-expiring.md
+      summary: The {{ .Labels.provider }} API key {{ .Labels.key }} expires in less than 14 days
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((ayeops_ai_api_key_expiry_timestamp_seconds - time()) / 86400 < bool 14) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((ayeops_ai_api_key_expiry_timestamp_seconds - time()) / 86400 < bool 14)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: ai-usage
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: AI provider API key expires soon
+    uid: aye-ai-key-expiring
+- folder: AyeOps
+  interval: 1m
+  name: autopilot
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/autopilot-failing.md
+      summary: An autopilot run on {{ .Labels.host }} failed in the last hour, so a critical alert got no diagnosis
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (sum by (host, project, group) (increase(ayeops_autopilot_runs_total{status="failed"}[1h])) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (sum by (host, project, group) (increase(ayeops_autopilot_runs_total{status="failed"}[1h])) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 0m
+    labels:
+      module: autopilot
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Autopilot runs fail
+    uid: aye-autopilot-failing
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/autopilot-cap-reached.md
+      summary: The {{ .Labels.cap }} cap of the autopilot on {{ .Labels.host }} is reached; critical alerts arrive without a diagnosis until it resets
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, cap) (ayeops_autopilot_cap_reached) == bool 1) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, cap) (ayeops_autopilot_cap_reached) == bool 1)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 0m
+    labels:
+      module: autopilot
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Autopilot spend cap reached
+    uid: aye-autopilot-cap-reached
+- folder: AyeOps
+  interval: 1m
+  name: backups
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/backup-failed.md
+      summary: The last run of the backup job {{ .Labels.backup }} on {{ .Labels.host }} failed or left no output
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, backup) ((ayeops_backup_last_run_success == bool 0) and on (host, project, group, backup) ayeops_backup_max_age_seconds)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, backup) ((ayeops_backup_last_run_success == bool 0) and on (host, project, group, backup) ayeops_backup_max_age_seconds))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: backups
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Backup job failed
+    uid: aye-backup-failed
+  - annotations:
+      __dashboardUid__: ayeops-reliability
+      __panelId__: '16'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/backup-missing.md
+      summary: The backup job {{ .Labels.backup }} on {{ .Labels.host }} has not succeeded within its schedule plus grace
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, backup) (time() - (max by (host, project, group, backup) (ayeops_backup_last_success_timestamp_seconds) or max by (host, project, group, backup) (ayeops_backup_declared_timestamp_seconds)) > bool on (host, project, group, backup) max by (host, project, group, backup) (ayeops_backup_max_age_seconds))) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, backup) (time() - (max by (host, project, group, backup) (ayeops_backup_last_success_timestamp_seconds) or max by (host, project, group, backup) (ayeops_backup_declared_timestamp_seconds)) > bool on (host, project, group, backup) max by (host, project, group, backup) (ayeops_backup_max_age_seconds)))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: backups
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: Alerting
+    title: Backup job missed its schedule
+    uid: aye-backup-missing
+- folder: AyeOps
+  interval: 1m
+  name: cloudflare
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-cloudflare
+      __panelId__: '4'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/cloudflare-edge-5xx.md
+      summary: More than 2% of the requests to {{ .Labels.zone }} end in 5xx at the edge
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((sum by (zone) (ayeops_cloudflare_requests{status_class="5xx"}) or sum by (zone) (ayeops_cloudflare_requests) * 0) / sum by (zone) (ayeops_cloudflare_requests) > bool 0.02 and sum by (zone) (ayeops_cloudflare_requests) >= 100) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((sum by (zone) (ayeops_cloudflare_requests{status_class="5xx"}) or sum by (zone) (ayeops_cloudflare_requests) * 0) / sum by (zone) (ayeops_cloudflare_requests) > bool 0.02 and sum by (zone) (ayeops_cloudflare_requests) >= 100)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: cloudflare
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Cloudflare edge answers 5xx
+    uid: aye-cloudflare-edge-5xx
+  - annotations:
+      __dashboardUid__: ayeops-cloudflare
+      __panelId__: '10'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/cloudflare-origin-errors.md
+      summary: Cloudflare answers 520-526 for {{ .Labels.hostname }}
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (sum by (zone, hostname) (ayeops_cloudflare_origin_errors) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (sum by (zone, hostname) (ayeops_cloudflare_origin_errors) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: cloudflare
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Cloudflare cannot reach the origin
+    uid: aye-cloudflare-origin-errors
+  - annotations:
+      __dashboardUid__: ayeops-cloudflare
+      __panelId__: '3'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/cloudflare-cache-ratio-drop.md
+      summary: The cache hit ratio of {{ .Labels.zone }} is less than half of the same time yesterday
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((sum by (zone) (ayeops_cloudflare_requests{cache_status=~"hit|stale|updating|revalidated"}) or sum by (zone) (ayeops_cloudflare_requests) * 0) / sum by (zone) (ayeops_cloudflare_requests) < bool 0.5 * (sum by (zone) (ayeops_cloudflare_requests{cache_status=~"hit|stale|updating|revalidated"} offset 1d) / sum by (zone) (ayeops_cloudflare_requests offset 1d)) and sum by (zone) (ayeops_cloudflare_requests) >= 100) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((sum by (zone) (ayeops_cloudflare_requests{cache_status=~"hit|stale|updating|revalidated"}) or sum by (zone) (ayeops_cloudflare_requests) * 0) / sum by (zone) (ayeops_cloudflare_requests) < bool 0.5 * (sum by (zone) (ayeops_cloudflare_requests{cache_status=~"hit|stale|updating|revalidated"} offset 1d) / sum by (zone) (ayeops_cloudflare_requests offset 1d)) and sum by (zone) (ayeops_cloudflare_requests) >= 100)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 30m
+    labels:
+      module: cloudflare
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: info
+    noDataState: OK
+    title: Cloudflare cache hit ratio dropped
+    uid: aye-cloudflare-cache-ratio-drop
+  - annotations:
+      __dashboardUid__: ayeops-cloudflare
+      __panelId__: '12'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/cloudflare-free-limit.md
+      summary: '{{ .Labels.resource }} of account {{ .Labels.account }} passed 80% of its free limit'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_cloudflare_usage / ayeops_cloudflare_free_limit > bool 0.8) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_cloudflare_usage / ayeops_cloudflare_free_limit > bool 0.8)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: cloudflare
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Cloudflare free limit 80% used
+    uid: aye-cloudflare-free-limit
+  - annotations:
+      __dashboardUid__: ayeops-cloudflare
+      __panelId__: '17'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/cloudflare-query-failing.md
+      summary: The {{ .Labels.dataset }} query for {{ .Labels.target }} has failed for 30 minutes
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_cloudflare_query_success == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_cloudflare_query_success == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 30m
+    labels:
+      module: cloudflare
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Cloudflare analytics query failing
+    uid: aye-cloudflare-query-failing
+- folder: AyeOps
+  interval: 1m
+  name: containers
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-health
+      __panelId__: '17'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/container-restarting.md
+      summary: '{{ .Labels.name }} on {{ .Labels.host }} restarted more than twice in 15 minutes'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (changes(container_start_time_seconds{name!=""}[15m]) > bool 2) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (changes(container_start_time_seconds{name!=""}[15m]) > bool 2)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 0m
+    labels:
+      module: containers
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Container restarting
+    uid: aye-container-restarting
+  - annotations:
+      __dashboardUid__: ayeops-health
+      __panelId__: '15'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/container-throttled.md
+      summary: '{{ .Labels.name }} on {{ .Labels.host }} used more than 80 % of its CPU limit on average over 30 minutes'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (sum by (host, project, group, name) (rate(container_cpu_usage_seconds_total{name!=""}[30m])) / max by (host, project, group, name) (container_spec_cpu_quota{name!=""} / container_spec_cpu_period{name!=""}) > bool 0.8) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (sum by (host, project, group, name) (rate(container_cpu_usage_seconds_total{name!=""}[30m])) / max by (host, project, group, name) (container_spec_cpu_quota{name!=""} / container_spec_cpu_period{name!=""}) > bool 0.8)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 0m
+    labels:
+      module: containers
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Container CPU throttled
+    uid: aye-container-throttled
+- folder: AyeOps
+  interval: 1m
+  name: delivery
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-delivery
+      __panelId__: '3'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/deploy-failed.md
+      summary: The latest deploy of {{ .Labels.project }} {{ .Labels.job }} failed
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (aye:step_success:last{step="deploy"} == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (aye:step_success:last{step="deploy"} == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1m
+    labels:
+      module: delivery
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: Deploy failed
+    uid: aye-deploy-failed
+  - annotations:
+      __dashboardUid__: ayeops-delivery
+      __panelId__: '6'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/deploy-slow.md
+      summary: The latest deploy of {{ .Labels.project }} {{ .Labels.job }} took more than twice its 30-day median
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((aye:step_duration_seconds:last{step="deploy"} > bool 2 * aye:step_duration_seconds:median30d{step="deploy"}) * (aye:step_ok_runs:30d{step="deploy"} >= bool 5)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((aye:step_duration_seconds:last{step="deploy"} > bool 2 * aye:step_duration_seconds:median30d{step="deploy"}) * (aye:step_ok_runs:30d{step="deploy"} >= bool 5))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1m
+    labels:
+      module: delivery
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Deploy slower than twice its 30-day median
+    uid: aye-deploy-slow
+  - annotations:
+      __dashboardUid__: ayeops-delivery
+      __panelId__: '9'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/ci-slower.md
+      summary: CI job {{ .Labels.job }} of {{ .Labels.project }} runs 50 % longer than its 30-day median
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((aye:step_duration_seconds:median3d{step="ci"} > bool 1.5 * aye:step_duration_seconds:median30d{step="ci"}) * (aye:step_ok_runs:30d{step="ci"} >= bool 10)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((aye:step_duration_seconds:median3d{step="ci"} > bool 1.5 * aye:step_duration_seconds:median30d{step="ci"}) * (aye:step_ok_runs:30d{step="ci"} >= bool 10))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: delivery
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: CI duration up 50 %
+    uid: aye-ci-slower
+  - annotations:
+      __dashboardUid__: ayeops-quality
+      __panelId__: '11'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/coverage-dropped.md
+      summary: Line coverage of {{ .Labels.project }} is more than 2 points below its 30-day median
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (aye:coverage_lines_percent:median30d - aye:coverage_lines_percent:last > bool 2) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (aye:coverage_lines_percent:median30d - aye:coverage_lines_percent:last > bool 2)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1m
+    labels:
+      module: delivery
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Line coverage dropped more than 2 pp
+    uid: aye-coverage-dropped
+  - annotations:
+      __dashboardUid__: ayeops-quality
+      __panelId__: '14'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/mutation-score-dropped.md
+      summary: The {{ .Labels.tool }} mutation score of {{ .Labels.project }} is more than 3 points below its 30-day median
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (aye:mutation_score_percent:median30d - aye:mutation_score_percent:last > bool 3) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (aye:mutation_score_percent:median30d - aye:mutation_score_percent:last > bool 3)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1m
+    labels:
+      module: delivery
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Mutation score dropped more than 3 pp
+    uid: aye-mutation-score-dropped
+  - annotations:
+      __dashboardUid__: ayeops-delivery
+      __panelId__: '12'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/delivery-silent.md
+      summary: No {{ .Labels.step }} report from {{ .Labels.project }} for more than {{ .Labels.expected }}
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (aye:delivery_overdue == bool 1) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (aye:delivery_overdue == bool 1)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: delivery
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: No delivery report when one is expected
+    uid: aye-delivery-silent
+- folder: AyeOps
+  interval: 1m
+  name: disk-forecast
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-health
+      __panelId__: '7'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/disk-full-forecast.md
+      summary: '{{ .Labels.mountpoint }} on {{ .Labels.host }} fills up within 7 days at the pace of the last day'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"}[1d], 7 * 86400) < bool 0) * (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} < bool 0.5)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"}[1d], 7 * 86400) < bool 0) * (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} < bool 0.5))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: disk-forecast
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Disk full within 7 days
+    uid: aye-disk-full-forecast
+- folder: AyeOps
+  interval: 1m
+  name: eol
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/eol-soon.md
+      summary: '{{ .Labels.product }} {{ .Labels.cycle }} ({{ .Labels.component }}) on {{ .Labels.host }} gets no security fixes after {{ .Labels.date }}'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (min by (host, project, group, component, product, cycle, date) (ayeops_eol_security_days_left > 0) < bool 90) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (min by (host, project, group, component, product, cycle, date) (ayeops_eol_security_days_left > 0) < bool 90)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: eol
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Security support of a component ends within 90 days
+    uid: aye-eol-soon
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/eol-passed.md
+      summary: '{{ .Labels.product }} {{ .Labels.cycle }} ({{ .Labels.component }}) on {{ .Labels.host }} is past its end of security support'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, component, product, cycle) (ayeops_eol_security_ended) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, component, product, cycle) (ayeops_eol_security_ended) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: eol
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: A component no longer gets security fixes
+    uid: aye-eol-passed
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/eol-cycle-unknown.md
+      summary: endoflife.date lists no cycle {{ .Labels.cycle }} of {{ .Labels.product }} ({{ .Labels.component }}) on {{ .Labels.host }}, so its end of support is unknown
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (min by (host, project, group, component, product, cycle) (ayeops_eol_cycle_known) == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (min by (host, project, group, component, product, cycle) (ayeops_eol_cycle_known) == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: eol
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: endoflife.date does not know the cycle of a component
+    uid: aye-eol-cycle-unknown
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/eol-data-stale.md
+      summary: eol-agent on {{ .Labels.host }} has not fetched every product from endoflife.date for more than 3 days
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - max by (host, project, group) (ayeops_eol_last_success_timestamp_seconds) > bool 259200) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - max by (host, project, group) (ayeops_eol_last_success_timestamp_seconds) > bool 259200)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: eol
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: No successful endoflife.date fetch for 3 days
+    uid: aye-eol-data-stale
+- folder: AyeOps
+  interval: 1m
+  name: github
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-delivery
+      __panelId__: '18'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/github-minutes-limit.md
+      summary: '{{ .Labels.account }} used more than 80% of its included Actions minutes this month'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_github_included_minutes_used / ayeops_github_included_minutes > bool 0.8) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_github_included_minutes_used / ayeops_github_included_minutes > bool 0.8)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: github
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: GitHub Actions minutes 80% used
+    uid: aye-github-minutes-limit
+  - annotations:
+      __dashboardUid__: ayeops-delivery
+      __panelId__: '18'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/github-query-failing.md
+      summary: The billing usage query of {{ .Labels.account }} has failed for 30 minutes
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_github_query_success == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_github_query_success == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 30m
+    labels:
+      module: github
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: GitHub billing query failing
+    uid: aye-github-query-failing
+  - annotations:
+      __dashboardUid__: ayeops-delivery
+      __panelId__: '20'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/github-report-import-failing.md
+      summary: The aye report artifacts of {{ .Labels.repo }} have not been imported for 30 minutes
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_github_report_import_success == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_github_report_import_success == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 30m
+    labels:
+      module: github
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: aye report artifacts not imported
+    uid: aye-github-report-import-failing
+- folder: AyeOps
+  interval: 1m
+  name: gpu
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/gpu-temperature-high.md
+      summary: GPU {{ .Labels.uuid }} on {{ .Labels.host }} has been above 85 °C for 10 minutes
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (nvidia_smi_temperature_gpu > bool 85) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (nvidia_smi_temperature_gpu > bool 85)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: gpu
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: GPU above 85 °C
+    uid: aye-gpu-temperature-high
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/gpu-memory-full.md
+      summary: GPU {{ .Labels.uuid }} on {{ .Labels.host }} has used more than 95 % of its memory for 15 minutes
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (nvidia_smi_memory_used_bytes / nvidia_smi_memory_total_bytes > bool 0.95) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (nvidia_smi_memory_used_bytes / nvidia_smi_memory_total_bytes > bool 0.95)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: gpu
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: GPU memory above 95 %
+    uid: aye-gpu-memory-full
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/gpu-collect-failing.md
+      summary: nvidia-smi on {{ .Labels.host }} has failed for 5 minutes; the driver may have lost the GPU
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (nvidia_smi_last_collect_success == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (nvidia_smi_last_collect_success == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: gpu
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: nvidia-smi failing
+    uid: aye-gpu-collect-failing
+- folder: AyeOps
+  interval: 1m
+  name: grafana
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/grafana-reader-failing.md
+      summary: The Grafana reader on {{ .Labels.host }} has not had a working Viewer token for 15 minutes, so the agents that read Grafana with it see nothing
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - max by (host, project, group) (ayeops_grafana_reader_last_success_timestamp_seconds) > bool 900) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - max by (host, project, group) (ayeops_grafana_reader_last_success_timestamp_seconds) > bool 900)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: grafana
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: Alerting
+    title: Grafana reader token does not work
+    uid: aye-grafana-reader-failing
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/dashboards-unmanaged.md
+      summary: 'Grafana on {{ .Labels.host }} has held dashboards for a day that no file provisions: they are not reviewed and go with the grafana-data volume; run aye dashboards pull'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group) (ayeops_grafana_reader_dashboards_unmanaged) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group) (ayeops_grafana_reader_dashboards_unmanaged) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1d
+    labels:
+      module: grafana
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: info
+    noDataState: OK
+    title: Dashboards drawn in Grafana, not in the repository
+    uid: aye-dashboards-unmanaged
+- folder: AyeOps
+  interval: 1m
+  name: hygiene
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/hygiene-stale.md
+      summary: The nightly docker prune on {{ .Labels.host }} has not succeeded for more than 2 days
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - ayeops_hygiene_last_success_timestamp_seconds > bool 172800) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - ayeops_hygiene_last_success_timestamp_seconds > bool 172800)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 30m
+    labels:
+      module: hygiene
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Docker prune has not succeeded for 2 days
+    uid: aye-hygiene-stale
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/build-cache-oversized.md
+      summary: The docker build cache on {{ .Labels.host }} stayed above twice build_cache_keep after the nightly prune
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group) (ayeops_hygiene_build_cache_bytes{phase="after"}) > bool 2 * max by (host, project, group) (ayeops_hygiene_build_cache_keep_bytes)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group) (ayeops_hygiene_build_cache_bytes{phase="after"}) > bool 2 * max by (host, project, group) (ayeops_hygiene_build_cache_keep_bytes))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: hygiene
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Build cache above twice the kept size
+    uid: aye-build-cache-oversized
+  - annotations:
+      __dashboardUid__: ayeops-health
+      __panelId__: '7'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/disk-critical.md
+      summary: '{{ .Labels.mountpoint }} on {{ .Labels.host }} is more than 90 % full'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"}) * 100 > bool 90) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"}) * 100 > bool 90)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: hygiene
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: Disk above 90 %
+    uid: aye-disk-critical
+- folder: AyeOps
+  interval: 1m
+  name: image-updates
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '37'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/image-update-available.md
+      summary: '{{ .Labels.host }} runs containers whose floating tag now points to a newer image; the dashboard lists them'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group) (ayeops_image_update_available) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group) (ayeops_image_update_available) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 12h
+    labels:
+      module: image-updates
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: A floating image tag points to a newer image
+    uid: aye-image-update-available
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/image-updates-scan-stale.md
+      summary: image-updates-agent on {{ .Labels.host }} has not read the running containers for 15 minutes
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - max by (host, project, group) (ayeops_image_updates_last_scan_timestamp_seconds) > bool 900) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - max by (host, project, group) (ayeops_image_updates_last_scan_timestamp_seconds) > bool 900)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: image-updates
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Running containers not read for 15 minutes
+    uid: aye-image-updates-scan-stale
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/image-updates-check-stale.md
+      summary: Diun on {{ .Labels.host }} has not finished a registry check for more than 2 days
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - max by (host, project, group) (ayeops_image_updates_last_check_success_timestamp_seconds) > bool 180000) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - max by (host, project, group) (ayeops_image_updates_last_check_success_timestamp_seconds) > bool 180000)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: image-updates
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: No finished Diun run for 2 days
+    uid: aye-image-updates-check-stale
+- folder: AyeOps
+  interval: 1m
+  name: incidents
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-incidents
+      __panelId__: '17'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/incidents-failing.md
+      summary: The incident journal on {{ .Labels.host }} has failed to {{ .Labels.step }} for 10 minutes, so incidents are not recorded
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (min by (host, project, group, step) (ayeops_incidents_step_success) == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (min by (host, project, group, step) (ayeops_incidents_step_success) == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: incidents
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Incident journal not updated
+    uid: aye-incidents-failing
+  - annotations:
+      __dashboardUid__: ayeops-incidents
+      __panelId__: '18'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/incidents-stale.md
+      summary: The incident journal agent on {{ .Labels.host }} has not finished a round for 10 minutes
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - max by (host, project, group) (ayeops_incidents_last_round_timestamp_seconds) > bool 600) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - max by (host, project, group) (ayeops_incidents_last_round_timestamp_seconds) > bool 600)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: incidents
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: Alerting
+    title: Incident journal agent stopped
+    uid: aye-incidents-stale
+- folder: AyeOps
+  interval: 1m
+  name: logs
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/logs-ingestion-errors.md
+      summary: 'Loki on {{ .Labels.host }} discards lines: {{ .Labels.reason }}'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (sum by (host, project, group, reason) (increase(loki_discarded_samples_total[10m])) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (sum by (host, project, group, reason) (increase(loki_discarded_samples_total[10m])) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: logs
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Loki discards log lines
+    uid: aye-logs-ingestion-errors
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/logs-shipping-failing.md
+      summary: Alloy on {{ .Labels.host }} dropped log lines it could not push to Loki
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (sum by (host, project, group) (increase(loki_write_dropped_entries_total[10m])) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (sum by (host, project, group) (increase(loki_write_dropped_entries_total[10m])) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 0m
+    labels:
+      module: logs
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Alloy drops log lines
+    uid: aye-logs-shipping-failing
+- folder: AyeOps
+  interval: 1m
+  name: mcp
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-health
+      __panelId__: '11'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/mcp-hub.md
+      summary: 'The MCP hub on {{ .Labels.host }} does not answer: assistants have no tools'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (min by (host, project, group) (up{job="agentgateway"}) == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (min by (host, project, group) (up{job="agentgateway"}) == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: mcp
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: Alerting
+    title: MCP hub down
+    uid: aye-mcp-hub-down
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/mcp-hub.md
+      summary: The MCP hub on {{ .Labels.host }} rejected its configuration file and serves the previous one
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (min by (host, project, group) (agentgateway_config_synchronized) == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (min by (host, project, group) (agentgateway_config_synchronized) == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: mcp
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: MCP hub runs an older configuration
+    uid: aye-mcp-hub-config
+- folder: AyeOps
+  interval: 1m
+  name: metrics
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-health
+      __panelId__: '11'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/target-down.md
+      summary: '{{ .Labels.job }} on {{ .Labels.host }} does not answer scrapes'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (up == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (up == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: metrics
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: Alerting
+    title: Scrape target down
+    uid: aye-target-down
+  - annotations:
+      __dashboardUid__: ayeops-health
+      __panelId__: '12'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-shipping-backlog.md
+      summary: vmagent on {{ .Labels.host }} holds more than 30 minutes of its samples or half its queue room unshipped
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool 1800 * sum by (host, project, group) (rate(vmagent_remotewrite_block_size_bytes_sum[1h]))) + (sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool sum by (host, project, group) (vm_persistentqueue_free_disk_space_bytes))) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool 1800 * sum by (host, project, group) (rate(vmagent_remotewrite_block_size_bytes_sum[1h]))) + (sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes) > bool sum by (host, project, group) (vm_persistentqueue_free_disk_space_bytes)))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: metrics
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: vmagent falls behind shipping metrics
+    uid: aye-metrics-shipping-backlog
+  - annotations:
+      __dashboardUid__: ayeops-health
+      __panelId__: '12'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/metrics-shipping-dropped.md
+      summary: 'vmagent on {{ .Labels.host }} dropped metrics: its full queue discarded the oldest, or storage rejected a block'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (sum by (host, project, group) (increase(vm_persistentqueue_blocks_dropped_total[1h])) + sum by (host, project, group) (increase(vmagent_remotewrite_packets_dropped_total[1h])) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (sum by (host, project, group) (increase(vm_persistentqueue_blocks_dropped_total[1h])) + sum by (host, project, group) (increase(vmagent_remotewrite_packets_dropped_total[1h])) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 0m
+    labels:
+      module: metrics
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: vmagent drops metrics
+    uid: aye-metrics-shipping-dropped
+- folder: AyeOps
+  interval: 1m
+  name: network
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-internet
+      __panelId__: '15'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/interface-down.md
+      summary: '{{ .Labels.device }} on {{ .Labels.host }} has been down for 5 minutes'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, device) (node_network_info{job="network", operstate=~"down|lowerlayerdown|dormant|notpresent"} or 0 * node_network_info{job="network"})) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, device) (node_network_info{job="network", operstate=~"down|lowerlayerdown|dormant|notpresent"} or 0 * node_network_info{job="network"}))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: network
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Network interface down
+    uid: aye-interface-down
+  - annotations:
+      __dashboardUid__: ayeops-internet
+      __panelId__: '16'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/wifi-signal-weak.md
+      summary: '{{ .Labels.device }} on {{ .Labels.host }} has had a Wi-Fi signal below -75 dBm for 15 minutes'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_wifi_signal_dbm < bool -75) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_wifi_signal_dbm < bool -75)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: network
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Wi-Fi signal below -75 dBm
+    uid: aye-wifi-signal-weak
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '27'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/network-errors.md
+      summary: '{{ .Labels.device }} on {{ .Labels.host }} loses more than 1 % of its packets to errors or drops'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((rate(node_network_receive_errs_total{job="network"}[5m]) + rate(node_network_transmit_errs_total{job="network"}[5m]) + rate(node_network_receive_drop_total{job="network"}[5m]) + rate(node_network_transmit_drop_total{job="network"}[5m])) / (rate(node_network_receive_packets_total{job="network"}[5m]) + rate(node_network_transmit_packets_total{job="network"}[5m])) > bool 0.01) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((rate(node_network_receive_errs_total{job="network"}[5m]) + rate(node_network_transmit_errs_total{job="network"}[5m]) + rate(node_network_receive_drop_total{job="network"}[5m]) + rate(node_network_transmit_drop_total{job="network"}[5m])) / (rate(node_network_receive_packets_total{job="network"}[5m]) + rate(node_network_transmit_packets_total{job="network"}[5m])) > bool 0.01)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: network
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Packet errors or drops above 1 %
+    uid: aye-network-errors
+  - annotations:
+      __dashboardUid__: ayeops-internet
+      __panelId__: '17'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/link-speed-degraded.md
+      summary: '{{ .Labels.device }} on {{ .Labels.host }} negotiated a slower link than it had this week'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((node_network_speed_bytes{job="network"} > 0) < bool max_over_time(node_network_speed_bytes{job="network"}[7d])) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((node_network_speed_bytes{job="network"} > 0) < bool max_over_time(node_network_speed_bytes{job="network"}[7d]))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: network
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Link speed below its weekly maximum
+    uid: aye-link-speed-degraded
+- folder: AyeOps
+  interval: 1m
+  name: node
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '2'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/host-down.md
+      summary: '{{ .Labels.host }} stopped reporting node metrics'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (1 - (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) + on (host) group_right () (0 * last_over_time(up{job="node"}[1d])))) unless on (host) (label_replace(max by (peer) (probe_success{job="blackbox-link"} unless on (zone) (max by (zone) (probe_success{job="blackbox-link"}) > 0)), "host", "$$1", "peer", "(.+)")) or 0 * (1 - (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) + on (host) group_right () (0 * last_over_time(up{job="node"}[1d]))))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 2m
+    labels:
+      module: node
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: Alerting
+    title: Host down
+    uid: aye-host-down
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '20'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/disk-full.md
+      summary: '{{ .Labels.mountpoint }} on {{ .Labels.host }} is more than 80 % full'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"}) * 100 > bool 80) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"}) * 100 > bool 80)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: node
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Disk above 80 %
+    uid: aye-disk-full
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '16'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/memory-low.md
+      summary: '{{ .Labels.host }} has less than 10 % memory available'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < bool 10) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < bool 10)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: node
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Memory available below 10 %
+    uid: aye-memory-low
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '18'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/swap-out-sustained.md
+      summary: '{{ .Labels.host }} has been writing more than 256 pages per second to swap for 10 minutes'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (rate(node_vmstat_pswpout[5m]) > bool 256) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (rate(node_vmstat_pswpout[5m]) > bool 256)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: node
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Sustained swap-out
+    uid: aye-swap-out-sustained
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '34'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/battery-low.md
+      summary: '{{ .Labels.host }} runs on battery below 20 %'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group) (ayeops_battery_capacity_percent < bool 20) * on (host) max by (host, project, group) (ayeops_power_on_ac == bool 0)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group) (ayeops_battery_capacity_percent < bool 20) * on (host) max by (host, project, group) (ayeops_power_on_ac == bool 0))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 2m
+    labels:
+      module: node
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Battery below 20 % and not on AC
+    uid: aye-battery-low
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '7'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/reboot-pending.md
+      summary: '{{ .Labels.host }} has waited a week for a reboot into its updated kernel or libraries'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group) (ayeops_reboot_required) == bool 1) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group) (ayeops_reboot_required) == bool 1)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 7d
+    labels:
+      module: node
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: info
+    noDataState: OK
+    title: Reboot pending for a week
+    uid: aye-reboot-pending
+- folder: AyeOps
+  interval: 1m
+  name: objectstore
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-health
+      __panelId__: '11'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/objectstore-down.md
+      summary: 'Garage on {{ .Labels.host }} does not answer: off-site backups cannot be written or restored'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (min by (host, project, group) (up{job="garage"}) == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (min by (host, project, group) (up{job="garage"}) == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: objectstore
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: Alerting
+    title: Object store down
+    uid: aye-objectstore-down
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/objectstore-down.md
+      summary: Garage on {{ .Labels.host }} reports its cluster as unhealthy
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (min by (host, project, group) (cluster_healthy) == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (min by (host, project, group) (cluster_healthy) == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: objectstore
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Object store unhealthy
+    uid: aye-objectstore-unhealthy
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/objectstore-quota.md
+      summary: Bucket {{ .Labels.bucket }} on {{ .Labels.host }} uses more than 80 % of its quota; at 100 % backups fail
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, bucket) (ayeops_objectstore_bucket_bytes / ayeops_objectstore_bucket_quota_bytes) > bool 0.8) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, bucket) (ayeops_objectstore_bucket_bytes / ayeops_objectstore_bucket_quota_bytes) > bool 0.8)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 30m
+    labels:
+      module: objectstore
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Object store bucket above 80 % of its quota
+    uid: aye-objectstore-quota
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/objectstore-quota.md
+      summary: garage-admin on {{ .Labels.host }} cannot read or set the bucket through the admin API
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group) ((time() - ayeops_objectstore_admin_last_success_timestamp_seconds > bool 3600) + (ayeops_objectstore_admin_ok == bool 0))) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group) ((time() - ayeops_objectstore_admin_last_success_timestamp_seconds > bool 3600) + (ayeops_objectstore_admin_ok == bool 0)))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: objectstore
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: Alerting
+    title: Object store quota and usage not reconciled for an hour
+    uid: aye-objectstore-admin
+- folder: AyeOps
+  interval: 1m
+  name: offsite
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-reliability
+      __panelId__: '11'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/offsite-stale.md
+      summary: The newest off-site snapshot of {{ .Labels.host }} is older than 26 hours, or than the rpo of a service whose dump it copies
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - max by (host, project, group) (ayeops_offsite_last_success_timestamp_seconds) > bool on (host, project, group) (max by (host, project, group) (ayeops_offsite_max_age_seconds) or max by (host, project, group) (ayeops_offsite_last_success_timestamp_seconds) * 0 + 93600)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - max by (host, project, group) (ayeops_offsite_last_success_timestamp_seconds) > bool on (host, project, group) (max by (host, project, group) (ayeops_offsite_max_age_seconds) or max by (host, project, group) (ayeops_offsite_last_success_timestamp_seconds) * 0 + 93600))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: offsite
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: Alerting
+    title: No off-site backup within 26 hours or the rpo
+    uid: aye-offsite-stale
+  - annotations:
+      __dashboardUid__: ayeops-reliability
+      __panelId__: '12'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/offsite-restore-test.md
+      summary: The restore test of the off-site copy of {{ .Labels.host }} failed or has not passed for 8 days
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group) ((time() - ayeops_offsite_restore_test_last_success_timestamp_seconds > bool 691200) + (ayeops_offsite_restore_test_ok == bool 0))) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group) ((time() - ayeops_offsite_restore_test_last_success_timestamp_seconds > bool 691200) + (ayeops_offsite_restore_test_ok == bool 0)))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: offsite
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: Alerting
+    title: Off-site restore test failed or older than 8 days
+    uid: aye-offsite-restore-test
+  - annotations:
+      __dashboardUid__: ayeops-reliability
+      __panelId__: '14'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/offsite-quota.md
+      summary: The off-site repository of {{ .Labels.host }} uses more than 80 % of its quota
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group) (ayeops_offsite_repo_size_bytes / ayeops_offsite_quota_bytes) > bool 0.8) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group) (ayeops_offsite_repo_size_bytes / ayeops_offsite_quota_bytes) > bool 0.8)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 30m
+    labels:
+      module: offsite
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Off-site repository above 80 % of its quota
+    uid: aye-offsite-quota
+  - annotations:
+      __dashboardUid__: ayeops-reliability
+      __panelId__: '14'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/offsite-retention.md
+      summary: restic forget or prune on {{ .Labels.host }} did not leave the snapshots the policy keeps
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (min by (host, project, group) (ayeops_offsite_retention_ok) == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (min by (host, project, group) (ayeops_offsite_retention_ok) == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 10m
+    labels:
+      module: offsite
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Off-site retention drifts from the policy
+    uid: aye-offsite-retention
+- folder: AyeOps
+  interval: 1m
+  name: oncall
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/oncall-telegram-silent.md
+      summary: The on-call bridge on {{ .Labels.host }} has not polled Telegram for 10 minutes, so acknowledge buttons and messages may not work
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - max by (host, project, group) (ayeops_oncall_last_poll_timestamp_seconds) > bool 600) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - max by (host, project, group) (ayeops_oncall_last_poll_timestamp_seconds) > bool 600)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: oncall
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: Alerting
+    title: On-call bridge has not reached Telegram for 10 minutes
+    uid: aye-oncall-telegram-silent
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/oncall-failing.md
+      summary: The on-call bridge on {{ .Labels.host }} failed {{ .Labels.op }} more than twice in 15 minutes
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (sum by (host, project, group, op) (increase(ayeops_oncall_failures_total[15m])) > bool 2) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (sum by (host, project, group, op) (increase(ayeops_oncall_failures_total[15m])) > bool 2)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 0m
+    labels:
+      module: oncall
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: On-call bridge fails to deliver
+    uid: aye-oncall-failing
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/oncall-topics-unavailable.md
+      summary: The on-call bridge on {{ .Labels.host }} cannot create forum topics in the ops group, so incidents reach the person on call only in direct messages
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group) (ayeops_oncall_topics_available) == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group) (ayeops_oncall_topics_available) == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 0m
+    labels:
+      module: oncall
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: On-call bridge cannot open incident topics in the ops group
+    uid: aye-oncall-topics-unavailable
+- folder: AyeOps
+  interval: 1m
+  name: probes
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-probes
+      __panelId__: '1'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/probe-failing.md
+      summary: '{{ .Labels.instance }} does not answer with 2xx'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (probe_success{job="blackbox-http"} == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (probe_success{job="blackbox-http"} == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: probes
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: Probe failing
+    uid: aye-probe-failing
+  - annotations:
+      __dashboardUid__: ayeops-probes
+      __panelId__: '5'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/link-down.md
+      summary: '{{ .Labels.host }} gets no ping back from any probed host of {{ .Labels.zone }} over the private network'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, zone) (probe_success{job="blackbox-link"}) == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, zone) (probe_success{job="blackbox-link"}) == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 3m
+    labels:
+      module: probes
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: Private network link down
+    uid: aye-link-down
+  - annotations:
+      __dashboardUid__: ayeops-probes
+      __panelId__: '3'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/tls-expiring.md
+      summary: The certificate of {{ .Labels.instance }} expires in less than 14 days
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time()) / 86400 < bool 14) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time()) / 86400 < bool 14)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: probes
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: TLS certificate expires in less than 14 days
+    uid: aye-tls-expiring
+  - annotations:
+      __dashboardUid__: ayeops-probes
+      __panelId__: '4'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/domain-expiring.md
+      summary: '{{ .Labels.domain }} expires in less than 60 days'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_domain_expiry_days < bool 60) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_domain_expiry_days < bool 60)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: probes
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: info
+    noDataState: OK
+    title: Domain expires in less than 60 days
+    uid: aye-domain-expiring-60d
+  - annotations:
+      __dashboardUid__: ayeops-probes
+      __panelId__: '4'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/domain-expiring.md
+      summary: '{{ .Labels.domain }} expires in less than 30 days'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_domain_expiry_days < bool 30) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_domain_expiry_days < bool 30)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: probes
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Domain expires in less than 30 days
+    uid: aye-domain-expiring-30d
+  - annotations:
+      __dashboardUid__: ayeops-probes
+      __panelId__: '4'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/domain-expiring.md
+      summary: '{{ .Labels.domain }} expires in less than 7 days'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_domain_expiry_days < bool 7) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_domain_expiry_days < bool 7)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: probes
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: Domain expires in less than 7 days
+    uid: aye-domain-expiring-7d
+  - annotations:
+      __dashboardUid__: ayeops-probes
+      __panelId__: '4'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/domain-expiry-unknown.md
+      summary: RDAP has not answered for {{ .Labels.domain }} for a day
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_domain_rdap_success == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_domain_rdap_success == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1d
+    labels:
+      module: probes
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Domain expiry unknown
+    uid: aye-domain-expiry-unknown
+- folder: AyeOps
+  interval: 1m
+  name: reconciler
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/reconciler-gave-up.md
+      summary: The reconciler on {{ .Labels.host }} started containers of {{ .Labels.compose_project }} as often as its back-off allows and they are still down; it leaves them to a person
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, compose_project) (ayeops_reconciler_given_up) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, compose_project) (ayeops_reconciler_given_up) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1m
+    labels:
+      module: reconciler
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Reconciler gave up on a compose project
+    uid: aye-reconciler-gave-up
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/reconciler-stale.md
+      summary: The reconciler on {{ .Labels.host }} has not finished a pass over the declared containers for 5 minutes
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - max by (host, project, group) (ayeops_reconciler_last_run_timestamp_seconds) > bool 300) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - max by (host, project, group) (ayeops_reconciler_last_run_timestamp_seconds) > bool 300)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: reconciler
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Reconciler stopped checking
+    uid: aye-reconciler-stale
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/host-drift.md
+      summary: '{{ .Labels.host }} has run containers of no declared compose project for an hour (a docker run by hand, a leftover after a service moved); ayeops_undeclared_container_info names them'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group) (ayeops_undeclared_containers) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group) (ayeops_undeclared_containers) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: reconciler
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Host runs containers the manifest does not declare
+    uid: aye-host-drift
+- folder: AyeOps
+  interval: 1m
+  name: sentinel
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-notify-failing.md
+      summary: The sentinel on {{ .Labels.host }} failed to send its last message about {{ .Labels.watch }}
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_sentinel_last_notice_ok == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_sentinel_last_notice_ok == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1m
+    labels:
+      module: sentinel
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: Sentinel cannot deliver its messages
+    uid: aye-sentinel-notify-failing
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-ping-failing.md
+      summary: The sentinel on {{ .Labels.host }} cannot ping its dead-man URL, so its own death would go unnoticed
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_sentinel_ping_success == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_sentinel_ping_success == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: sentinel
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Sentinel dead-man ping failing
+    uid: aye-sentinel-ping-failing
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-stalled.md
+      summary: The sentinel on {{ .Labels.host }} has not finished a round of checks for 5 minutes
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - ayeops_sentinel_last_round_timestamp_seconds > bool 300) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - ayeops_sentinel_last_round_timestamp_seconds > bool 300)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: sentinel
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Sentinel stopped checking
+    uid: aye-sentinel-stalled
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-digest-overdue.md
+      summary: The daily backup digest of the sentinel on {{ .Labels.host }} is more than 2 hours overdue
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - ayeops_sentinel_digest_due_timestamp_seconds > bool 7200) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - ayeops_sentinel_digest_due_timestamp_seconds > bool 7200)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: sentinel
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Backup digest overdue
+    uid: aye-sentinel-digest-overdue
+- folder: AyeOps
+  interval: 1m
+  name: smart
+  orgId: 1
+  rules:
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '29'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/smart-failing.md
+      summary: '{{ .Labels.device }} on {{ .Labels.host }} fails its SMART health check'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (smartctl_device_smart_status == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (smartctl_device_smart_status == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: smart
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: critical
+    noDataState: OK
+    title: SMART health check failing
+    uid: aye-smart-failing
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '29'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/smart-sectors-growing.md
+      summary: '{{ .Labels.device }} on {{ .Labels.host }} gained reallocated, pending or media-error sectors within a day'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((increase(smartctl_device_attribute{attribute_name=~"Reallocated_Sector_Ct|Current_Pending_Sector|Offline_Uncorrectable", attribute_value_type="raw"}[1d]) > bool 0) or (increase(smartctl_device_media_errors[1d]) > bool 0)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((increase(smartctl_device_attribute{attribute_name=~"Reallocated_Sector_Ct|Current_Pending_Sector|Offline_Uncorrectable", attribute_value_type="raw"}[1d]) > bool 0) or (increase(smartctl_device_media_errors[1d]) > bool 0))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 0m
+    labels:
+      module: smart
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Bad sectors or media errors growing
+    uid: aye-smart-sectors-growing
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '31'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/nvme-wear.md
+      summary: '{{ .Labels.device }} on {{ .Labels.host }} has used more than 80 % of its rated endurance'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (smartctl_device_percentage_used > bool 80) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (smartctl_device_percentage_used > bool 80)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: smart
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: NVMe wear above 80 %
+    uid: aye-nvme-wear
+  - annotations:
+      __dashboardUid__: ayeops-host
+      __panelId__: '30'
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/disk-temperature-high.md
+      summary: '{{ .Labels.device }} on {{ .Labels.host }} has been above 60 °C for 15 minutes'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (smartctl_device_temperature{temperature_type="current"} > bool 60) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (smartctl_device_temperature{temperature_type="current"} > bool 60)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 15m
+    labels:
+      module: smart
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Drive above 60 °C
+    uid: aye-disk-temperature-high
+- folder: AyeOps
+  interval: 1m
+  name: status
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/status-push-failing.md
+      summary: The status reporter on {{ .Labels.host }} has not pushed to the status page for 5 minutes, so its components show no data there
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - max by (host, project, group) (ayeops_status_last_push_timestamp_seconds) > bool 300) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - max by (host, project, group) (ayeops_status_last_push_timestamp_seconds) > bool 300)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1m
+    labels:
+      module: status
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: Alerting
+    title: Status page reporter cannot push
+    uid: aye-status-push-failing
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/status-query-failing.md
+      summary: The status reporter on {{ .Labels.host }} cannot read the alerts from Grafana, so it pushes no data for every component
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (ayeops_status_query_success == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (ayeops_status_query_success == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: status
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Status page reporter cannot read Grafana
+    uid: aye-status-query-failing
+- folder: AyeOps
+  interval: 1m
+  name: updates
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/updates-stale.md
+      summary: Renovate on {{ .Labels.host }} has not finished a clean run over every repository for more than 2 days
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - max by (host, project, group) (ayeops_updates_last_success_timestamp_seconds) > bool 172800) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - max by (host, project, group) (ayeops_updates_last_success_timestamp_seconds) > bool 172800)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 30m
+    labels:
+      module: updates
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: No successful dependency update run for 2 days
+    uid: aye-updates-stale
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/updates-pending-old.md
+      summary: '{{ .Labels.repository }} has a dependency update released more than 30 days ago that is still not merged'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - min by (host, project, group, repository) (ayeops_updates_oldest_pending_release_timestamp_seconds) > bool 2592000) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - min by (host, project, group, repository) (ayeops_updates_oldest_pending_release_timestamp_seconds) > bool 2592000)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: updates
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: An update has waited for more than 30 days
+    uid: aye-updates-pending-old
+- folder: AyeOps
+  interval: 1m
+  name: vulns
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/vulns-critical-fixable.md
+      summary: '{{ .Labels.image }} on {{ .Labels.host }} has a critical vulnerability that a newer package or image fixes'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, image) (ayeops_vulns_vulnerabilities{severity="critical", fixed="true"}) > bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, image) (ayeops_vulns_vulnerabilities{severity="critical", fixed="true"}) > bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: vulns
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: A running image has a critical vulnerability with a fix
+    uid: aye-vulns-critical-fixable
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/vulns-scan-failed.md
+      summary: Trivy on {{ .Labels.host }} could not scan {{ .Labels.image }} in its last run, so its vulnerabilities are unknown
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host, project, group, image) (ayeops_vulns_image_scan_success) == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host, project, group, image) (ayeops_vulns_image_scan_success) == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 30m
+    labels:
+      module: vulns
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: The vulnerability scan of an image failed
+    uid: aye-vulns-scan-failed
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/vulns-scan-stale.md
+      summary: Trivy on {{ .Labels.host }} has not finished a vulnerability scan for more than 2 days
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - max by (host, project, group) (ayeops_vulns_last_run_timestamp_seconds) > bool 180000) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - max by (host, project, group) (ayeops_vulns_last_run_timestamp_seconds) > bool 180000)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      module: vulns
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: No vulnerability scan finished for 2 days
+    uid: aye-vulns-scan-stale
+- folder: AyeOps
+  interval: 1m
+  name: services
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: https://runbooks.acme.example/acme-db-dump-small
+      summary: The newest dump of the acme database is smaller than 1 MiB
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (max by (host) (ayeops_backup_last_size_bytes{backup="acme-db"}) < bool 1048576) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (max by (host) (ayeops_backup_last_size_bytes{backup="acme-db"}) < bool 1048576)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Alerting
+    for: 10m
+    labels:
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      service: acme-db
+      severity: warning
+    noDataState: Alerting
+    title: Database dump suspiciously small
+    uid: aye-acme-db-dump-small
+  - annotations:
+      __dashboardUid__: ayeops-internet
+      __panelId__: '4'
+      runbook_url: https://runbooks.acme.example/mcp-down
+      summary: https://mcp.acme.example does not answer with 2xx
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (probe_success{instance="https://mcp.acme.example"} == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (probe_success{instance="https://mcp.acme.example"} == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Alerting
+    for: 3m
+    labels:
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      service: mcp
+      severity: critical
+    noDataState: Alerting
+    title: MCP endpoint down
+    uid: aye-mcp-down
+  - annotations:
+      __dashboardUid__: ayeops-baseline
+      __panelId__: '340542'
+      runbook_url: https://runbooks.acme.example/mcp-calls-flow
+      summary: 'mcp-calls-flow: the last 1h is under 30% of the usual level for this hour of the week'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((((((sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h])) or (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) * 0)) < bool (0.3 * quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum
+          by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))))) * ((sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h])) or (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) * 0)) > bool 0) * (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h]
+          offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) > bool 5) * (count by (tool) ((label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) >= bool 2)) * on() group_left() (1 - clamp_max(((((hour() * 60 + minute()) >= bool 180) * ((hour() * 60 + minute()) < bool 240)) * ((day_of_week() == bool 0))), 1))) unless on(tool) label_replace(vector(1), "tool", "legacy-search", "", "")) or on() vector(0)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d])
+          * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((((((sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h])) or (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) * 0)) < bool (0.3 * quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h]
+          offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))))) * ((sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h])) or (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) * 0)) > bool 0) * (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week",
+          "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) > bool 5) * (count by (tool) ((label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) >= bool 2)) * on() group_left() (1 - clamp_max(((((hour() * 60 + minute()) >= bool 180) * ((hour() * 60 + minute()) < bool 240)) * ((day_of_week() == bool 0))), 1))) unless on(tool) label_replace(vector(1), "tool", "legacy-search", "",
+          "")) or on() vector(0))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Alerting
+    for: 1h
+    labels:
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      service: mcp
+      severity: warning
+    noDataState: Alerting
+    title: 'MCP tool calls: below usual level'
+    uid: aye-mcp-calls-flow
+  - annotations:
+      __dashboardUid__: ayeops-baseline
+      __panelId__: '340542'
+      runbook_url: https://runbooks.acme.example/mcp-calls-flow
+      summary: 'mcp-calls-flow: nothing in the last 1h, where this hour of the week usually has a flow'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((((((sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h])) or (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) * 0)) == bool 0) * (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum
+          by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) > bool 5) * (count by (tool) ((label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) >= bool 2)) * on() group_left() (1 - clamp_max(((((hour() * 60 + minute()) >= bool 180) * ((hour() * 60 + minute()) < bool 240)) * ((day_of_week() == bool 0))), 1))) unless on(tool) label_replace(vector(1), "tool", "legacy-search", "", "")) or on() vector(0)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((((((sum
+          by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h])) or (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) * 0)) == bool 0) * (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool)
+          (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) > bool 5) * (count by (tool) ((label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) >= bool 2)) * on() group_left() (1 - clamp_max(((((hour() * 60 + minute()) >= bool 180) * ((hour() * 60 + minute()) < bool 240)) * ((day_of_week() == bool 0))), 1))) unless on(tool) label_replace(vector(1), "tool", "legacy-search", "", "")) or on() vector(0))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Alerting
+    for: 1h
+    labels:
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      service: mcp
+      severity: critical
+    noDataState: Alerting
+    title: 'MCP tool calls: stopped'
+    uid: aye-mcp-calls-flow-zero
+  - annotations:
+      __dashboardUid__: ayeops-baseline
+      __panelId__: '340542'
+      runbook_url: https://runbooks.acme.example/mcp-calls-flow
+      summary: 'mcp-calls-flow: the last 1h is over 5 times the usual level for this hour of the week'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((((((sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h])) or (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) * 0)) > bool (5 * quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum
+          by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))))) * (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) > bool 5) * (count by (tool) ((label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or
+          label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) >= bool 2)) * on() group_left() (1 - clamp_max(((((hour() * 60 + minute()) >= bool 180) * ((hour() * 60 + minute()) < bool 240)) * ((day_of_week() == bool 0))), 1))) unless on(tool) label_replace(vector(1), "tool", "legacy-search", "", "")) or on() vector(0)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((((((sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h])) or (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h]
+          offset 4w)), "aye_week", "4", "", ""))) * 0)) > bool (5 * quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))))) * (quantile by (tool) (0.5, (label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h]
+          offset 4w)), "aye_week", "4", "", ""))) > bool 5) * (count by (tool) ((label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 1w)), "aye_week", "1", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 2w)), "aye_week", "2", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 3w)), "aye_week", "3", "", "") or label_replace(sum by (tool) (increase(mcp_tool_calls_total{service="mcp"}[1h] offset 4w)), "aye_week", "4", "", ""))) >= bool 2)) * on() group_left() (1 - clamp_max(((((hour() * 60 + minute()) >= bool 180) * ((hour() * 60 + minute()) < bool 240)) * ((day_of_week() == bool 0))), 1))) unless on(tool) label_replace(vector(1), "tool", "legacy-search", "", "")) or on() vector(0))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Alerting
+    for: 1h
+    labels:
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      service: mcp
+      severity: warning
+    noDataState: Alerting
+    title: 'MCP tool calls: above usual level'
+    uid: aye-mcp-calls-flow-spike
+  - annotations:
+      __dashboardUid__: ayeops-baseline
+      __panelId__: '340542'
+      runbook_url: https://runbooks.acme.example/mcp-calls-flow
+      summary: 'mcp-calls-flow: over 50% of the answers in the last 1h were ok_empty'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: ((((((sum by (tool) (increase(mcp_tool_calls_total{service="mcp", outcome="ok_empty"}[1h])) or (sum by (tool) (increase(mcp_tool_calls_total{service="mcp", outcome=~"ok|ok_empty"}[1h])) * 0)) / sum by (tool) (increase(mcp_tool_calls_total{service="mcp", outcome=~"ok|ok_empty"}[1h])) > bool 0.5) * (sum by (tool) (increase(mcp_tool_calls_total{service="mcp", outcome=~"ok|ok_empty"}[1h])) > bool 5)) * on() group_left() (1 - clamp_max(((((hour() * 60 + minute()) >= bool 180) * ((hour() * 60 + minute()) < bool 240)) * ((day_of_week() == bool 0))), 1))) unless on(tool) label_replace(vector(1), "tool", "legacy-search", "", "")) or on() vector(0)) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * ((((((sum by (tool) (increase(mcp_tool_calls_total{service="mcp", outcome="ok_empty"}[1h])) or (sum by (tool) (increase(mcp_tool_calls_total{service="mcp", outcome=~"ok|ok_empty"}[1h])) * 0)) / sum by (tool) (increase(mcp_tool_calls_total{service="mcp",
+          outcome=~"ok|ok_empty"}[1h])) > bool 0.5) * (sum by (tool) (increase(mcp_tool_calls_total{service="mcp", outcome=~"ok|ok_empty"}[1h])) > bool 5)) * on() group_left() (1 - clamp_max(((((hour() * 60 + minute()) >= bool 180) * ((hour() * 60 + minute()) < bool 240)) * ((day_of_week() == bool 0))), 1))) unless on(tool) label_replace(vector(1), "tool", "legacy-search", "", "")) or on() vector(0))
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Alerting
+    for: 1h
+    labels:
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      service: mcp
+      severity: warning
+    noDataState: Alerting
+    title: 'MCP tool calls: empty answers'
+    uid: aye-mcp-calls-flow-empty
+  - annotations:
+      __dashboardUid__: ayeops-internet
+      __panelId__: '4'
+      runbook_url: https://runbooks.acme.example/web-down
+      summary: https://acme.example does not answer with 2xx
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (probe_success{instance="https://acme.example"} == bool 0) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (probe_success{instance="https://acme.example"} == bool 0)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Alerting
+    for: 3m
+    labels:
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      service: web
+      severity: critical
+    noDataState: Alerting
+    title: Website down
+    uid: aye-web-down
+- folder: AyeOps
+  interval: 1m
+  name: duties
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: '{{ if $$labels.runbook }}{{ $$labels.runbook }}{{ else }}https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/duty-overdue.md{{ end }}'
+      summary: '{{ .Labels.title }} ({{ .Labels.duty }}, every {{ .Labels.every }}) was due on {{ .Labels.due }}{{ if .Labels.owner }}, owner {{ .Labels.owner }}{{ end }}'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(vector(time() >= bool 1798668000), "duty", "access-review", "", ""), "title", "Review who can sign in to Grafana, the portal and the hosts", "", ""), "due", "2026-12-30", "", ""), "every", "90d", "", ""), "owner", "ops", "", ""), "runbook", "https://runbooks.acme.example/access-review", "", "") or label_replace(label_replace(label_replace(label_replace(vector(time() >= bool 1804024800), "duty", "token-rotation", "", ""), "title", "Rotate the Cloudflare and Telegram API tokens", "", ""), "due", "2027-03-02", "", ""), "every", "365d", "", "")
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      scope: '{{ $$labels.duty }}'
+      severity: warning
+    noDataState: OK
+    title: A recurring duty is overdue
+    uid: aye-duty-overdue

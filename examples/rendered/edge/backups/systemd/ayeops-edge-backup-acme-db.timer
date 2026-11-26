@@ -1,0 +1,10 @@
+[Unit]
+Description=Schedule of the AyeOps backup job acme-db of edge
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 Europe/Berlin
+Persistent=true
+Unit=ayeops-edge-backup-acme-db.service
+
+[Install]
+WantedBy=timers.target

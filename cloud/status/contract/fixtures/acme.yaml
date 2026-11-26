@@ -1,0 +1,102 @@
+version: 1
+project: acme
+runbook_base_url: https://runbooks.acme.example
+status_page:
+  hostname: status.acme.example
+  title: Acme
+  locale: uk
+  notify:
+    telegram_chat_id: "-1001234567890"
+    min_state: no_data
+  access:
+    team: acme
+    aud: fb52298607fa036764eb5e6e31b89bab96294fddc185ce6324890af471c374f0
+hosts:
+  central:
+    arch: amd64
+    compose:
+    - apps.compose.yaml
+    modules: {}
+services:
+  web:
+    host: central
+    description: The web of acme.
+    metrics:
+    - probe_success
+    alerts:
+    - name: web-down
+      expr: probe_success == bool 0
+      severity: critical
+      runbook: web-down
+    logs: docker
+    status:
+      public: Website
+      probe: https://acme.example
+  api:
+    host: central
+    description: The api of acme.
+    metrics:
+    - probe_success
+    alerts:
+    - name: api-down
+      expr: probe_success == bool 0
+      severity: critical
+      runbook: api-down
+    logs: docker
+    status:
+      public: API
+      probe: https://api.acme.example/health
+  api-worker:
+    host: central
+    description: The api-worker of acme.
+    metrics:
+    - probe_success
+    alerts:
+    - name: api-worker-down
+      expr: probe_success == bool 0
+      severity: critical
+      runbook: api-worker-down
+    logs: docker
+    status:
+      public: API
+  checkout:
+    host: central
+    description: The checkout of acme.
+    metrics:
+    - probe_success
+    alerts:
+    - name: checkout-down
+      expr: probe_success == bool 0
+      severity: critical
+      runbook: checkout-down
+    logs: docker
+    status:
+      public: Payments & checkout
+  docs:
+    host: central
+    description: The docs of acme.
+    metrics:
+    - probe_success
+    alerts:
+    - name: docs-down
+      expr: probe_success == bool 0
+      severity: critical
+      runbook: docs-down
+    logs: docker
+    status:
+      public: Документація
+      id: docs
+      probe: https://docs.acme.example
+  billing-cron:
+    host: central
+    description: The billing-cron of acme.
+    metrics:
+    - probe_success
+    alerts:
+    - name: billing-cron-down
+      expr: probe_success == bool 0
+      severity: critical
+      runbook: billing-cron-down
+    logs: docker
+    status:
+      internal: nightly invoices, users see them in Payments

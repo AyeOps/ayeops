@@ -1,0 +1,18 @@
+To apply a mutant on disk:
+    mutmut apply <id>
+
+To show a mutant:
+    mutmut show <id>
+
+
+Suspicious 🤔 (10)
+
+---- src\ayeops\report.py (10) ----
+
+193-194, 306, 398, 400-402, 407-408, 741
+
+Survived 🙁 (6)
+
+---- src\ayeops\report.py (6) ----
+
+471, 474, 599, 602, 731, 743

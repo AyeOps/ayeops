@@ -1,0 +1,76 @@
+services:
+  autopilot:
+{% if settings.runner == "claude-code" %}
+    image: python:3.13.16-slim@sha256:cf50a4f6ac4f026458b08d5222023d700ac806410dff5e9ca8728fa44f2b850f
+{% else %}
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+{% endif %}
+    command: ["python", "-I", "/app/autopilot.py"]
+    user: "65534:65534"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      AYE_AUTOPILOT_WEBHOOK_SECRET: "${AYE_AUTOPILOT_WEBHOOK_SECRET:?set AYE_AUTOPILOT_WEBHOOK_SECRET}"
+      AYE_AUTOPILOT_RUNNER: {{ settings.runner | tojson }}
+      AYE_AUTOPILOT_AUTH: {{ settings.auth | tojson }}
+{% if settings.auth == "subscription" %}
+      AYE_AUTOPILOT_OAUTH_TOKEN: "${AYE_AUTOPILOT_OAUTH_TOKEN:?set AYE_AUTOPILOT_OAUTH_TOKEN}"
+{% elif settings.runner != "none" %}
+      AYE_AUTOPILOT_API_KEY: "${AYE_AUTOPILOT_API_KEY:?set AYE_AUTOPILOT_API_KEY}"
+{% endif %}
+      AYE_AUTOPILOT_MODEL: {{ settings.model | tojson }}
+      AYE_AUTOPILOT_ESCALATION_MODEL: {{ settings.escalation_model | tojson }}
+      AYE_AUTOPILOT_CRITICAL_SERVICES: {{ settings.critical_services | tojson | tojson }}
+      AYE_AUTOPILOT_METRICS_URL: http://victoriametrics:8428
+      AYE_AUTOPILOT_LOKI_URL: {{ autopilot.loki_url | tojson }}
+      AYE_AUTOPILOT_CATALOG: /app/catalog.json
+      AYE_AUTOPILOT_STATE: /tmp
+      AYE_AUTOPILOT_LOOKBACK_MINUTES: {{ settings.lookback_minutes | string | tojson }}
+      AYE_AUTOPILOT_DOSSIER_TOKENS: {{ settings.dossier_tokens | string | tojson }}
+      AYE_AUTOPILOT_RUN_USD: {{ settings.run_usd | string | tojson }}
+      AYE_AUTOPILOT_RUN_SECONDS: {{ settings.run_seconds | string | tojson }}
+      AYE_AUTOPILOT_RUNS_PER_HOUR: {{ settings.runs_per_hour | string | tojson }}
+      AYE_AUTOPILOT_DAY_USD: {{ settings.day_usd | string | tojson }}
+      AYE_AUTOPILOT_NIGHT_USD: {{ settings.night_usd | string | tojson }}
+{% if settings.quiet_hours %}
+      AYE_AUTOPILOT_QUIET_START: {{ settings.quiet_hours.start | tojson }}
+      AYE_AUTOPILOT_QUIET_END: {{ settings.quiet_hours.end | tojson }}
+{% endif %}
+      AYE_AUTOPILOT_TIMEZONE: {{ settings.timezone | tojson }}
+{% if autopilot.incidents %}
+      AYE_AUTOPILOT_INCIDENTS: {{ autopilot.incidents | tojson }}
+{% endif %}
+      AYE_AUTOPILOT_POST_VERDICT: {{ settings.post_verdict | string | lower | tojson }}
+{% if settings.post_verdict %}
+      AYE_ONCALL_TELEGRAM_TOKEN: "${AYE_ONCALL_TELEGRAM_TOKEN:?set AYE_ONCALL_TELEGRAM_TOKEN}"
+      AYE_AUTOPILOT_CHAT_ID: {{ autopilot.chat_id | tojson }}
+{% endif %}
+{% if settings.mask %}
+      AYE_AUTOPILOT_MASK: {{ settings.mask | tojson | tojson }}
+{% endif %}
+{% if settings.mask_env %}
+      AYE_AUTOPILOT_MASK_ENV: {{ settings.mask_env | tojson | tojson }}
+{% for name in settings.mask_env %}
+      {{ name }}: {{ ("${" ~ name ~ ":?set " ~ name ~ "}") | tojson }}
+{% endfor %}
+{% endif %}
+    volumes:
+      - "./autopilot/autopilot.py:/app/autopilot.py:ro"
+      - "./autopilot/catalog.json:/app/catalog.json:ro"
+      - "/usr/share/zoneinfo:/usr/share/zoneinfo:ro"
+      - "autopilot-state:/tmp"
+{% if autopilot.incidents %}
+      - "incidents-journal:/incidents:ro"
+{% endif %}
+{% if settings.runner == "claude-code" %}
+      - {{ (settings.claude_binary ~ ":/usr/local/bin/claude:ro") | tojson }}
+{% endif %}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+volumes:
+  autopilot-state: {}

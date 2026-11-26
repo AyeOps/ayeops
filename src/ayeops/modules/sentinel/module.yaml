@@ -1,0 +1,158 @@
+name: sentinel
+summary: Watches the central host from another host and sends one message to Telegram, or to Slack with contact slack, when it stops answering, plus a dead-man ping while it answers and, when asked, a daily digest of every backup.
+requires: {}
+defaults:
+  checks: []
+  failures_before_alert: 3
+  reminder: 6h
+  interval: 60s
+  timeout: 10s
+  expose: []
+  digest: null
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  required: [watch]
+  properties:
+    watch:
+      type: string
+      pattern: "^[a-z][a-z0-9-]{0,39}$"
+    checks:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        required: [name]
+        properties:
+          name:
+            type: string
+            pattern: "^[a-z][a-z0-9-]{0,39}$"
+          enabled:
+            type: boolean
+          kind:
+            enum: [http, fresh, tls]
+          url:
+            type: string
+            pattern: "^https?://"
+          contains:
+            type: string
+          query:
+            type: string
+            minLength: 1
+          max_age_seconds:
+            type: integer
+            minimum: 30
+          host:
+            type: string
+            pattern: '^[A-Za-z0-9.-]+$'
+          port:
+            type: integer
+            minimum: 1
+            maximum: 65535
+          min_days:
+            type: integer
+            minimum: 0
+    failures_before_alert:
+      type: integer
+      minimum: 1
+      maximum: 60
+    reminder:
+      type: string
+      pattern: "^[1-9][0-9]*[mhd]$"
+    interval:
+      type: string
+      pattern: "^[1-9][0-9]*[sm]$"
+    timeout:
+      type: string
+      pattern: "^[1-9][0-9]*s$"
+    expose:
+      type: array
+      items:
+        enum: [9134]
+    digest:
+      type: [object, "null"]
+      additionalProperties: false
+      required: [at]
+      properties:
+        at:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+        timezone:
+          type: string
+          pattern: '^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$'
+        url:
+          type: string
+          pattern: '^https?://'
+services:
+  sentinel:
+    description: Checks Grafana, VictoriaMetrics and the freshness of up on the watched host every minute and tells Telegram, or Slack with contact slack, when they stop answering.
+    memory: 48m
+    cpus: 0.05
+    metrics:
+      - ayeops_sentinel_check_success
+      - ayeops_sentinel_failure_streak
+      - ayeops_sentinel_alerting
+      - ayeops_sentinel_last_notice_ok
+      - ayeops_sentinel_ping_success
+      - ayeops_sentinel_digest_due_timestamp_seconds
+    alerts:
+      - target-down
+      - sentinel-notify-failing
+      - sentinel-ping-failing
+      - sentinel-stalled
+      - sentinel-digest-overdue
+    logs: docker
+    status:
+      internal: watches the monitoring itself, not a user-facing component
+alerts:
+  - name: sentinel-notify-failing
+    title: Sentinel cannot deliver its messages
+    expr: ayeops_sentinel_last_notice_ok == bool 0
+    for: 1m
+    severity: critical
+    summary: "The sentinel on {{ .Labels.host }} failed to send its last message about {{ .Labels.watch }}"
+    runbook: sentinel-notify-failing
+  - name: sentinel-ping-failing
+    title: Sentinel dead-man ping failing
+    expr: ayeops_sentinel_ping_success == bool 0
+    for: 15m
+    severity: warning
+    summary: "The sentinel on {{ .Labels.host }} cannot ping its dead-man URL, so its own death would go unnoticed"
+    runbook: sentinel-ping-failing
+  - name: sentinel-stalled
+    title: Sentinel stopped checking
+    expr: time() - ayeops_sentinel_last_round_timestamp_seconds > bool 300
+    for: 5m
+    severity: warning
+    summary: "The sentinel on {{ .Labels.host }} has not finished a round of checks for 5 minutes"
+    runbook: sentinel-stalled
+  - name: sentinel-digest-overdue
+    setting: digest
+    title: Backup digest overdue
+    expr: time() - ayeops_sentinel_digest_due_timestamp_seconds > bool 7200
+    for: 5m
+    severity: warning
+    summary: "The daily backup digest of the sentinel on {{ .Labels.host }} is more than 2 hours overdue"
+    runbook: sentinel-digest-overdue
+files:
+  - src: files/sentinel.py
+    dest: sentinel/sentinel.py
+permissions:
+  - issuer: Telegram
+    credential: bot token and chat id
+    env: [AYE_TELEGRAM_BOT_TOKEN, AYE_TELEGRAM_CHAT_ID]
+    when: "contact != 'slack'"
+    grants:
+      - "the bot of the Grafana contact point, a member of the alert chat that may post there; no admin rights"
+  - issuer: Slack
+    credential: incoming webhook URL
+    env: [AYE_SLACK_WEBHOOK_URL]
+    when: "contact == 'slack'"
+    grants:
+      - "the incoming webhook of the Grafana contact point, which posts into the alert channel only"
+  - issuer: healthchecks.io or another dead-man service
+    credential: ping URL of one check
+    env: [AYE_SENTINEL_PING_URL]
+    grants:
+      - "the URL of one check; it can only mark that check alive, no API key"

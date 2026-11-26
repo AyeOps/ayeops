@@ -1,0 +1,136 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ${{ fromJSON(contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && vars.AYE_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: lint
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: types
+        run: uv run mypy
+      - name: no comments
+        run: uv run python -m ayeops.comments .
+      - name: text hygiene
+        run: uv run python -m ayeops.texthygiene .
+      - name: example manifest
+        run: uv run aye check examples/acme.yaml
+      - name: example render is current
+        run: uv run aye render examples/acme.yaml -o examples/rendered --check --build-time "2026-01-01 00:00 UTC" --commit example
+      - name: tests
+        run: uv run pytest -n auto
+
+  status-worker:
+    runs-on: ${{ fromJSON(contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && vars.AYE_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: cloud/status
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cloud/status/package-lock.json
+      - run: npm ci
+      - name: types
+        run: npm run typecheck
+      - name: tests
+        run: npm test
+
+  secrets:
+    runs-on: ${{ fromJSON(contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && vars.AYE_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: gitleaks over the git history
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256_X64: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          GITLEAKS_SHA256_ARM64: e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080
+        run: |
+          case "$(uname -m)" in
+            x86_64) arch=x64; sum="$GITLEAKS_SHA256_X64" ;;
+            aarch64|arm64) arch=arm64; sum="$GITLEAKS_SHA256_ARM64" ;;
+            *) echo "no gitleaks build for $(uname -m)"; exit 1 ;;
+          esac
+          dir="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$dir"
+          tarball="$dir/gitleaks.tar.gz"
+          curl -fsSL -o "$tarball" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${arch}.tar.gz"
+          echo "$sum  $tarball" | sha256sum -c -
+          tar -xzf "$tarball" -C "$dir" gitleaks
+          "$dir/gitleaks" git . --config .gitleaks.toml --redact --verbose --no-banner
+
+  compose:
+    runs-on: ${{ fromJSON(contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && vars.AYE_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: docker compose config
+        run: |
+          for host in examples/rendered/*/; do
+            docker compose --env-file .env.example -f "${host}compose.yaml" config -q
+          done
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: quickstart composes with the documented .env
+        run: |
+          uv run --locked aye render examples/quickstart.yaml -o rendered
+          uv run --locked aye secrets gen --manifest examples/quickstart.yaml --host local --env-file rendered/local/.env
+          docker compose -f rendered/local/compose.yaml config -q
+          rm -rf rendered
+      - name: images are multi-arch
+        run: |
+          for image in $(grep -h '^    image: ' examples/rendered/*/compose.yaml | awk '{print $2}' | sort -u); do
+            platforms=""
+            for attempt in 1 2 3 4; do
+              platforms=$(docker buildx imagetools inspect "$image" | grep 'Platform:') && break
+              echo "$image: registry did not answer, attempt $attempt"
+              sleep $((attempt * 15))
+            done
+            for arch in linux/amd64 linux/arm64; do
+              echo "$platforms" | grep -q "$arch" || { echo "$image lacks $arch"; exit 1; }
+            done
+          done
+
+  zizmor:
+    runs-on: ${{ fromJSON(contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) && vars.AYE_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - name: GitHub Actions static analysis
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uvx zizmor==1.31.1 --min-severity high --format github .

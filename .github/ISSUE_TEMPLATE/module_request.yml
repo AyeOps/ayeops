@@ -1,0 +1,51 @@
+name: Module or integration request
+description: Ask for a new module, a new provider of an existing one, or an integration with another tool.
+title: "Module: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        AyeOps integrates existing open-source tools rather than rebuilding them, and every service it runs ships with a description, a metric, an alert with a runbook, a log source and a status mark (docs/rules.md).
+        The more of that you can name below, the faster a module can be written. Check docs/roadmap.md first: it may already be planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you want to watch or run
+      description: The problem on your fleet, not the solution. What fails today without anyone noticing?
+    validations:
+      required: true
+  - type: textarea
+    id: tool
+    attributes:
+      label: Tool or service to integrate
+      description: Name, link, licence, and the image it would run from, if you know it.
+      placeholder: "Example: Gatus, https://github.com/TwiN/gatus, Apache-2.0"
+  - type: checkboxes
+    id: image
+    attributes:
+      label: Image
+      description: Every image is pinned to an exact version and runs on both architectures.
+      options:
+        - label: The image has a pinned version tag, not only latest.
+        - label: The image is published for linux/amd64 and linux/arm64.
+  - type: textarea
+    id: metrics
+    attributes:
+      label: Metrics and alerts
+      description: Which metrics it exposes or AyeOps would collect, and which alert would page someone, with what severity.
+  - type: textarea
+    id: credentials
+    attributes:
+      label: Credentials and access
+      description: What it needs to read (an API token, the docker socket, a host directory), and the narrowest grant that works.
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you write it?
+      options:
+        - I would like to write the module myself
+        - I can test it on my fleet
+        - I am only asking
+    validations:
+      required: true

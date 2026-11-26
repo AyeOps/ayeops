@@ -1,0 +1,171 @@
+name: grafana
+summary: Grafana with the VictoriaMetrics datasource, the dashboards and alert rules of every enabled module a Telegram, Slack or email contact point and SMTP through the manifest mail relay.
+requires:
+  metrics:
+    role: server
+defaults:
+  root_url: null
+  expose: []
+  dashboards: null
+  datasources: []
+  locale: null
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    root_url:
+      type: ["string", "null"]
+      pattern: "^https?://"
+    expose:
+      type: array
+      items:
+        enum: [3000]
+    dashboards:
+      type: ["string", "null"]
+      minLength: 1
+    locale:
+      enum: [en, uk, null]
+    datasources:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        required: [name, uid, type, url]
+        properties:
+          name:
+            type: string
+            minLength: 1
+          uid:
+            type: string
+            pattern: "^[A-Za-z0-9_-]{1,40}$"
+          type:
+            enum: [postgres, loki, prometheus]
+          url:
+            type: string
+            minLength: 1
+          database:
+            type: string
+            minLength: 1
+          user:
+            type: string
+            minLength: 1
+          password_env:
+            type: string
+            pattern: "^[A-Z][A-Z0-9_]*$"
+          tls:
+            type: boolean
+          max_connections:
+            type: integer
+            minimum: 1
+            maximum: 20
+        dependentRequired:
+          password_env: [user]
+        if:
+          properties:
+            type:
+              const: postgres
+        then:
+          required: [database]
+          properties:
+            url:
+              pattern: "^[A-Za-z0-9.-]+:[0-9]+$"
+        else:
+          properties:
+            url:
+              pattern: "^https?://"
+          not:
+            anyOf:
+              - required: [database]
+              - required: [tls]
+              - required: [max_connections]
+services:
+  grafana:
+    description: Shows the dashboards, evaluates the alert rules and sends notifications to the contact point.
+    memory: 512m
+    cpus: 0.5
+    metrics: [grafana_alerting_result_total, grafana_http_request_duration_seconds_count]
+    alerts: [target-down]
+    logs: docker
+    status:
+      internal: operator console, not a user-facing component
+    login: Grafana sign-in form, user AYE_GRAFANA_ADMIN_USER and password AYE_GRAFANA_ADMIN_PASSWORD
+  grafana-reader:
+    description: Keeps a Grafana service account with role Viewer and a token for it in the grafana-reader volume, so agents on the Grafana host read alert rules, silences, alerts and alert annotations without the admin password; checks the token every 5 minutes, writes a new one only when the file is missing or Grafana refuses it, counts the dashboards that no file provisions, and serves the result on 9137.
+    memory: 32m
+    cpus: 0.1
+    metrics: [ayeops_grafana_reader_ok, ayeops_grafana_reader_endpoint_ok, ayeops_grafana_reader_last_success_timestamp_seconds, ayeops_grafana_reader_rotations_total, ayeops_grafana_reader_dashboards_unmanaged]
+    alerts: [grafana-reader-failing, dashboards-unmanaged, target-down]
+    logs: docker
+    status:
+      internal: credentials for agents that read Grafana, not a user-facing component
+alerts:
+  - name: grafana-reader-failing
+    title: Grafana reader token does not work
+    expr: time() - max by (host, project, group) (ayeops_grafana_reader_last_success_timestamp_seconds) > bool 900
+    for: 5m
+    severity: warning
+    summary: "The Grafana reader on {{ .Labels.host }} has not had a working Viewer token for 15 minutes, so the agents that read Grafana with it see nothing"
+    runbook: grafana-reader-failing
+    no_data: alerting
+    only_with: grafana_reader
+  - name: dashboards-unmanaged
+    title: Dashboards drawn in Grafana, not in the repository
+    expr: max by (host, project, group) (ayeops_grafana_reader_dashboards_unmanaged) > bool 0
+    for: 1d
+    severity: info
+    summary: "Grafana on {{ .Labels.host }} has held dashboards for a day that no file provisions: they are not reviewed and go with the grafana-data volume; run aye dashboards pull"
+    runbook: dashboards-unmanaged
+    only_with: grafana_reader
+dashboards: [health.json, services.json, reliability.json]
+files:
+  - src: files/grafana_reader.py
+    dest: grafana/grafana_reader.py
+    when: grafana_reader.enabled
+permissions:
+  - issuer: Telegram
+    credential: bot token and chat id
+    env: [AYE_TELEGRAM_BOT_TOKEN, AYE_TELEGRAM_CHAT_ID]
+    when: "contact == 'telegram'"
+    grants:
+      - "a bot made with BotFather that is a member of the alert chat and may post there; no admin rights in the chat"
+  - issuer: Slack
+    credential: incoming webhook URL
+    env: [AYE_SLACK_WEBHOOK_URL]
+    when: "contact == 'slack'"
+    grants:
+      - "an incoming webhook of a Slack app that posts into the alert channel only; no bot token and no other scope"
+  - issuer: "{{ 'Google' if modules.auth.provider == 'google' else 'OIDC provider' }}"
+    credential: the OAuth client of the auth module
+    env: [AYE_AUTH_CLIENT_ID, AYE_AUTH_CLIENT_SECRET]
+    when: "modules.auth"
+    grants:
+      - "redirect URI {{ settings.root_url }}/login/{{ 'google' if modules.auth.provider == 'google' else 'generic_oauth' }} on the same client"
+  - issuer: "{{ mail.host }}"
+    credential: SMTP login
+    env: [AYE_SMTP_USER, AYE_SMTP_PASSWORD]
+    when: "mail"
+    grants:
+      - "may send as {{ mail.from }} only; no mailbox read access"
+  - issuer: "{{ item.type }} at {{ item.url }}"
+    credential: "database login {{ item.user }}"
+    env: ["{{ item.password_env }}"]
+    each: "settings.datasources"
+    when: "item.password_env"
+    grants:
+      - "read only: connect to {{ item.database or 'the database' }} and SELECT on the tables the dashboards query, nothing else"
+generated:
+  - env: [AYE_GRAFANA_ADMIN_USER]
+    format: hex
+    bytes: 8
+  - env: [AYE_GRAFANA_ADMIN_PASSWORD]
+    format: hex
+    bytes: 24
+  - env: [AYE_ONCALL_WEBHOOK_SECRET]
+    when: "modules.oncall"
+    format: hex
+    bytes: 32
+  - env: [AYE_AUTOPILOT_WEBHOOK_SECRET]
+    when: "modules.autopilot"
+    format: hex
+    bytes: 32

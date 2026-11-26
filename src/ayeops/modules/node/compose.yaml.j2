@@ -1,0 +1,56 @@
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    command:
+      - "--path.rootfs=/host"
+      - "--collector.textfile.directory=/textfile"
+    pid: host
+    volumes:
+      - "/:/host:ro{{ ',rslave' if settings.rslave else '' }}"
+      - {{ (textfile ~ ":/textfile:ro") | tojson }}
+    ports: [9100]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9100/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+{% if settings.battery %}
+  battery:
+    image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+    command: ["sh", "/battery.sh"]
+    environment:
+      AYE_POWER_SUPPLY_DIR: /host/sys/class/power_supply
+      AYE_TEXTFILE_DIR: /textfile
+      AYE_BATTERY_INTERVAL: {{ settings.battery_interval | string | tojson }}
+    volumes:
+      - "./node/battery.sh:/battery.sh:ro"
+      - "/sys:/host/sys:ro"
+      - {{ (textfile ~ ":/textfile") | tojson }}
+    healthcheck:
+      test: ["CMD-SHELL", "find /textfile/battery.prom -mmin -5 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+{% endif %}
+{% if settings.reboot %}
+  reboot:
+    image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+    command: ["sh", "/reboot.sh"]
+    environment:
+      AYE_HOST_ROOT: /host
+      AYE_TEXTFILE_DIR: /textfile
+      AYE_REBOOT_INTERVAL: {{ settings.reboot_interval | string | tojson }}
+    volumes:
+      - "./node/reboot.sh:/reboot.sh:ro"
+      - "/:/host:ro"
+      - {{ (textfile ~ ":/textfile") | tojson }}
+    healthcheck:
+      test: ["CMD-SHELL", "find /textfile/reboot.prom -mmin -30 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+{% endif %}
+{% if textfile == "node-textfile" %}
+volumes:
+  node-textfile: {}
+{% endif %}

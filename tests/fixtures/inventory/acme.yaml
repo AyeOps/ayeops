@@ -1,0 +1,292 @@
+all:
+  children:
+    module_ai_usage:
+      hosts:
+        central: {}
+    module_auth:
+      hosts:
+        central: {}
+    module_autopilot:
+      hosts:
+        central: {}
+    module_backups:
+      hosts:
+        edge: {}
+    module_cloudflare:
+      hosts:
+        central: {}
+    module_containers:
+      hosts:
+        central: {}
+        edge: {}
+    module_delivery:
+      hosts:
+        central: {}
+    module_disk_forecast:
+      hosts:
+        edge: {}
+    module_eol:
+      hosts:
+        edge: {}
+    module_github:
+      hosts:
+        central: {}
+    module_gpu:
+      hosts:
+        edge: {}
+    module_grafana:
+      hosts:
+        central: {}
+    module_hygiene:
+      hosts:
+        edge: {}
+    module_image_updates:
+      hosts:
+        edge: {}
+    module_incidents:
+      hosts:
+        central: {}
+    module_ingress:
+      hosts:
+        central: {}
+    module_logs:
+      hosts:
+        central: {}
+        edge: {}
+    module_mcp:
+      hosts:
+        central: {}
+    module_metrics:
+      hosts:
+        central: {}
+        edge: {}
+    module_network:
+      hosts:
+        edge: {}
+    module_node:
+      hosts:
+        central: {}
+        edge: {}
+    module_objectstore:
+      hosts:
+        central: {}
+    module_offsite:
+      hosts:
+        edge: {}
+    module_oncall:
+      hosts:
+        central: {}
+    module_portal:
+      hosts:
+        central: {}
+    module_probes:
+      hosts:
+        central: {}
+        edge: {}
+    module_reconciler:
+      hosts:
+        central: {}
+    module_sentinel:
+      hosts:
+        edge: {}
+    module_smart:
+      hosts:
+        edge: {}
+    module_status:
+      hosts:
+        central: {}
+    module_updates:
+      hosts:
+        edge: {}
+    module_vulns:
+      hosts:
+        edge: {}
+    service_acme_db:
+      hosts:
+        edge: {}
+    service_agentgateway:
+      hosts:
+        central: {}
+    service_ai_usage_exporter:
+      hosts:
+        central: {}
+    service_alloy:
+      hosts:
+        central: {}
+        edge: {}
+    service_autopilot:
+      hosts:
+        central: {}
+    service_backup_jobs:
+      hosts:
+        edge: {}
+    service_battery:
+      hosts:
+        edge: {}
+    service_blackbox:
+      hosts:
+        central: {}
+        edge: {}
+    service_cadvisor:
+      hosts:
+        central: {}
+        edge: {}
+    service_cloudflare_exporter:
+      hosts:
+        central: {}
+    service_diun:
+      hosts:
+        edge: {}
+    service_eol_agent:
+      hosts:
+        edge: {}
+    service_garage:
+      hosts:
+        central: {}
+    service_garage_admin:
+      hosts:
+        central: {}
+    service_github_exporter:
+      hosts:
+        central: {}
+    service_goalert:
+      hosts:
+        central: {}
+    service_goalert_db:
+      hosts:
+        central: {}
+    service_grafana:
+      hosts:
+        central: {}
+    service_grafana_reader:
+      hosts:
+        central: {}
+    service_hygiene:
+      hosts:
+        edge: {}
+    service_image_updates_agent:
+      hosts:
+        edge: {}
+    service_image_updates_proxy:
+      hosts:
+        edge: {}
+    service_incidents_agent:
+      hosts:
+        central: {}
+    service_loki:
+      hosts:
+        central: {}
+    service_mcp:
+      hosts:
+        central: {}
+    service_mcp_catalog:
+      hosts:
+        central: {}
+    service_mcp_grafana:
+      hosts:
+        central: {}
+    service_mcp_s3_bin:
+      hosts:
+        central: {}
+    service_mcp_tools:
+      hosts:
+        central: {}
+    service_mcp_victoriametrics:
+      hosts:
+        central: {}
+    service_net_exporter:
+      hosts:
+        edge: {}
+    service_node_exporter:
+      hosts:
+        central: {}
+        edge: {}
+    service_nvidia_gpu_exporter:
+      hosts:
+        edge: {}
+    service_oauth2_proxy:
+      hosts:
+        central: {}
+    service_offsite:
+      hosts:
+        edge: {}
+    service_offsite_restic:
+      hosts:
+        edge: {}
+    service_oncall_bridge:
+      hosts:
+        central: {}
+    service_portal:
+      hosts:
+        central: {}
+    service_rdap_exporter:
+      hosts:
+        central: {}
+    service_reboot:
+      hosts:
+        edge: {}
+    service_reconciler:
+      hosts:
+        central: {}
+    service_sentinel:
+      hosts:
+        edge: {}
+    service_smartctl_exporter:
+      hosts:
+        edge: {}
+    service_status_reporter:
+      hosts:
+        central: {}
+    service_traefik:
+      hosts:
+        central: {}
+    service_updates:
+      hosts:
+        edge: {}
+    service_updates_agent:
+      hosts:
+        edge: {}
+    service_victoriametrics:
+      hosts:
+        central: {}
+    service_vmagent:
+      hosts:
+        central: {}
+        edge: {}
+    service_vmalert:
+      hosts:
+        central: {}
+    service_vulns:
+      hosts:
+        edge: {}
+    service_vulns_agent:
+      hosts:
+        edge: {}
+    service_vulns_proxy:
+      hosts:
+        edge: {}
+    service_web:
+      hosts:
+        central: {}
+    service_wifi:
+      hosts:
+        edge: {}
+    zone_datacenter:
+      hosts:
+        central: {}
+    zone_office:
+      hosts:
+        edge: {}
+  hosts:
+    central:
+      ansible_host: 10.8.0.1
+      ayeops_arch: arm64
+      ayeops_project: acme
+      ayeops_zone: datacenter
+    edge:
+      ansible_host: 10.8.0.2
+      ayeops_arch: amd64
+      ayeops_project: acme
+      ayeops_zone: office
+  vars:
+    ayeops_generated_by: aye inventory

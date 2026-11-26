@@ -1,0 +1,118 @@
+name: errors
+summary: Self-hosted error tracking that the Sentry SDKs report to, GlitchTip by default, with its own PostgreSQL, Valkey and a daily database dump.
+requires:
+  metrics: {}
+  node: {}
+  backups: {}
+defaults:
+  provider: glitchtip
+  url: null
+  retention_days: 30
+  backup_hour: 4
+  backup_keep_days: 14
+  expose: []
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  required: [url]
+  properties:
+    provider:
+      enum: [glitchtip]
+    url:
+      type: string
+      pattern: '^https?://[^/\s]+$'
+    retention_days:
+      type: integer
+      minimum: 1
+      maximum: 365
+    backup_hour:
+      type: integer
+      minimum: 0
+      maximum: 23
+    backup_keep_days:
+      type: integer
+      minimum: 1
+      maximum: 365
+    expose:
+      type: array
+      items:
+        enum: [8095]
+services:
+  glitchtip:
+    description: Takes exceptions from the Sentry SDKs of every service, groups them into issues with the stack trace and the request, and shows them in its web UI.
+    memory: 768m
+    cpus: 1.0
+    metrics: [glitchtip_projects_total, django_http_responses_total_by_status_total]
+    alerts: [target-down]
+    logs: docker
+    login: email and password of the first account, which owns the instance; sign-ups and new organizations are closed after it
+    status:
+      internal: operator access over the private network, users never see it
+  glitchtip-worker:
+    description: Runs the background tasks of the error tracker, event processing, alert mail and the retention cleanup.
+    memory: 512m
+    cpus: 0.5
+    metrics:
+      none: the worker serves no metrics; its tasks show as the issues glitchtip lists and it restarts into container-restarting
+    alerts: [container-restarting]
+    logs: docker
+    status:
+      internal: background work of the error tracker
+  glitchtip-db:
+    description: PostgreSQL of the error tracker, holding events for retention_days.
+    memory: 512m
+    cpus: 0.5
+    metrics:
+      none: only glitchtip connects to it, and glitchtip fails its healthcheck and target-down without it
+    alerts: [container-restarting]
+    logs: docker
+    status:
+      internal: storage of the error tracker
+  glitchtip-cache:
+    description: Valkey task queue and cache of the error tracker, in memory only.
+    memory: 64m
+    cpus: 0.25
+    metrics:
+      none: only glitchtip connects to it, and glitchtip fails its healthcheck and target-down without it
+    alerts: [container-restarting]
+    logs: docker
+    status:
+      internal: queue of the error tracker
+  glitchtip-backup:
+    description: Dumps the error tracker database once a day into a volume through backups/backup_run.sh, which reports every run under the backup label errors.
+    memory: 64m
+    cpus: 0.25
+    metrics: [ayeops_backup_last_success_timestamp_seconds, ayeops_backup_last_run_success, ayeops_backup_last_size_bytes]
+    alerts: [backup-missing, backup-failed]
+    logs: docker
+    status:
+      internal: backup of the error tracker
+dashboards: []
+backup_jobs:
+  - name: errors
+    service: glitchtip-backup
+    schedule: "0 {{ settings.backup_hour }} * * *"
+    timezone: UTC
+    grace: 2h
+files:
+  - src: files/backup.sh
+    dest: errors/backup.sh
+  - src: files/ayeops_settings.py
+    dest: errors/ayeops_settings.py
+  - src: files/google_app.py
+    dest: errors/google_app.py
+permissions:
+  - issuer: Google
+    credential: the OAuth client of the auth module
+    env: [AYE_AUTH_CLIENT_ID, AYE_AUTH_CLIENT_SECRET]
+    when: "modules.auth and modules.auth.provider == 'google'"
+    grants:
+      - "redirect URI {{ settings.url }}/accounts/google/login/callback/ on the same client"
+generated:
+  - env: [AYE_ERRORS_SECRET_KEY]
+    format: hex
+    bytes: 32
+  - env: [AYE_ERRORS_DB_PASSWORD, AYE_ERRORS_CACHE_PASSWORD]
+    format: hex
+    bytes: 24

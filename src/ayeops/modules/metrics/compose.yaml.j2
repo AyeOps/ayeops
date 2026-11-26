@@ -1,0 +1,96 @@
+services:
+{% if settings.role == "server" %}
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.153.0@sha256:5eff7af5341e401471002f58d106d399e614a62f3d240f2dbc21901e49eed5dd
+    command:
+      - {{ ("-retentionPeriod=" ~ settings.retention) | tojson }}
+      - "-storageDataPath=/storage"
+      - "-httpListenAddr=:8428"
+    volumes:
+      - "victoriametrics-data:/storage"
+    ports: [8428]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8428/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+{% if settings.backup %}
+  victoriametrics-backup:
+    image: victoriametrics/victoria-metrics:v1.153.0@sha256:5eff7af5341e401471002f58d106d399e614a62f3d240f2dbc21901e49eed5dd
+    entrypoint: ["sh", "/backup.sh"]
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      AYE_BACKUP_DIR: /backups
+      AYE_STORAGE_DIR: /storage
+      AYE_TEXTFILE_DIR: /textfile
+      AYE_VM_URL: http://victoriametrics:8428
+      AYE_BACKUP_HOUR: {{ settings.backup_hour | string | tojson }}
+      AYE_BACKUP_KEEP_DAYS: {{ settings.backup_keep_days | string | tojson }}
+      AYE_RESTORE_TEST_DAYS: {{ settings.restore_test_days | string | tojson }}
+    volumes:
+      - "./metrics/backup.sh:/backup.sh:ro"
+      - "./backups/backup_run.sh:/backup_run.sh:ro"
+      - "victoriametrics-data:/storage:ro"
+      - {{ (settings.backup_dir ~ ":/backups") | tojson }}
+      - {{ (textfile ~ ":/textfile") | tojson }}
+    depends_on:
+      victoriametrics:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "find /tmp/backup.alive -mmin -15 | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 180s
+{% endif %}
+{% endif %}
+  vmagent:
+    image: victoriametrics/vmagent:v1.153.0@sha256:474135388ae700b842007d3e186a8ae60ccf7de3dfd776fb6ed27cf8522d8331
+    command:
+      - "-promscrape.config=/etc/vmagent/scrape.yaml"
+      - {{ ("-remoteWrite.url=" ~ remote_write_url) | tojson }}
+      - {{ ("-remoteWrite.label=host=" ~ host.name) | tojson }}
+      - {{ ("-remoteWrite.label=project=" ~ project) | tojson }}
+{% if host.group %}
+      - {{ ("-remoteWrite.label=group=" ~ host.group) | tojson }}
+{% endif %}
+      - "-remoteWrite.tmpDataPath=/vmagent-data"
+      - {{ ("-remoteWrite.maxDiskUsagePerURL=" ~ settings.queue_max) | tojson }}
+      - "-remoteWrite.inmemoryQueues=1"
+      - "-httpListenAddr=:8429"
+    volumes:
+      - "./vmagent/scrape.yaml:/etc/vmagent/scrape.yaml:ro"
+      - "vmagent-data:/vmagent-data"
+    ports: [8429]
+{% if settings.networks %}
+    networks:
+      - default
+{% for network in settings.networks %}
+      - {{ network | tojson }}
+{% endfor %}
+{% endif %}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8429/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+{% if settings.role == "server" %}
+  victoriametrics-data: {}
+{% endif %}
+  vmagent-data: {}
+{% if settings.role == "server" and settings.backup and textfile == "node-textfile" %}
+  node-textfile: {}
+{% endif %}
+{% if settings.networks %}
+networks:
+  default: {}
+{% for network in settings.networks %}
+  {{ network | tojson }}:
+    external: true
+{% endfor %}
+{% endif %}

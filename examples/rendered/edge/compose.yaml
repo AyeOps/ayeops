@@ -1,0 +1,1143 @@
+name: acme-edge
+networks:
+  image-updates:
+    internal: true
+  image-updates-docker:
+    internal: true
+  vulns-docker:
+    internal: true
+services:
+  alloy:
+    command:
+    - run
+    - --server.http.listen-addr=0.0.0.0:12345
+    - --storage.path=/var/lib/alloy/data
+    - --disable-reporting
+    - /etc/alloy/config.alloy
+    cpus: 0.5
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - bash
+      - -c
+      - "exec 3<>/dev/tcp/127.0.0.1/12345 && printf 'GET /-/ready HTTP/1.0\r\n\r\n' >&3 && head -n 1 <&3 | grep -q ' 200 '"
+      timeout: 5s
+    image: grafana/alloy:v1.21.3@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4
+    labels:
+      io.ayeops.config-hash: 6ec12f604cf7ef94
+      io.ayeops.module: logs
+      io.ayeops.service: alloy
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 256m
+    platform: linux/amd64
+    ports:
+    - 127.0.0.1:12345:12345
+    restart: unless-stopped
+    volumes:
+    - ./logs/config.alloy:/etc/alloy/config.alloy:ro
+    - alloy-data:/var/lib/alloy/data
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - /var/log/journal:/var/log/journal:ro
+    - /run/log/journal:/run/log/journal:ro
+    - /etc/machine-id:/etc/machine-id:ro
+  backup-jobs:
+    cap_drop:
+    - ALL
+    command:
+    - sh
+    - /backups/backup_jobs.sh
+    cpus: 0.05
+    environment:
+      AYE_BACKUP_INTERVAL: '300'
+      AYE_BACKUP_JOBS: acme-db=93600
+      AYE_BACKUP_RPO: acme-db=93600
+      AYE_TEXTFILE_DIR: /textfile
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD-SHELL
+      - find /textfile/ayeops_backups.prom -mmin -16 | grep -q .
+      timeout: 5s
+    image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+    init: true
+    labels:
+      io.ayeops.config-hash: b929bb5d0e726537
+      io.ayeops.module: backups
+      io.ayeops.service: backup-jobs
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 16m
+    network_mode: none
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    volumes:
+    - ./backups/backup_jobs.sh:/backups/backup_jobs.sh:ro
+    - /var/lib/ayeops/textfile:/textfile
+  battery:
+    command:
+    - sh
+    - /battery.sh
+    cpus: 0.05
+    environment:
+      AYE_BATTERY_INTERVAL: '60'
+      AYE_POWER_SUPPLY_DIR: /host/sys/class/power_supply
+      AYE_TEXTFILE_DIR: /textfile
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD-SHELL
+      - find /textfile/battery.prom -mmin -5 | grep -q .
+      timeout: 5s
+    image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+    labels:
+      io.ayeops.config-hash: d75eb42253439863
+      io.ayeops.module: node
+      io.ayeops.service: battery
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 16m
+    platform: linux/amd64
+    restart: unless-stopped
+    volumes:
+    - ./node/battery.sh:/battery.sh:ro
+    - /sys:/host/sys:ro
+    - /var/lib/ayeops/textfile:/textfile
+  blackbox:
+    command:
+    - --config.file=/etc/blackbox/blackbox.yml
+    cpus: 0.25
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:9115/-/healthy
+      timeout: 5s
+    image: prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
+    labels:
+      io.ayeops.config-hash: 06859a172c2dad85
+      io.ayeops.module: probes
+      io.ayeops.service: blackbox
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/amd64
+    ports:
+    - 127.0.0.1:9115:9115
+    restart: unless-stopped
+    sysctls:
+      net.ipv4.ping_group_range: 0 2147483647
+    volumes:
+    - ./probes/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+  cadvisor:
+    command:
+    - --housekeeping_interval=30s
+    - --docker_only=true
+    - --store_container_labels=false
+    cpus: 0.5
+    devices:
+    - /dev/kmsg
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8080/healthz
+      timeout: 5s
+    image: ghcr.io/google/cadvisor:v0.60.6@sha256:b8e7d1093144fd088f425ff003d75a4aa405de075db78dae3bc563730b1bd07a
+    labels:
+      io.ayeops.module: containers
+      io.ayeops.service: cadvisor
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 256m
+    platform: linux/amd64
+    ports:
+    - 127.0.0.1:8080:8080
+    privileged: true
+    restart: unless-stopped
+    volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:ro
+    - /sys:/sys:ro
+    - /var/lib/docker/:/var/lib/docker:ro
+    - /dev/disk/:/dev/disk:ro
+  diun:
+    cap_drop:
+    - ALL
+    cpus: 0.25
+    depends_on:
+      image-updates-agent:
+        condition: service_healthy
+    environment:
+      DIUN_DB_PATH: /data/diun.db
+      DIUN_NOTIF_WEBHOOK_ENDPOINT: http://image-updates-agent:8098/diun
+      DIUN_NOTIF_WEBHOOK_METHOD: POST
+      DIUN_NOTIF_WEBHOOK_TIMEOUT: 10s
+      DIUN_PROVIDERS_FILE_FILENAME: /data/images.json
+      DIUN_WATCH_COMPAREDIGEST: 'true'
+      DIUN_WATCH_FIRSTCHECKNOTIF: 'true'
+      DIUN_WATCH_HEALTHCHECKS_BASEURL: http://image-updates-agent:8098/hc/
+      DIUN_WATCH_HEALTHCHECKS_UUID: diun
+      DIUN_WATCH_JITTER: 5m
+      DIUN_WATCH_RUNONSTARTUP: 'true'
+      DIUN_WATCH_SCHEDULE: 15 4 * * *
+      DIUN_WATCH_WORKERS: '2'
+      LOG_JSON: 'true'
+      LOG_LEVEL: info
+      TZ: Europe/Berlin
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://image-updates-agent:8098/health
+      timeout: 5s
+    image: crazymax/diun:4.33.1@sha256:8cc638b4c54e8a0c47898a51b20dae73037ad43310168b5da543a311dc668f77
+    labels:
+      io.ayeops.module: image-updates
+      io.ayeops.service: diun
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    networks:
+    - default
+    - image-updates
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=16m
+    volumes:
+    - image-updates-data:/data
+  eol-agent:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/eol_agent.py
+    cpus: 0.1
+    environment:
+      AYE_EOL_API: https://endoflife.date/api/v1
+      AYE_EOL_CACHE: /cache
+      AYE_EOL_COMPONENTS: '[{"name":"python:3.13.16-alpine3.23","product":"python","cycle":"3.13"},{"name":"python:3.13.16-alpine3.23","product":"alpine-linux","cycle":"3.23"},{"name":"acme web app","product":"django","cycle":"5.2"}]'
+      AYE_EOL_OS_RELEASE: /host/os-release
+      AYE_EOL_SCHEDULE: 05:30
+      AYE_EOL_TEXTFILE: /textfile/ayeops_eol.prom
+      AYE_EOL_UNMAPPED: '["aquasec/trivy:0.76.1","busybox:1.38.0","crazymax/diun:4.33.1","ghcr.io/google/cadvisor:v0.60.6","ghcr.io/renovatebot/renovate:44.149.0","grafana/alloy:v1.21.3","prom/blackbox-exporter:v0.29.1","prom/node-exporter:v1.12.1","prometheuscommunity/smartctl-exporter:v0.15.0","restic/restic:0.19.1","tecnativa/docker-socket-proxy:v0.5.0","utkuozdemir/nvidia_gpu_exporter:1.16.0","victoriametrics/vmagent:v1.153.0"]'
+      TZ: Europe/Berlin
+    healthcheck:
+      interval: 60s
+      retries: 3
+      start_period: 30s
+      test:
+      - CMD
+      - python
+      - -c
+      - import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/eol.alive') > 300)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    init: true
+    labels:
+      io.ayeops.config-hash: b73e0cae26551132
+      io.ayeops.module: eol
+      io.ayeops.service: eol-agent
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 48m
+    pids_limit: 32
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=4m
+    volumes:
+    - ./eol/eol_agent.py:/app/eol_agent.py:ro
+    - eol-cache:/cache
+    - /etc/os-release:/host/os-release:ro
+    - /var/lib/ayeops/textfile:/textfile
+  hygiene:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/hygiene_runner.py
+    cpus: 0.25
+    environment:
+      AYE_HYGIENE_BUILD_CACHE_KEEP: 10g
+      AYE_HYGIENE_CONTAINERS_UNTIL: 24h
+      AYE_HYGIENE_DISK: /disk
+      AYE_HYGIENE_DRY_RUN: 'false'
+      AYE_HYGIENE_IMAGES_UNTIL: 168h
+      AYE_HYGIENE_JOURNAL: /journal
+      AYE_HYGIENE_SCHEDULE: 03:30
+      AYE_HYGIENE_TEXTFILE: /textfile/ayeops_hygiene.prom
+      AYE_HYGIENE_VOLUMES: 'false'
+    healthcheck:
+      interval: 60s
+      retries: 3
+      start_period: 30s
+      test:
+      - CMD
+      - python
+      - -c
+      - import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/hygiene.alive') > 300)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: 1204d9ed449b48c6
+      io.ayeops.module: hygiene
+      io.ayeops.service: hygiene
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    network_mode: none
+    pids_limit: 32
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=4m
+    volumes:
+    - ./hygiene/hygiene_runner.py:/app/hygiene_runner.py:ro
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /etc/localtime:/etc/localtime:ro
+    - /var/lib/docker:/disk:ro
+    - /var/log/journal:/journal:ro
+    - /var/lib/ayeops/textfile:/textfile
+  image-updates-agent:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/image_updates_agent.py
+    cpus: 0.1
+    depends_on:
+      image-updates-proxy:
+        condition: service_healthy
+    environment:
+      AYE_IMAGES_DOCKER: http://image-updates-proxy:2375
+      AYE_IMAGES_FILE: /data/images.json
+      AYE_IMAGES_INTERVAL: '60'
+      AYE_IMAGES_LISTEN: 0.0.0.0:8098
+      AYE_IMAGES_STATE: /data/agent-state.json
+      AYE_IMAGES_TEXTFILE: /textfile/ayeops_image_updates.prom
+    healthcheck:
+      interval: 60s
+      retries: 3
+      start_period: 30s
+      test:
+      - CMD
+      - python
+      - -c
+      - import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/image-updates.alive') > 210)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    init: true
+    labels:
+      io.ayeops.config-hash: 4058fab9044948d6
+      io.ayeops.module: image-updates
+      io.ayeops.service: image-updates-agent
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 48m
+    networks:
+    - image-updates
+    - image-updates-docker
+    pids_limit: 32
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=4m
+    volumes:
+    - ./image-updates/image_updates_agent.py:/app/image_updates_agent.py:ro
+    - image-updates-data:/data
+    - /var/lib/ayeops/textfile:/textfile
+  image-updates-proxy:
+    cap_drop:
+    - ALL
+    cpus: 0.1
+    environment:
+      CONTAINERS: '1'
+      DISABLE_IPV6: '1'
+      EVENTS: '0'
+      IMAGES: '1'
+      PING: '1'
+      POST: '0'
+      VERSION: '0'
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:2375/_ping
+      timeout: 5s
+    image: tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    labels:
+      io.ayeops.module: image-updates
+      io.ayeops.service: image-updates-proxy
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 32m
+    networks:
+    - image-updates-docker
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=1m
+    - /run:size=1m
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+  net-exporter:
+    command:
+    - --web.listen-address=:9101
+    - --collector.disable-defaults
+    - --collector.netdev
+    - --no-collector.netdev.netlink
+    - --collector.netdev.device-include=^(enp3s0|wlan0)$
+    - --collector.netclass
+    - --collector.netclass.ignore-invalid-speed
+    - --collector.textfile
+    - --collector.textfile.directory=/textfile
+    - --path.procfs=/host/proc/1
+    - --path.sysfs=/host/sys
+    cpus: 0.1
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:9101/
+      timeout: 5s
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    labels:
+      io.ayeops.module: network
+      io.ayeops.service: net-exporter
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/amd64
+    ports:
+    - 127.0.0.1:9101:9101
+    restart: unless-stopped
+    volumes:
+    - /proc:/host/proc:ro
+    - /sys:/host/sys:ro
+    - network-textfile:/textfile:ro
+  node-exporter:
+    command:
+    - --path.rootfs=/host
+    - --collector.textfile.directory=/textfile
+    cpus: 0.25
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:9100/
+      timeout: 5s
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    labels:
+      io.ayeops.module: node
+      io.ayeops.service: node-exporter
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    pid: host
+    platform: linux/amd64
+    ports:
+    - 127.0.0.1:9100:9100
+    restart: unless-stopped
+    volumes:
+    - /:/host:ro,rslave
+    - /var/lib/ayeops/textfile:/textfile:ro
+  nvidia-gpu-exporter:
+    cpus: 0.1
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - capabilities:
+            - gpu
+            count: all
+            driver: nvidia
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: utility
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - nvidia-smi
+      - -L
+      timeout: 10s
+    image: utkuozdemir/nvidia_gpu_exporter:1.16.0@sha256:cec17e3ddfce7baefbdf116d1a259e208bb1519e4e0b18b7b0879bde0fcad5a2
+    labels:
+      io.ayeops.module: gpu
+      io.ayeops.service: nvidia-gpu-exporter
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/amd64
+    ports:
+    - 127.0.0.1:9835:9835
+    restart: unless-stopped
+  offsite:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/offsite_agent.py
+    cpus: 1.0
+    depends_on:
+      offsite-restic:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${AYE_OFFSITE_ACCESS_KEY_ID:?set AYE_OFFSITE_ACCESS_KEY_ID}
+      AWS_DEFAULT_REGION: garage
+      AWS_SECRET_ACCESS_KEY: ${AYE_OFFSITE_SECRET_ACCESS_KEY:?set AYE_OFFSITE_SECRET_ACCESS_KEY}
+      AYE_OFFSITE_HOST: edge
+      AYE_OFFSITE_KEEP_DAILY: '7'
+      AYE_OFFSITE_KEEP_MONTHLY: '3'
+      AYE_OFFSITE_KEEP_WEEKLY: '4'
+      AYE_OFFSITE_MAX_AGE_SECONDS: '93600'
+      AYE_OFFSITE_RESTORE_TEST_DAYS: '7'
+      AYE_OFFSITE_RETRY_MINUTES: '60'
+      AYE_OFFSITE_SCHEDULE: 05:30
+      AYE_OFFSITE_SETTLE_MINUTES: '15'
+      AYE_OFFSITE_SOURCE: /var/backups/acme/*.dump
+      AYE_OFFSITE_STATE: /state/state.json
+      AYE_OFFSITE_TEXTFILE: /textfile/ayeops_offsite.prom
+      AYE_OFFSITE_TIMEZONE: Europe/Berlin
+      AYE_OFFSITE_VERIFY: pg_dump
+      AYE_RESTIC: /opt/restic/restic
+      HOME: /tmp
+      RESTIC_CACHE_DIR: /cache
+      RESTIC_PASSWORD: ${AYE_OFFSITE_RESTIC_PASSWORD:?set AYE_OFFSITE_RESTIC_PASSWORD}
+      RESTIC_REPOSITORY: s3:http://10.8.0.1:3900/acme-offsite/edge
+      TMPDIR: /cache
+      TZ: Europe/Berlin
+    healthcheck:
+      interval: 5m
+      retries: 3
+      start_period: 2m
+      test:
+      - CMD
+      - python
+      - -c
+      - import os, sys, time; sys.exit(time.time() - os.path.getmtime('/textfile/ayeops_offsite.prom') > 25200)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    init: true
+    labels:
+      io.ayeops.config-hash: 2b880db73c8f5bf7
+      io.ayeops.module: offsite
+      io.ayeops.service: offsite
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 512m
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=64m
+    volumes:
+    - ./offsite/offsite_agent.py:/app/offsite_agent.py:ro
+    - offsite-restic:/opt/restic:ro
+    - offsite-state:/state
+    - offsite-cache:/cache
+    - /var/lib/ayeops/textfile:/textfile
+    - /var/backups/acme:/var/backups/acme:ro
+  offsite-restic:
+    cap_drop:
+    - ALL
+    cpus: 0.1
+    entrypoint:
+    - sh
+    - -c
+    - cp /usr/bin/restic /out/.restic.tmp && mv -f /out/.restic.tmp /out/restic && exec sleep 2147483647
+    healthcheck:
+      interval: 5m
+      retries: 3
+      start_period: 30s
+      test:
+      - CMD
+      - /out/restic
+      - version
+      timeout: 10s
+    image: restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
+    init: true
+    labels:
+      io.ayeops.module: offsite
+      io.ayeops.service: offsite-restic
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    network_mode: none
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    volumes:
+    - offsite-restic:/out
+  reboot:
+    command:
+    - sh
+    - /reboot.sh
+    cpus: 0.05
+    environment:
+      AYE_HOST_ROOT: /host
+      AYE_REBOOT_INTERVAL: '600'
+      AYE_TEXTFILE_DIR: /textfile
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD-SHELL
+      - find /textfile/reboot.prom -mmin -30 | grep -q .
+      timeout: 5s
+    image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+    labels:
+      io.ayeops.config-hash: 8ba22cc6965c2a58
+      io.ayeops.module: node
+      io.ayeops.service: reboot
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 16m
+    platform: linux/amd64
+    restart: unless-stopped
+    volumes:
+    - ./node/reboot.sh:/reboot.sh:ro
+    - /:/host:ro
+    - /var/lib/ayeops/textfile:/textfile
+  sentinel:
+    command:
+    - python
+    - -I
+    - /app/sentinel.py
+    cpus: 0.05
+    environment:
+      AYE_SENTINEL_CHECKS: '[{"contains": "\"database\": \"ok\"", "kind": "http", "name": "grafana", "url": "https://grafana.ops.acme.example/api/health"}, {"kind": "http", "name": "victoriametrics", "url": "http://10.8.0.1:8428/health"}, {"kind": "fresh", "max_age_seconds": 180, "name": "samples", "url": "http://10.8.0.1:8428/api/v1/query"}]'
+      AYE_SENTINEL_DIGEST_AT: 08:00
+      AYE_SENTINEL_DIGEST_TIMEZONE: Europe/Kyiv
+      AYE_SENTINEL_DIGEST_URL: http://10.8.0.1:8428/api/v1/query
+      AYE_SENTINEL_FAILURES_BEFORE_ALERT: '3'
+      AYE_SENTINEL_HOST: edge
+      AYE_SENTINEL_INTERVAL: 60s
+      AYE_SENTINEL_PING_URL: ${AYE_SENTINEL_PING_URL:-}
+      AYE_SENTINEL_PORT: '9134'
+      AYE_SENTINEL_PROJECT: acme
+      AYE_SENTINEL_REMINDER: 6h
+      AYE_SENTINEL_RUNBOOK: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-central-down.md
+      AYE_SENTINEL_TIMEOUT: 10s
+      AYE_SENTINEL_WATCH: central
+      AYE_TELEGRAM_BOT_TOKEN: ${AYE_TELEGRAM_BOT_TOKEN:?set AYE_TELEGRAM_BOT_TOKEN}
+      AYE_TELEGRAM_CHAT_ID: ${AYE_TELEGRAM_CHAT_ID:?set AYE_TELEGRAM_CHAT_ID}
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:9134/health
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    labels:
+      io.ayeops.config-hash: 9c058d1cedfa2909
+      io.ayeops.module: sentinel
+      io.ayeops.service: sentinel
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 48m
+    platform: linux/amd64
+    ports:
+    - 127.0.0.1:9134:9134
+    restart: unless-stopped
+    user: 65534:65534
+    volumes:
+    - ./sentinel/sentinel.py:/app/sentinel.py:ro
+  smartctl-exporter:
+    command:
+    - --smartctl.interval=60s
+    cpus: 0.1
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:9633/
+      timeout: 10s
+    image: prometheuscommunity/smartctl-exporter:v0.15.0@sha256:a76e08dbf5db4781fefd1ed81c65ad46ae8d2849dae6b6d3acebcde2fc4e59d6
+    labels:
+      io.ayeops.module: smart
+      io.ayeops.service: smartctl-exporter
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    platform: linux/amd64
+    ports:
+    - 127.0.0.1:9633:9633
+    privileged: true
+    restart: unless-stopped
+    user: root
+  updates:
+    cap_drop:
+    - ALL
+    command:
+    - sh
+    - /app/updates_loop.sh
+    cpus: 1.0
+    depends_on:
+      updates-agent:
+        condition: service_healthy
+    environment:
+      AYE_UPDATES_STATE: /state
+      AYE_UPDATES_TIMEOUT: '7200'
+      LOG_FORMAT: json
+      LOG_LEVEL: info
+      RENOVATE_ALLOWED_COMMANDS: '["^make generate$$"]'
+      RENOVATE_BASE_DIR: /tmp/renovate
+      RENOVATE_PLATFORM: github
+      RENOVATE_PLATFORM_COMMIT: enabled
+      RENOVATE_REPORT_PATH: /state/report.json
+      RENOVATE_REPORT_TYPE: file
+      RENOVATE_REPOSITORIES: '["acme/web", "acme/ops"]'
+      RENOVATE_TOKEN: ${AYE_UPDATES_TOKEN:?set AYE_UPDATES_TOKEN}
+      TZ: Europe/Berlin
+    healthcheck:
+      interval: 5m
+      retries: 3
+      start_period: 1m
+      test:
+      - CMD
+      - sh
+      - -c
+      - find /state/loop.alive -mmin -150 | grep -q .
+      timeout: 10s
+    image: ghcr.io/renovatebot/renovate:44.149.0@sha256:33e1ce773404122fd3bcf1dca6ce9b5638a080da68a8972ad942d4d991cec464
+    init: true
+    labels:
+      io.ayeops.config-hash: 6e3645e1c4306336
+      io.ayeops.module: updates
+      io.ayeops.service: updates
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 1g
+    platform: linux/amd64
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    volumes:
+    - ./updates/updates_loop.sh:/app/updates_loop.sh:ro
+    - updates-state:/state
+    - updates-cache:/tmp
+  updates-agent:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/updates_agent.py
+    cpus: 0.1
+    environment:
+      AYE_UPDATES_REPOSITORIES: '["acme/web", "acme/ops"]'
+      AYE_UPDATES_SCHEDULE: 06:00
+      AYE_UPDATES_STATE: /state
+      AYE_UPDATES_TEXTFILE: /textfile/ayeops_updates.prom
+      TZ: Europe/Berlin
+    healthcheck:
+      interval: 60s
+      retries: 3
+      start_period: 30s
+      test:
+      - CMD
+      - python
+      - -c
+      - import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/updates.alive') > 300)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    init: true
+    labels:
+      io.ayeops.config-hash: ba430190e86b5ad5
+      io.ayeops.module: updates
+      io.ayeops.service: updates-agent
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 64m
+    network_mode: none
+    pids_limit: 32
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=4m
+    volumes:
+    - ./updates/updates_agent.py:/app/updates_agent.py:ro
+    - updates-state:/state
+    - /var/lib/ayeops/textfile:/textfile
+  vmagent:
+    command:
+    - -promscrape.config=/etc/vmagent/scrape.yaml
+    - -remoteWrite.url=http://10.8.0.1:8428/api/v1/write
+    - -remoteWrite.label=host=edge
+    - -remoteWrite.label=project=acme
+    - -remoteWrite.tmpDataPath=/vmagent-data
+    - -remoteWrite.maxDiskUsagePerURL=1GB
+    - -remoteWrite.inmemoryQueues=1
+    - -httpListenAddr=:8429
+    cpus: 0.5
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8429/health
+      timeout: 5s
+    image: victoriametrics/vmagent:v1.153.0@sha256:474135388ae700b842007d3e186a8ae60ccf7de3dfd776fb6ed27cf8522d8331
+    labels:
+      io.ayeops.config-hash: bd9b6382a57c5ab1
+      io.ayeops.module: metrics
+      io.ayeops.service: vmagent
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 256m
+    platform: linux/amd64
+    ports:
+    - 127.0.0.1:8429:8429
+    restart: unless-stopped
+    volumes:
+    - ./vmagent/scrape.yaml:/etc/vmagent/scrape.yaml:ro
+    - vmagent-data:/vmagent-data
+  vulns:
+    cap_drop:
+    - ALL
+    cpus: 1.0
+    depends_on:
+      vulns-agent:
+        condition: service_healthy
+      vulns-proxy:
+        condition: service_healthy
+    entrypoint:
+    - sh
+    - /app/vulns_loop.sh
+    environment:
+      AYE_VULNS_STATE: /state
+      AYE_VULNS_TIMEOUT: '900'
+      DOCKER_HOST: tcp://vulns-proxy:2375
+      TMPDIR: /cache/tmp
+      TRIVY_CACHE_DIR: /cache
+      TRIVY_DISABLE_TELEMETRY: 'true'
+      TRIVY_FORMAT: json
+      TRIVY_IMAGE_SRC: docker,remote
+      TRIVY_NO_PROGRESS: 'true'
+      TRIVY_SCANNERS: vuln
+      TRIVY_SKIP_VERSION_CHECK: 'true'
+      TRIVY_TIMEOUT: 15m
+      TZ: Europe/Berlin
+    healthcheck:
+      interval: 5m
+      retries: 3
+      start_period: 1m
+      test:
+      - CMD
+      - sh
+      - -c
+      - find /state/loop.alive -mmin -60 | grep -q .
+      timeout: 10s
+    image: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+    init: true
+    labels:
+      io.ayeops.config-hash: 7d3fd1e0ab80684d
+      io.ayeops.module: vulns
+      io.ayeops.service: vulns
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 1g
+    networks:
+    - default
+    - vulns-docker
+    pids_limit: 128
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=16m
+    volumes:
+    - ./vulns/vulns_loop.sh:/app/vulns_loop.sh:ro
+    - vulns-state:/state
+    - vulns-cache:/cache
+  vulns-agent:
+    cap_drop:
+    - ALL
+    command:
+    - python
+    - -I
+    - /app/vulns_agent.py
+    cpus: 0.1
+    environment:
+      AYE_VULNS_DB: /cache/db/metadata.json
+      AYE_VULNS_IMAGES: '["aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c","busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4","crazymax/diun:4.33.1@sha256:8cc638b4c54e8a0c47898a51b20dae73037ad43310168b5da543a311dc668f77","ghcr.io/google/cadvisor:v0.60.6@sha256:b8e7d1093144fd088f425ff003d75a4aa405de075db78dae3bc563730b1bd07a","ghcr.io/renovatebot/renovate:44.149.0@sha256:33e1ce773404122fd3bcf1dca6ce9b5638a080da68a8972ad942d4d991cec464","grafana/alloy:v1.21.3@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4","prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13","prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0","prometheuscommunity/smartctl-exporter:v0.15.0@sha256:a76e08dbf5db4781fefd1ed81c65ad46ae8d2849dae6b6d3acebcde2fc4e59d6","python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b","restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510","tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459","utkuozdemir/nvidia_gpu_exporter:1.16.0@sha256:cec17e3ddfce7baefbdf116d1a259e208bb1519e4e0b18b7b0879bde0fcad5a2","victoriametrics/vmagent:v1.153.0@sha256:474135388ae700b842007d3e186a8ae60ccf7de3dfd776fb6ed27cf8522d8331"]'
+      AYE_VULNS_SCHEDULE: 05:00
+      AYE_VULNS_STATE: /state
+      AYE_VULNS_TEXTFILE: /textfile/ayeops_vulns.prom
+      TZ: Europe/Berlin
+    healthcheck:
+      interval: 60s
+      retries: 3
+      start_period: 30s
+      test:
+      - CMD
+      - python
+      - -c
+      - import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/vulns.alive') > 300)
+      timeout: 10s
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    init: true
+    labels:
+      io.ayeops.config-hash: 2031225d7019394f
+      io.ayeops.module: vulns
+      io.ayeops.service: vulns-agent
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 48m
+    network_mode: none
+    pids_limit: 32
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=4m
+    volumes:
+    - ./vulns/vulns_agent.py:/app/vulns_agent.py:ro
+    - vulns-state:/state
+    - vulns-cache:/cache:ro
+    - /var/lib/ayeops/textfile:/textfile
+  vulns-proxy:
+    cap_drop:
+    - ALL
+    cpus: 0.1
+    environment:
+      CONTAINERS: '0'
+      DISABLE_IPV6: '1'
+      EVENTS: '0'
+      IMAGES: '1'
+      PING: '1'
+      POST: '0'
+      VERSION: '1'
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:2375/_ping
+      timeout: 5s
+    image: tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    labels:
+      io.ayeops.module: vulns
+      io.ayeops.service: vulns-proxy
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 32m
+    networks:
+    - vulns-docker
+    platform: linux/amd64
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=1m
+    - /run:size=1m
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+  wifi:
+    cpus: 0.05
+    entrypoint:
+    - sh
+    - /wifi.sh
+    environment:
+      AYE_TEXTFILE_DIR: /textfile
+      AYE_WIFI_INTERVAL: '30'
+      AYE_WIFI_PORT: '19102'
+    healthcheck:
+      interval: 60s
+      retries: 3
+      test:
+      - CMD-SHELL
+      - find /textfile/wifi.prom -mmin -5 | grep -q .
+      timeout: 5s
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    labels:
+      io.ayeops.config-hash: ef019cb7f46375d4
+      io.ayeops.module: network
+      io.ayeops.service: wifi
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+    mem_limit: 48m
+    network_mode: host
+    platform: linux/amd64
+    restart: unless-stopped
+    user: 0:0
+    volumes:
+    - ./network/wifi.sh:/wifi.sh:ro
+    - network-textfile:/textfile
+volumes:
+  alloy-data: {}
+  eol-cache: {}
+  image-updates-data: {}
+  network-textfile: {}
+  offsite-cache: {}
+  offsite-restic: {}
+  offsite-state: {}
+  updates-cache: {}
+  updates-state: {}
+  vmagent-data: {}
+  vulns-cache: {}
+  vulns-state: {}

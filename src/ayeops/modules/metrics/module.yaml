@@ -1,0 +1,162 @@
+name: metrics
+summary: VictoriaMetrics single-node storage and vmagent scraping, with remote_write for light hosts, and an optional daily snapshot backup of the store with a weekly restore test.
+requires: {}
+defaults:
+  role: server
+  retention: 30d
+  scrape_interval: 30s
+  queue_max: 1GB
+  remote_write: null
+  networks: []
+  expose: []
+  backup: false
+  backup_hour: 2
+  backup_keep_days: 2
+  backup_dir: /var/backups/ayeops/metrics
+  restore_test_days: 7
+  resources: {}
+settings_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    role:
+      enum: [server, agent]
+    retention:
+      type: string
+      pattern: "^[0-9]+[hdwy]$"
+    scrape_interval:
+      type: string
+      pattern: "^[0-9]+[sm]$"
+    queue_max:
+      type: string
+      pattern: "^[0-9]+(KB|MB|GB)$"
+    remote_write:
+      oneOf:
+        - type: "null"
+        - type: object
+          additionalProperties: false
+          required: [host]
+          properties:
+            host:
+              type: string
+        - type: object
+          additionalProperties: false
+          required: [url]
+          properties:
+            url:
+              type: string
+              pattern: "^https?://"
+    networks:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        pattern: "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+        not: {const: default}
+    expose:
+      type: array
+      items:
+        enum: [8428, 8429]
+    backup:
+      type: boolean
+    backup_hour:
+      type: integer
+      minimum: 0
+      maximum: 23
+    backup_keep_days:
+      type: integer
+      minimum: 1
+      maximum: 60
+    backup_dir:
+      type: string
+      pattern: '^/[^:\s]*[^/:\s]$'
+    restore_test_days:
+      type: integer
+      minimum: 1
+      maximum: 60
+services:
+  victoriametrics:
+    description: Stores every metric of the fleet and answers dashboard and alert queries.
+    memory: 1g
+    cpus: 1.0
+    metrics: [vm_rows, vm_free_disk_space_bytes, vm_http_requests_total]
+    alerts: [target-down]
+    logs: docker
+    status:
+      internal: storage behind dashboards and alerts, not a user-facing component
+  vmagent:
+    description: Scrapes the exporters of its host and ships samples to storage, buffering on disk while offline.
+    memory: 256m
+    cpus: 0.5
+    metrics: [vmagent_remotewrite_pending_data_bytes, vm_persistentqueue_blocks_dropped_total, vmagent_remotewrite_packets_dropped_total, vm_promscrape_targets]
+    alerts: [target-down, metrics-shipping-backlog, metrics-shipping-dropped]
+    logs: docker
+    status:
+      internal: collection pipeline, failures surface as target-down, host-down and the metrics-shipping alerts
+  victoriametrics-backup:
+    description: With backup on, takes a snapshot of the store once a day through its snapshot API, archives it into backup_dir through backups/backup_run.sh under the backup label metrics and deletes the snapshot; once a week opens the newest archive in a scratch VictoriaMetrics and checks that it holds samples of up.
+    memory: 512m
+    cpus: 0.5
+    metrics: [ayeops_backup_last_success_timestamp_seconds, ayeops_backup_last_run_success, ayeops_backup_last_size_bytes, ayeops_backup_restore_test_ok, ayeops_backup_restore_test_deadline_timestamp_seconds]
+    alerts: [backup-missing, backup-failed, metrics-restore-test]
+    logs: docker
+    status:
+      internal: backup of the metrics store; users never see it until a restore needs it
+alerts:
+  - name: target-down
+    title: Scrape target down
+    expr: up == bool 0
+    for: 5m
+    severity: warning
+    summary: "{{ .Labels.job }} on {{ .Labels.host }} does not answer scrapes"
+    runbook: target-down
+    no_data: alerting
+  - name: metrics-shipping-backlog
+    title: vmagent falls behind shipping metrics
+    expr: >-
+      (sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes)
+      > bool 1800 * sum by (host, project, group) (rate(vmagent_remotewrite_block_size_bytes_sum[1h])))
+      + (sum by (host, project, group) (vmagent_remotewrite_pending_data_bytes)
+      > bool sum by (host, project, group) (vm_persistentqueue_free_disk_space_bytes))
+    for: 15m
+    severity: warning
+    summary: "vmagent on {{ .Labels.host }} holds more than 30 minutes of its samples or half its queue room unshipped"
+    runbook: metrics-shipping-backlog
+  - name: metrics-shipping-dropped
+    title: vmagent drops metrics
+    expr: >-
+      sum by (host, project, group) (increase(vm_persistentqueue_blocks_dropped_total[1h]))
+      + sum by (host, project, group) (increase(vmagent_remotewrite_packets_dropped_total[1h]))
+      > bool 0
+    for: 0m
+    severity: critical
+    summary: "vmagent on {{ .Labels.host }} dropped metrics: its full queue discarded the oldest, or storage rejected a block"
+    runbook: metrics-shipping-dropped
+    dashboard: {uid: ayeops-health, panel: 12}
+  - name: metrics-restore-test
+    setting: backup
+    title: Metrics store restore test failed or overdue
+    expr: max by (host, project, group, backup) ((time() > bool ayeops_backup_restore_test_deadline_timestamp_seconds) + ((ayeops_backup_restore_test_ok == bool 0) or (ayeops_backup_restore_test_deadline_timestamp_seconds * 0)))
+    for: 10m
+    severity: warning
+    summary: "The restore test of the metrics store backup on {{ .Labels.host }} failed, or none passed within restore_test_days plus one"
+    runbook: metrics-restore-test
+    no_data: alerting
+dashboards: []
+backup_jobs:
+  - name: metrics
+    service: victoriametrics-backup
+    when: backup
+    schedule: "0 {{ settings.backup_hour }} * * *"
+    timezone: UTC
+    grace: 2h
+files:
+  - src: files/backup.sh
+    dest: metrics/backup.sh
+    when: backup
+host_directories:
+  - setting: backup_dir
+    owner: "0:0"
+    mode: "0700"
+    when: "settings.backup and settings.role == 'server'"
+    for: the archives of the metrics store, written by root in victoriametrics-backup

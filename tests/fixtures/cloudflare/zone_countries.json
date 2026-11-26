@@ -1,0 +1,31 @@
+{
+  "data": {
+    "viewer": {
+      "zones": [
+        {
+          "httpRequestsAdaptiveGroups": [
+            {
+              "count": 800,
+              "dimensions": {
+                "clientCountryName": "UA"
+              }
+            },
+            {
+              "count": 300,
+              "dimensions": {
+                "clientCountryName": "DE"
+              }
+            },
+            {
+              "count": 150,
+              "dimensions": {
+                "clientCountryName": "US"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "errors": null
+}

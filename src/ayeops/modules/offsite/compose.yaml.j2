@@ -1,0 +1,88 @@
+services:
+{% if settings.provider == "restic" %}
+  offsite-restic:
+    image: restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
+    init: true
+    entrypoint: ["sh", "-c", "cp /usr/bin/restic /out/.restic.tmp && mv -f /out/.restic.tmp /out/restic && exec sleep 2147483647"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - "offsite-restic:/out"
+    healthcheck:
+      test: ["CMD", "/out/restic", "version"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+  offsite:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/offsite_agent.py"]
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:size=64m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      AYE_OFFSITE_SOURCE: {{ settings.source | tojson }}
+      AYE_OFFSITE_HOST: {{ host.name | tojson }}
+      AYE_OFFSITE_SCHEDULE: {{ settings.schedule | tojson }}
+      AYE_OFFSITE_TIMEZONE: {{ settings.timezone | tojson }}
+      TZ: {{ settings.timezone | tojson }}
+      AYE_OFFSITE_KEEP_DAILY: {{ settings.keep_daily | string | tojson }}
+      AYE_OFFSITE_KEEP_WEEKLY: {{ settings.keep_weekly | string | tojson }}
+      AYE_OFFSITE_KEEP_MONTHLY: {{ settings.keep_monthly | string | tojson }}
+      AYE_OFFSITE_RESTORE_TEST_DAYS: {{ settings.restore_test_days | string | tojson }}
+      AYE_OFFSITE_SETTLE_MINUTES: {{ settings.settle_minutes | string | tojson }}
+      AYE_OFFSITE_RETRY_MINUTES: {{ settings.retry_minutes | string | tojson }}
+      AYE_OFFSITE_VERIFY: {{ settings.verify | tojson }}
+      AYE_OFFSITE_MAX_AGE_SECONDS: {{ offsite.max_age | string | tojson }}
+{% if offsite.quota_bytes %}
+      AYE_OFFSITE_QUOTA_BYTES: {{ offsite.quota_bytes | string | tojson }}
+{% endif %}
+      AYE_OFFSITE_STATE: /state/state.json
+      AYE_OFFSITE_TEXTFILE: /textfile/ayeops_offsite.prom
+      AYE_RESTIC: /opt/restic/restic
+      HOME: /tmp
+      RESTIC_REPOSITORY: {{ offsite.repository | tojson }}
+      RESTIC_PASSWORD: "${AYE_OFFSITE_RESTIC_PASSWORD:?set AYE_OFFSITE_RESTIC_PASSWORD}"
+      RESTIC_CACHE_DIR: /cache
+      TMPDIR: /cache
+{% if offsite.append_only %}
+      AYE_OFFSITE_APPEND_ONLY: "1"
+{% endif %}
+{% if offsite.rest_user %}
+      RESTIC_REST_USERNAME: {{ offsite.rest_user | tojson }}
+      RESTIC_REST_PASSWORD: "${AYE_OFFSITE_REST_PASSWORD:?set AYE_OFFSITE_REST_PASSWORD}"
+{% else %}
+      AWS_ACCESS_KEY_ID: "${AYE_OFFSITE_ACCESS_KEY_ID:?set AYE_OFFSITE_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AYE_OFFSITE_SECRET_ACCESS_KEY:?set AYE_OFFSITE_SECRET_ACCESS_KEY}"
+{% endif %}
+{% if offsite.region %}
+      AWS_DEFAULT_REGION: {{ offsite.region | tojson }}
+{% endif %}
+    volumes:
+      - "./offsite/offsite_agent.py:/app/offsite_agent.py:ro"
+      - "offsite-restic:/opt/restic:ro"
+      - "offsite-state:/state"
+      - "offsite-cache:/cache"
+      - {{ (textfile ~ ":/textfile") | tojson }}
+      - {{ (offsite.source_dir ~ ":" ~ offsite.source_dir ~ ":ro") | tojson }}
+    depends_on:
+      offsite-restic:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/textfile/ayeops_offsite.prom') > 25200)"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+{% endif %}
+volumes:
+  offsite-restic: {}
+  offsite-state: {}
+  offsite-cache: {}
+{% if textfile == "node-textfile" %}
+  node-textfile: {}
+{% endif %}

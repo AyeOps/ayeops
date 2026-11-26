@@ -1,0 +1,47 @@
+config:
+  adminAddr: 'off'
+mcp:
+  prefixMode: always
+  failureMode: failOpen
+  targets:
+  - name: backups
+    stdio:
+      cmd: /opt/aye/s3/mcp-s3
+      args: []
+      clear_env: true
+      env:
+        AWS_ACCESS_KEY_ID: |2-
+          $AYE_MCP_BACKUPS_ACCESS_KEY_ID
+        AWS_SECRET_ACCESS_KEY: |2-
+          $AYE_MCP_BACKUPS_SECRET_ACCESS_KEY
+        AWS_REGION: garage
+        AWS_EC2_METADATA_DISABLED: 'true'
+        S3_ENDPOINT: http://garage:3900
+        S3_USE_PATH_STYLE: 'true'
+        S3_CONNECTION_NAME: backups
+        MCP_S3_EXT_READONLY: 'true'
+        SSL_CERT_FILE: /opt/aye/s3/ca-certificates.crt
+        HOME: /tmp
+  - name: catalog
+    mcp:
+      host: http://mcp-catalog:8000/mcp
+  - name: grafana
+    mcp:
+      host: http://mcp-grafana:8000/mcp
+    policies:
+      backendAuth:
+        key:
+          value: |2-
+            $AYE_MCP_GRAFANA_SERVER_TOKEN
+  - name: metrics
+    mcp:
+      host: http://mcp-victoriametrics:8080/mcp
+  policies:
+    timeout:
+      requestTimeout: 60s
+    mcpAuthorization:
+      rules:
+      - allow: mcp.tool.target == "backups" && mcp.tool.name in ["s3_get_object_metadata", "s3_list_buckets", "s3_list_objects"]
+      - allow: mcp.tool.target == "catalog" && mcp.tool.name in ["get_runbook", "get_service", "list_alerts", "list_hosts", "list_services"]
+      - allow: mcp.tool.target == "grafana"
+      - allow: mcp.tool.target == "metrics"

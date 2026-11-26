@@ -1,0 +1,1 @@
+[{"Name":"shop","Status":"running(3)","ConfigFiles":"/srv/shop/compose.yaml,/srv/shop/compose.override.yaml"},{"Name":"tools","Status":"exited(1)","ConfigFiles":"/opt/tools/docker-compose.yml"}]

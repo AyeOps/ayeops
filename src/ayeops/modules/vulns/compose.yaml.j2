@@ -1,0 +1,101 @@
+services:
+  vulns-proxy:
+    image: tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    read_only: true
+    tmpfs: ["/tmp:size=1m", "/run:size=1m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      CONTAINERS: "0"
+      IMAGES: "1"
+      PING: "1"
+      VERSION: "1"
+      EVENTS: "0"
+      POST: "0"
+      DISABLE_IPV6: "1"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - vulns-docker
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2375/_ping"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+  vulns:
+    image: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+    entrypoint: ["sh", "/app/vulns_loop.sh"]
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    environment:
+      AYE_VULNS_STATE: /state
+      AYE_VULNS_TIMEOUT: {{ (settings.timeout_minutes * 60) | string | tojson }}
+      DOCKER_HOST: "tcp://vulns-proxy:2375"
+      TMPDIR: /cache/tmp
+      TRIVY_CACHE_DIR: /cache
+      TRIVY_SCANNERS: vuln
+      TRIVY_FORMAT: json
+      TRIVY_IMAGE_SRC: "docker,remote"
+      TRIVY_TIMEOUT: {{ (settings.timeout_minutes | string ~ "m") | tojson }}
+      TRIVY_NO_PROGRESS: "true"
+      TRIVY_SKIP_VERSION_CHECK: "true"
+      TRIVY_DISABLE_TELEMETRY: "true"
+      TZ: {{ settings.timezone | tojson }}
+    volumes:
+      - "./vulns/vulns_loop.sh:/app/vulns_loop.sh:ro"
+      - "vulns-state:/state"
+      - "vulns-cache:/cache"
+    networks:
+      - default
+      - vulns-docker
+    depends_on:
+      vulns-proxy:
+        condition: service_healthy
+      vulns-agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "find /state/loop.alive -mmin -{{ settings.timeout_minutes * 2 + 30 }} | grep -q ."]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 1m
+  vulns-agent:
+    image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
+    command: ["python", "-I", "/app/vulns_agent.py"]
+    init: true
+    network_mode: none
+    read_only: true
+    tmpfs: ["/tmp:size=4m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 32
+    environment:
+      AYE_VULNS_SCHEDULE: {{ settings.schedule | tojson }}
+      AYE_VULNS_STATE: /state
+      AYE_VULNS_TEXTFILE: /textfile/ayeops_vulns.prom
+      AYE_VULNS_DB: /cache/db/metadata.json
+      TZ: {{ settings.timezone | tojson }}
+    volumes:
+      - "./vulns/vulns_agent.py:/app/vulns_agent.py:ro"
+      - "vulns-state:/state"
+      - "vulns-cache:/cache:ro"
+      - {{ (textfile ~ ":/textfile") | tojson }}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/vulns.alive') > 300)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+networks:
+  vulns-docker:
+    internal: true
+volumes:
+  vulns-state: {}
+  vulns-cache: {}
+{% if textfile == "node-textfile" %}
+  node-textfile: {}
+{% endif %}
