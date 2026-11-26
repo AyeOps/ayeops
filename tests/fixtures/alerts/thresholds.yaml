@@ -47,6 +47,7 @@ domain-expiry-unknown: {when: "== 0", healthy: 1, failing: 0}
 reconciler-gave-up: {when: "> 0", healthy: 0, failing: 1}
 reconciler-stale: {when: "> 300", healthy: 60, failing: 600, why: the reconciler runs every 30 s}
 host-drift: {when: "> 0", healthy: 0, failing: 2, why: containers no manifest declares}
+sentinel-digest-overdue: {when: "> 7200", healthy: -3600, failing: 10800, why: the due time moves a day ahead after each delivered digest}
 sentinel-notify-failing: {when: "== 0", healthy: 1, failing: 0}
 sentinel-ping-failing: {when: "== 0", healthy: 1, failing: 0}
 sentinel-stalled: {when: "> 300", healthy: 70, failing: 600, why: a round every 60 s with a 10 s timeout}
