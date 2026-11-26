@@ -1,5 +1,5 @@
 name: probes
-summary: blackbox-exporter for HTTP 2xx, TLS expiry and the host's own internet (ping and DNS from the host), plus an RDAP exporter for domain expiry.
+summary: blackbox-exporter for HTTP 2xx, TLS expiry, the host's own internet (ping and DNS from the host) and the private network links to other hosts, plus an RDAP exporter for domain expiry.
 requires:
   metrics: {}
 defaults:
@@ -10,6 +10,7 @@ defaults:
   dns_query: example.com
   gateway: null
   internet_interval: 15s
+  links: []
   domains: []
   rdap_bootstrap_url: https://data.iana.org/rdap/dns.json
   rdap_refresh_seconds: 21600
@@ -49,6 +50,14 @@ settings_schema:
     internet_interval:
       type: string
       pattern: "^[0-9]+[sm]$"
+    links:
+      oneOf:
+        - type: boolean
+        - type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^[a-z][a-z0-9-]{0,39}$"
     domains:
       type: array
       items:
@@ -66,11 +75,11 @@ settings_schema:
         enum: [9115, 9130]
 services:
   blackbox:
-    description: Probes the configured URLs for a 2xx answer and their TLS certificate expiry, and pings the gateway and public addresses and asks public resolvers from the host.
+    description: Probes the configured URLs for a 2xx answer and their TLS certificate expiry, pings the gateway and public addresses and asks public resolvers from the host, and pings the private address of other hosts.
     memory: 64m
     cpus: 0.25
     metrics: [probe_success, probe_duration_seconds, probe_ssl_earliest_cert_expiry, probe_icmp_duration_seconds]
-    alerts: [target-down, probe-failing, tls-expiring]
+    alerts: [target-down, probe-failing, tls-expiring, link-down]
     logs: docker
     status:
       internal: the probes themselves, their targets carry the public marks
@@ -92,6 +101,15 @@ alerts:
     summary: "{{ .Labels.instance }} does not answer with 2xx"
     runbook: probe-failing
     dashboard: {uid: ayeops-probes, panel: 1}
+  - name: link-down
+    title: Private network link down
+    expr: max by (host, project, group, zone) (probe_success{job="blackbox-link"}) == bool 0
+    for: 3m
+    severity: critical
+    summary: "{{ .Labels.host }} gets no ping back from any probed host of {{ .Labels.zone }} over the private network"
+    runbook: link-down
+    only_with: links
+    dashboard: {uid: ayeops-probes, panel: 5}
   - name: tls-expiring
     title: TLS certificate expires in less than 14 days
     expr: (probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time()) / 86400 < bool 14

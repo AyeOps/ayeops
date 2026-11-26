@@ -137,6 +137,7 @@ once, at the anchor. The same loader reads:
 | `offsite-drill` | a `restore_drill` has a `target: {host}` running a rest-server objectstore with `node`, a `verify: pg_dump` source, read-only checks with unique names, the same `version` as the other drills on that store, and a window from `schedule` for `max_minutes` that does not hold the store's `prune_schedule` |
 | `incidents-host-alert` | every entry of the incidents module's `host_alerts`, a name or the `alert:` of an entry with labels, is an alert of a module |
 | `sentinel-watch` | a sentinel's `watch` names a host of the manifest other than its own, in another `zone` when both hosts name one: one outage must not silence both |
+| `probe-links` | each host in a `probes.links` list is another host of the manifest with an `address` and not `volatile`; `links: true` finds at least one such host, see [probes](modules.md#probes) |
 | `sentinel-checks` | a sentinel has at least one check after the defaults and overrides, and each has a known kind with its `url` or `host` |
 | `sentinel-digest` | a sentinel with `digest` knows where to read the backup metrics: its `digest.url`, or a `samples` check of kind `fresh` to take the url from |
 | `status-reporter` | the `status` module has a `status_page.hostname` to push to and at least one public component without a `probe`, which waits for its pushes |

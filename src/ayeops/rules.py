@@ -23,6 +23,7 @@ from ayeops.grafana_reader import SERVICE as READER_SERVICE
 from ayeops.grafana_reader import consumer_problems, declared, mounts_volume
 from ayeops.i18n import is_reserved
 from ayeops.incidents import incidents_problems
+from ayeops.links import link_problems
 from ayeops.local_modules import load_local_modules, with_local_modules
 from ayeops.logs import LOKI_DATASOURCE_UID, loki_url, push_problems
 from ayeops.manifest import (
@@ -980,6 +981,7 @@ def check_manifest(
     findings += [Finding(*problem) for problem in status_problems(manifest)]
     findings += [Finding(*problem) for problem in reporter_problems(manifest)]
     findings += [Finding(*problem) for problem in sentinel_problems(manifest)]
+    findings += [Finding(*problem) for problem in link_problems(manifest)]
     findings += [Finding(*problem) for problem in autopilot_problems(manifest)]
     findings += [Finding(*problem) for problem in manifest_problems(manifest.raw)]
     findings += check_waivers(manifest, today)
