@@ -35,7 +35,7 @@ or an external kept while its last client moves, is work in progress, not a brok
 |---|---|---|
 | `service-description` | a non-empty `description` | the person on call needs to know what breaks for whom |
 | `service-metrics` | at least one metric, or `metrics: {none: <reason>}` ([a waiver](#waivers-end)) | "no metrics" is allowed as a decision, never as an omission |
-| `service-alerts` | at least one alert | a metric nobody watches is a log with extra steps |
+| `service-alerts` | at least one alert, or a [`replication`](manifest.md#replication) block, which brings its own | a metric nobody watches is a log with extra steps |
 | `alert-severity` | every alert has `severity` | routing and urgency depend on it |
 | `alert-runbook` | every alert has `runbook`, and `runbook_base_url` is set | an alert without a next step trains people to ignore alerts |
 | `service-logs` | a log source | the first question after an alert is "what did it say" |
@@ -43,7 +43,7 @@ or an external kept while its last client moves, is work in progress, not a brok
 | `cloud-limit` | each cloud dependency has `limit` and `on_exceed` | free tiers and quotas end in throttling or bills; both should be known before they happen |
 | `service-provided` | a module, a compose file or a declared unit on the service's host provides it | dead entries make the catalog lie |
 | `alert-dashboard` | an alert's `dashboard` names a dashboard uid, and a panel id, that a module or project dashboard has | a link to a dashboard that does not exist sends whoever is paged to an empty page |
-| `alert-unique` | alert names are unique across modules and services | the name is the rule uid |
+| `alert-unique` | alert names are unique across modules and services, and none is `duty-overdue` while the manifest has [duties](manifest.md#duties) | the name is the rule uid |
 | `baseline-skip`, `baseline-quiet`, `baseline-empty` | a [baseline alert](modules.md#flow-baselines) skips only on labels of its series (`by`, with `host` also `project` and `group`), has no quiet window that starts where it ends, and counts empty answers only on a counter; a skip is a [waiver](#waivers-end) | an opt-out on a label the rule never groups by, or an empty window, matches nothing and looks like it works |
 | `alert-filter-nodata` | an alert whose no data counts as firing (every service alert, and a module alert with `no_data: alerting`) does not filter at the top level: `> 120` must be `> bool 120`, unless an `or` branch always returns a series | a filtering comparison returns no series while healthy, so with no data as firing the alert fires exactly when everything is fine; `bool` yields 0 or 1 and keeps the series |
 | `status-component` | a public component has an id (a slug of its title, or an explicit `id`), and one id carries one title | the [status page](status.md) shows ids and titles only, so they must be stable and unambiguous |
@@ -52,7 +52,7 @@ The built-in modules are held to the same rules: every service a module can run 
 entry with a description, metrics, alerts, a log source and a status mark, and every built-in
 alert has a page under [runbooks](runbooks/). Tests enforce both, and the other direction too:
 every page under runbooks is named after an alert of a built-in module (or the sentinel's
-`sentinel-central-down`), or is one of the few operating pages of a module (`glitchtip`,
+`sentinel-central-down`, or `duty-overdue` of the [duties](manifest.md#duties)), or is one of the few operating pages of a module (`glitchtip`,
 `infisical`, `oauth2-proxy`, `offsite`, `offsite-append-only`, `flow-baseline`), listed in
 `tests/test_unused.py` and linked from [modules](modules.md).
 
@@ -140,6 +140,7 @@ once, at the anchor. The same loader reads:
 | `probe-links` | each host in a `probes.links` list is another host of the manifest with an `address` and not `volatile`; `links: true` finds at least one such host, see [probes](modules.md#probes) |
 | `sentinel-checks` | a sentinel has at least one check after the defaults and overrides, and each has a known kind with its `url` or `host` |
 | `sentinel-digest` | a sentinel with `digest` knows where to read the backup metrics: its `digest.url`, or a `samples` check of kind `fresh` to take the url from |
+| `check-smtp` | an [`smtp` check](checks.md#smtp) has no `tls: tls` on 25 or 587, which greet in plain text, no `starttls` or `none` on 465, which speaks TLS from the first byte, and a name for `EHLO`: `ehlo`, or `mail.from` to take its domain |
 | `status-reporter` | the `status` module has a `status_page.hostname` to push to and at least one public component without a `probe`, which waits for its pushes |
 | `host-volatile` | a host's `volatile` is `true` or a duration from `1h` to `7d`, and the host runs `node`, whose `host-down` it softens, see [volatile hosts](manifest.md#volatile-hosts-and-maintenance-windows) |
 | `maintenance-window` | a host's `maintenance` window lasts longer than 0 and at most 24 hours, and is not 24 hours on every day, which would never close; its `start` (`"HH:MM"`) and `days` (`mon` to `sun`) are checked by the `schema` |
@@ -152,6 +153,8 @@ once, at the anchor. The same loader reads:
 | `ingress-unique` | a name below an ingress domain is routed on one host only |
 | `ingress-auth` | a host with ingress runs `auth` too, or its ingress states `without_auth: <why>` ([a waiver](#waivers-end)) |
 | `waiver-until` | the `until` of a [waiver](#waivers-end) is a day as `YYYY-MM-DD`; with `rules.waivers_need_until: true` every waiver has one |
+| `duty-every` | a [duty](manifest.md#duties) recurs at most every `3660d`, ten years |
+| `duty-done` | the `last_done` of a duty is a real day, `YYYY-MM-DD`, and not after today in the manifest's `timezone` (`aye check --today` moves today); a duty that is overdue is not an error of the manifest, it fires `duty-overdue` and fails `aye duties` |
 | `auth-route` | no ingress route is named `auth`; that name is the sign-in callback |
 | `auth-open` | every name in `auth.open` is an ingress route on the same host |
 | `auth-admins` | every address in `auth.admins` is in `auth.emails` |
@@ -161,6 +164,7 @@ once, at the anchor. The same loader reads:
 | `icon-known` | an `icon` on a host, service or external is a vendored icon or glyph, see [icons](manifest.md#icons) |
 | `brand-file` | `brand.logo`, `brand.logo_dark` and `brand.favicon` name an existing `.svg`, `.png`, `.webp` or `.ico` file next to the manifest |
 | `client-endpoint` | every entry in a service's `clients` is in the manifest |
+| `slack-webhook` | no value of the manifest holds a Slack webhook URL (`hooks.slack.com/` or `hooks.slack-gov.com/`, any case): the URL is the whole credential and goes into `AYE_SLACK_WEBHOOK_URL` in the `.env` of the host, see [Slack](manifest.md#slack) |
 | `text-hygiene` | no key or value carries a character a reader cannot see or tell apart, see [below](#the-text-hygiene-rule); typographic quotes and dashes are fine, values are prose |
 | `flow-endpoint` | both ends of every entry in `flows` are in the manifest |
 | `depends-known` | every `depends_on` entry is a service, a module service, a cloud dependency or `external:<name>` from `externals` |
@@ -205,6 +209,24 @@ One warning belongs here, printed by `aye check` without failing it:
 | Rule | Warns when |
 |---|---|
 | `data-declared` | a `criticality: critical` service has no `data` and runs on a database: its compose image or its `units` entry is `postgres`, `postgresql`, `mysql`, `mariadb`, `mongo`, `mongodb` or `mongod` (registry, tag, digest and unit suffix aside, so `postgres:18.1-alpine` and `postgresql@16-main.service` count, `postgres-exporter` does not) |
+
+## Replication rules
+
+A service's [`replication`](manifest.md#replication) block declares it the streaming replica of
+another; these rules make sure its alerts can work. The paths name the field to change, on the
+replica or on its primary.
+
+| Rule | Requirement | Why |
+|---|---|---|
+| `replication-primary` | `primary` names another live service that is not itself a replica | a pair with a missing or planned primary has nothing to compare, and cascading replication (a replica of a replica) is not supported yet, which also rules out cycles |
+| `replication-engine` | the primary declares [`data`](manifest.md#data), and its `engine`, and the replica's when it declares `data`, is `postgres` | the alerts read the metrics of postgres_exporter; another engine would leave them without data |
+| `replication-metrics` | the replica lists `pg_replication_is_replica` in `metrics`, the primary `pg_replication_is_replica`, `pg_stat_replication_pg_current_wal_lsn_bytes` and `pg_stat_replication_pg_wal_lsn_diff` | the alerts read exactly these series; listing them is the promise that an exporter scrapes them with the service's label |
+| `replication-name` | no two replicas of one primary share an `application_name` | the primary tells its standbys apart by that name only, so two of them would hide each other |
+
+```text
+error [replication-primary] services.orders-replica.replication.primary: the primary orders-ro is itself a replica of orders: cascading replication is not supported, name the primary that is not in recovery
+error [replication-metrics] services.orders.metrics: the replication alerts of orders-replica read pg_stat_replication_pg_current_wal_lsn_bytes, pg_stat_replication_pg_wal_lsn_diff of orders: scrape its postgres_exporter with the label service=orders and list them in metrics
+```
 
 ## Waivers end
 

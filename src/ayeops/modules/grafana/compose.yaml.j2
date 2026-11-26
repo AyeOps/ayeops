@@ -55,6 +55,9 @@ services:
       AYE_TELEGRAM_BOT_TOKEN: "${AYE_TELEGRAM_BOT_TOKEN:?set AYE_TELEGRAM_BOT_TOKEN}"
       AYE_TELEGRAM_CHAT_ID: "${AYE_TELEGRAM_CHAT_ID:?set AYE_TELEGRAM_CHAT_ID}"
 {% endif %}
+{% if contact == "slack" %}
+      AYE_SLACK_WEBHOOK_URL: "${AYE_SLACK_WEBHOOK_URL:?set AYE_SLACK_WEBHOOK_URL}"
+{% endif %}
 {% if "oncall" in modules %}
       AYE_ONCALL_WEBHOOK_SECRET: "${AYE_ONCALL_WEBHOOK_SECRET:?set AYE_ONCALL_WEBHOOK_SECRET}"
 {% endif %}
@@ -98,7 +101,7 @@ services:
       grafana:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9137/health', timeout=5)"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9137/health"]
       interval: 30s
       timeout: 10s
       retries: 3

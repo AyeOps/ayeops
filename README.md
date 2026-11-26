@@ -14,7 +14,12 @@ and `aye render` turns the manifest into a docker compose project per host with 
 vmagent, exporters and a provisioned Grafana.
 
 What ships today, as the [modules](#modules) below: metrics and logs, probes and declared
-checks, backups monitoring with off-site copies and restore tests, on-call escalation and an
+checks, backups monitoring with off-site copies and restore tests, alerts on PostgreSQL
+replication lag, a broken stream and two primaries, on-call escalation and an incident
+journal, a status page, an MCP hub, and the autopilot's first level in shadow mode, which
+diagnoses but runs no action. A module marked preview works and is tested, but its
+checks, [duties](docs/manifest.md#duties) only a person can do with an alert when one is
+overdue, backups monitoring with off-site copies and restore tests, on-call escalation and an
 incident journal, a status page, an MCP hub, and the autopilot's first level in shadow mode,
 which diagnoses but runs no action. A module marked preview works and is tested, but its
 settings, metrics or alerts may still change in a minor release ([changelog](CHANGELOG.md)).
@@ -208,6 +213,11 @@ Teams that harden or bootstrap hosts with their own Ansible playbooks target the
 instead of a second host list: `aye inventory examples/acme.yaml -o inventory.yaml` writes the
 hosts with groups such as `zone_office`, `module_node` and `service_postgres`, and `--check`
 fails CI when a committed inventory is out of date: see [docs/inventory.md](docs/inventory.md).
+Provisioned dashboards are read-only, so new ones get drawn in the Grafana UI and live only in
+its database: `aye dashboards drift examples/acme.yaml` lists them and exits 1 while any exist,
+and `aye dashboards pull examples/acme.yaml` writes them as reviewable JSON into the manifest's
+dashboards directory, so the next deploy provisions them under the same uid: see
+[docs/modules.md](docs/modules.md#dashboards-drawn-in-grafana).
 
 Every image is pinned to an exact version and the digest of its multi-arch index, so a tag
 pushed again cannot change what a host pulls, and runs on `linux/amd64` and `linux/arm64`.
@@ -232,17 +242,17 @@ Ports bind to `127.0.0.1` unless the manifest exposes them on an explicit addres
 | `vulns` | preview | Trivy once a day over every image the host's compose projects run: known vulnerabilities per image, severity and fix as metrics, an alert for a critical one with a fix and for a scan that failed or did not run |
 | `eol` | preview | endoflife.date once a day for the cycles the host's image tags carry, its OS and listed components: days until end of support and of security support as metrics, an alert 90 days before security support ends, after it ended, and when the data is 3 days old |
 | `probes` | stable | blackbox-exporter for HTTP 2xx and TLS expiry, for the host's own internet (ping of the gateway and public addresses, DNS) and for the private network links to other hosts (`link-down` per zone instead of a `host-down` per host), RDAP exporter for domain expiry |
-| `checks` | stable | the runners of the [checks](docs/checks.md) declared under a service: HTTP, TCP and DNS through blackbox-exporter, sandboxed scripts and read-only SQL queries, each with its metrics and alert |
+| `checks` | stable | the runners of the [checks](docs/checks.md) declared under a service: HTTP, TCP, SMTP (greeting, `STARTTLS` or TLS on 465, certificate expiry) and DNS through blackbox-exporter, sandboxed scripts and read-only SQL queries, each with its metrics and alert |
 | `cloudflare` | stable | optional: Cloudflare edge traffic, cache, errors and origin time of proxied zones, and the free-plan limits of R2, Workers and D1 |
 | `delivery` | stable | optional: recording rules, the `Delivery` and `Quality` dashboards and alerts over what CI and deploy scripts push with `aye report`: deploy and CI durations and failures, tests, flaky tests, coverage, mutation score, merge lead time |
 | `github` | stable | optional: GitHub Actions minutes and billed usage of organizations and users, with an 80 % alert, and the importer of `aye report` artifacts from GitHub-hosted runners |
 | `ai-usage` | stable | optional: the month's and day's spend of Anthropic and OpenAI by model, tokens, rate limits and key expiry from their admin reports, with budget, spike and key-expiry alerts |
-| `sentinel` | stable | a 48 MB watcher on another host: one Telegram message when the central host stops answering, a reminder every 6 hours, an all-clear, a dead-man ping while all is well, and on request a daily digest of every backup, so that "all fresh" also arrives |
+| `sentinel` | stable | a 48 MB watcher on another host: one Telegram message (Slack with `alerting.contact: slack`) when the central host stops answering, a reminder every 6 hours, an all-clear, a dead-man ping while all is well, and on request a daily digest of every backup, so that "all fresh" also arrives |
 | `oncall` | preview | optional: on-call escalation for critical alerts with GoAlert: a Telegram message with an acknowledge button that repeats until someone presses it, quiet hours at night, email, escalation steps from the manifest |
 | `incidents` | preview | optional: the incident journal: every firing alert from Grafana's alert state history becomes one record with service, host, severity, start, end, duration and night, kept as JSON lines on the central host, and the `Incidents` dashboard with downtime weighted by service `criticality` (a host outage counts for every manifest service of the host), degraded minutes from warnings, requests lost behind the ingress against a four-week baseline, time to restore and night incidents; with `oncall` also who acknowledged each paged incident in GoAlert and when, and the time to acknowledge by criticality, day and night |
 | `status` | preview | optional: the status page reporter next to Grafana: the firing alerts and maintenance silences of the services behind each public component, pushed once a minute, signed, to the status page Worker |
 | `autopilot` | preview | optional: level 1 in shadow mode: for each critical alert a dossier from metrics, logs, containers and deploys, then up to three ranked hypotheses from Claude, within hard caps per run, hour, night and day, and a journal of every run with its timing, tokens and cost; after the incident it labels which hypothesis matched what fixed it (the reconciler, a host outage in the incident journal, or a person's verdict; an acknowledgement in GoAlert marks a run no signal explains as one a person handled) and exports the hit rate per incident class and rank; secrets in logs, labels and the environment are masked before anything leaves the host ([what leaves](docs/autopilot.md#what-leaves-your-host)); it runs no action and messages nobody by default |
-| `grafana` | stable | Grafana with the datasource, dashboards and alert rules of the enabled modules, fleet Health, Services and Reliability dashboards in English or Ukrainian, your own dashboards and datasources, Telegram contact point, and a Viewer token in a volume for agents that read alerts |
+| `grafana` | stable | Grafana with the datasource, dashboards and alert rules of the enabled modules, fleet Health, Services and Reliability dashboards in English or Ukrainian, your own dashboards and datasources, a Telegram, Slack or email contact point, and a Viewer token in a volume for agents that read alerts |
 | `ingress` | stable | Traefik with human HTTPS names for internal services over a private network, wildcard certificate via Cloudflare DNS-01; `aye dns` writes the A records |
 | `auth` | stable | oauth2-proxy: Google or OIDC sign-in in front of every ingress route without a login of its own, an email allowlist, and Grafana's own OAuth with the same client |
 | `secrets` | stable | a self-hosted secrets manager (Infisical by default) with its own PostgreSQL, Valkey and a daily dump; `aye secrets pull` writes a host's `.env` from it at deploy time; `set`, `ask`, `gen` and `run` store and use single keys without printing them |
@@ -261,7 +271,7 @@ Details: [docs/modules.md](docs/modules.md).
 - [Manifest reference](docs/manifest.md)
 - [Catalog rules](docs/rules.md): a new service ships with a description, a metric and an alert
 - [Modules](docs/modules.md)
-- [Checks](docs/checks.md): HTTP, TCP, DNS, script and read-only SQL checks declared under a service
+- [Checks](docs/checks.md): HTTP, TCP, SMTP, DNS, script and read-only SQL checks declared under a service
 - [Deploy](docs/deploy.md): `aye deploy` swaps a host's files atomically and recreates exactly the services whose config changed, and rolls a fleet out canary first; `aye diff` shows beforehand what it would change and `aye doctor` says read-only why a deploy would fail
 - [Host init](docs/host-init.md): a deploy user that may run one helper on one directory, and the narrowest credentials with `aye permissions`
 - [Ansible inventory](docs/inventory.md): `aye inventory` writes the hosts of the manifest as an Ansible inventory for the hardening and bootstrap playbooks a team already runs
@@ -271,7 +281,7 @@ Details: [docs/modules.md](docs/modules.md).
 - [Status page](docs/status.md): the Worker, its push contract, and `aye status deploy`
 - [MCP hub](docs/mcp.md): the four gateways compared, sources, and what `aye check` refuses
 - [Autopilot](docs/autopilot.md): level 1 in shadow mode, its caps and what leaves the host
-- [Failover](docs/failover.md): the design of failover by priority
+- [Failover](docs/failover.md): the design of failover by priority; the [replication](docs/manifest.md#replication) alerts of a declared replica ship
 - [End-to-end run](docs/e2e.md): the CI job that deploys a manifest on one runner and checks it
 - [Roadmap](docs/roadmap.md)
 - [Releasing](docs/releasing.md): bump the version, merge, push a `v<version>` tag
