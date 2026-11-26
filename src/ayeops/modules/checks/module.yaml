@@ -1,5 +1,5 @@
 name: checks
-summary: Declarative checks of your services, HTTP, TCP and DNS through blackbox-exporter, sandboxed scripts and read-only SQL queries through textfile runners.
+summary: Declarative checks of your services, HTTP, TCP, SMTP and DNS through blackbox-exporter, sandboxed scripts and read-only SQL queries through textfile runners.
 requires:
   metrics: {}
 defaults:
@@ -19,11 +19,11 @@ settings_schema:
         enum: [9116]
 services:
   check-blackbox:
-    description: Runs the HTTP, TCP and DNS checks declared under services.<name>.checks from this host.
+    description: Runs the HTTP, TCP, SMTP and DNS checks declared under services.<name>.checks from this host.
     memory: 64m
     cpus: 0.25
-    metrics: [probe_success, probe_duration_seconds]
-    alerts: [target-down]
+    metrics: [probe_success, probe_duration_seconds, probe_ssl_earliest_cert_expiry]
+    alerts: [target-down, check-tls-expiring]
     logs: docker
     status:
       internal: the checks themselves, the checked services carry the public marks
@@ -55,6 +55,13 @@ services:
     status:
       internal: the checks themselves, the checked services carry the public marks
 alerts:
+  - name: check-tls-expiring
+    title: TLS certificate of a check expires in less than 14 days
+    expr: (probe_ssl_earliest_cert_expiry{job=~"check-.+"} - time()) / 86400 < bool 14
+    for: 1h
+    severity: warning
+    summary: "The certificate behind check {{ .Labels.check }} expires in less than 14 days"
+    runbook: check-tls-expiring
   - name: check-runner-stale
     title: Script check runner stale
     expr: time() - ayeops_checks_heartbeat_timestamp_seconds > bool 300

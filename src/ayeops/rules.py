@@ -47,6 +47,7 @@ from ayeops.render import (
     DATASOURCE_UID,
     METRICS_PORT,
     SERVICE_SILENCE,
+    SLACK_WEBHOOK_ENV,
     FleetRender,
     all_baseline_sources,
     compose_entries,
@@ -56,6 +57,7 @@ from ayeops.render import (
     project_dashboard_files,
     service_owners,
 )
+from ayeops.replication import replication_alerts, replication_problems
 from ayeops.sentinel import sentinel_problems
 from ayeops.status import reporter_problems, status_problems
 from ayeops.strict import StrictValidator
@@ -160,7 +162,7 @@ def check_service(path: str, service: dict[str, Any]) -> list[Finding]:
             Finding(path, "service-metrics", "service has no metric and no explicit metrics: none")
         )
     alerts = service.get("alerts") or []
-    if not alerts and not checks:
+    if not alerts and not checks and not service.get("replication"):
         findings.append(Finding(path, "service-alerts", "service has no alert"))
     for index, alert in enumerate(alerts):
         findings.extend(check_alert(f"{path}.alerts.{index}", alert))
@@ -457,6 +459,12 @@ def check_services(
         for alert in service.get("alerts") or []
         for name in alert_names(alert)
     ] + [alert["name"] for check in service_checks(manifest) for alert in check_alerts(check)]
+    service_alerts += [
+        alert["name"]
+        for name, service in sorted(manifest.services.items())
+        for alert in replication_alerts(manifest, name, service)
+    ]
+    for alert, count in sorted(Counter(module_alerts + service_alerts).items()):
     duty_alerts = [DUTY_ALERT] if manifest.data.get("duties") else []
     for alert, count in sorted(Counter(module_alerts + service_alerts + duty_alerts).items()):
         if count > 1:
@@ -840,6 +848,38 @@ def check_mail(manifest: Manifest) -> list[Finding]:
     return findings
 
 
+SLACK_WEBHOOK = re.compile(r"hooks\.slack(-gov)?\.com/", re.IGNORECASE)
+
+
+def text_values(value: Any, path: str) -> list[tuple[str, str]]:
+    if isinstance(value, dict):
+        return [
+            found
+            for key, item in value.items()
+            for found in text_values(item, f"{path}.{key}" if path else str(key))
+        ]
+    if isinstance(value, list):
+        return [
+            found
+            for index, item in enumerate(value)
+            for found in text_values(item, f"{path}[{index}]")
+        ]
+    return [(path, value)] if isinstance(value, str) else []
+
+
+def check_slack(manifest: Manifest) -> list[Finding]:
+    return [
+        Finding(
+            path,
+            "slack-webhook",
+            f"a Slack webhook URL is a secret: put it into {SLACK_WEBHOOK_ENV} in the .env of "
+            "the host, not into the manifest",
+        )
+        for path, text in text_values(manifest.raw, "")
+        if SLACK_WEBHOOK.search(text)
+    ]
+
+
 def check_references(
     manifest: Manifest, modules: dict[str, Module], renders: FleetRender | None = None
 ) -> list[Finding]:
@@ -870,7 +910,7 @@ def check_oncall(manifest: Manifest) -> list[Finding]:
                 Finding(
                     "alerting.contact",
                     "oncall-fallback",
-                    "oncall needs contact telegram or email: critical alerts go there too, "
+                    "oncall needs contact telegram, slack or email: critical alerts go there too, "
                     "so a stopped on-call path never means silence",
                 )
             )
@@ -970,6 +1010,7 @@ def check_manifest(
     findings += check_auth(manifest, modules, renders)
     findings += check_icons(manifest)
     findings += check_mail(manifest)
+    findings += check_slack(manifest)
     findings += check_oncall(manifest)
     findings += check_timezones(manifest)
     findings += [Finding(*problem) for problem in incidents_problems(manifest)]
@@ -981,6 +1022,7 @@ def check_manifest(
     findings += [Finding(*problem) for problem in backups_problems(manifest)]
     findings += [Finding(*problem) for problem in objectstore_problems(manifest)]
     findings += [Finding(*problem) for problem in datastore_problems(manifest)]
+    findings += [Finding(*problem) for problem in replication_problems(manifest)]
     findings += [Finding(*problem) for problem in mcp_problems(manifest)]
     findings += check_references(manifest, modules, renders)
     findings += check_alert_traps(manifest, modules)

@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
@@ -139,20 +140,66 @@ def compiled(source: str) -> jinja2.Template:
 DASHBOARD_WORD = {"en": "dashboard", "uk": "дашборд"}
 
 
-def telegram_group(state: str, mark: str) -> str:
+def html_link(url: str, word: str) -> str:
+    return f' · <a href="{{{{ {url} }}}}">{word}</a>'
+
+
+def mrkdwn_link(url: str, word: str) -> str:
+    return f" · <{{{{ {url} }}}}|{word}>"
+
+
+def html_strong(text: str) -> str:
+    return f"<b>{text}</b>"
+
+
+def as_is(text: str) -> str:
+    return text
+
+
+def shown(value: str) -> str:
+    return f"{{{{ {value} }}}}"
+
+
+def escaped(value: str) -> str:
+    return f'{{{{ template "aye.escape" {value} }}}}'
+
+
+@dataclass(frozen=True)
+class MessageStyle:
+    link: Callable[[str, str], str]
+    strong: Callable[[str], str]
+    show: Callable[[str], str]
+
+
+TELEGRAM_STYLE = MessageStyle(html_link, html_strong, shown)
+SLACK_STYLE = MessageStyle(mrkdwn_link, as_is, escaped)
+SLACK_ESCAPE = (
+    '{{ define "aye.escape" }}{{ . | reReplaceAll "&" "&amp;" '
+    '| reReplaceAll "<" "&lt;" | reReplaceAll ">" "&gt;" }}{{ end }}'
+)
+
+
+def message_group(state: str, mark: str, style: MessageStyle) -> str:
     alerts = f".Alerts.{state}"
     return (
-        f"{{{{ if {alerts} }}}}{mark} <b>{{{{ len {alerts} }}}} x "
-        "{{ .CommonLabels.alertname }}</b>"
-        "{{ if .GroupLabels.scope }} · {{ .GroupLabels.scope }}{{ end }}"
-        f'{{{{ template "aye.links" index {alerts} 0 }}}}\n'
-        f"{{{{ if .CommonLabels.host }}}}{{{{ range {alerts} }}}}"
-        "{{ .Annotations.summary }}\n{{ end }}"
-        f'{{{{ else }}}}{{{{ template "aye.hosts" {alerts} }}}}\n{{{{ end }}}}\n{{{{ end }}}}'
+        f"{{{{ if {alerts} }}}}{mark} "
+        + style.strong(f"{{{{ len {alerts} }}}} x " + style.show(".CommonLabels.alertname"))
+        + "{{ if .GroupLabels.scope }} · "
+        + style.show(".GroupLabels.scope")
+        + "{{ end }}"
+        + f'{{{{ template "aye.links" index {alerts} 0 }}}}\n'
+        + f"{{{{ if .CommonLabels.host }}}}{{{{ range {alerts} }}}}"
+        + style.show(".Annotations.summary")
+        + "\n{{ end }}"
+        + f'{{{{ else }}}}{{{{ template "aye.hosts" {alerts} }}}}\n{{{{ end }}}}\n{{{{ end }}}}'
     )
 
 
-def telegram_template(lang: str) -> str:
+def message_groups(style: MessageStyle) -> str:
+    return message_group("Firing", "🔴", style) + message_group("Resolved", "✅", style)
+
+
+def message_parts(lang: str, style: MessageStyle) -> str:
     word = DASHBOARD_WORD.get(lang, DASHBOARD_WORD["en"])
     return (
         '{{ define "aye.host" }}'
@@ -162,15 +209,20 @@ def telegram_template(lang: str) -> str:
         '{{ range slice . 1 }}, {{ template "aye.host" . }}{{ end }}{{ end }}'
         '{{ define "aye.links" }}'
         "{{ if .Annotations.runbook_url }}"
-        ' · <a href="{{ .Annotations.runbook_url }}">runbook</a>{{ end }}'
-        "{{ if .PanelURL }}"
-        f' · <a href="{{{{ .PanelURL }}}}">{word}</a>'
-        "{{ else if .DashboardURL }}"
-        f' · <a href="{{{{ .DashboardURL }}}}">{word}</a>'
-        "{{ end }}{{ end }}"
-        '{{ define "aye.telegram" }}{{ if gt (len .Alerts) 1 }}'
-        + telegram_group("Firing", "🔴")
-        + telegram_group("Resolved", "✅")
+        + style.link(".Annotations.runbook_url", "runbook")
+        + "{{ end }}{{ if .PanelURL }}"
+        + style.link(".PanelURL", word)
+        + "{{ else if .DashboardURL }}"
+        + style.link(".DashboardURL", word)
+        + "{{ end }}{{ end }}"
+    )
+
+
+def telegram_template(lang: str) -> str:
+    return (
+        message_parts(lang, TELEGRAM_STYLE)
+        + '{{ define "aye.telegram" }}{{ if gt (len .Alerts) 1 }}'
+        + message_groups(TELEGRAM_STYLE)
         + "{{ else }}{{ range .Alerts }}"
         '{{ if eq .Status "firing" }}🔴{{ else }}✅{{ end }} <b>{{ .Labels.alertname }}</b>\n'
         "{{ .Annotations.summary }}\n"
@@ -179,6 +231,33 @@ def telegram_template(lang: str) -> str:
     )
 
 
+SLACK_TITLE = (
+    '{{ define "aye.slack.title" }}'
+    "{{ if .Alerts.Firing }}🔴{{ else }}✅{{ end }} {{ .CommonLabels.alertname }}"
+    "{{ if gt (len .Alerts) 1 }}{{ if .GroupLabels.scope }} · {{ .GroupLabels.scope }}"
+    "{{ end }}{{ end }}{{ end }}"
+)
+
+
+def slack_template(lang: str) -> str:
+    return (
+        SLACK_ESCAPE
+        + message_parts(lang, SLACK_STYLE)
+        + SLACK_TITLE
+        + '{{ define "aye.slack" }}{{ if gt (len .Alerts) 1 }}'
+        + message_groups(SLACK_STYLE)
+        + "{{ else }}{{ range .Alerts }}"
+        + escaped(".Annotations.summary")
+        + '\n{{ .Labels.host }}{{ template "aye.links" . }}'
+        "{{ end }}{{ end }}{{ end }}"
+    )
+
+
+SLACK_WEBHOOK_ENV = "AYE_SLACK_WEBHOOK_URL"
+MESSAGE_TEMPLATES: dict[str, Callable[[str], str]] = {
+    "telegram": telegram_template,
+    "slack": slack_template,
+}
 TELEGRAM_TEMPLATE = telegram_template("en")
 
 MODULE_RUNBOOK_BASE = "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/"
@@ -876,6 +955,16 @@ def contact_receiver(manifest: Manifest) -> dict[str, Any] | None:
             "type": "email",
             "settings": {"addresses": ";".join(manifest.alert_emails), "singleEmail": True},
         }
+    if manifest.contact == "slack":
+        return {
+            "uid": "aye-slack",
+            "type": "slack",
+            "settings": {
+                "url": "${" + SLACK_WEBHOOK_ENV + "}",
+                "title": '{{ template "aye.slack.title" . }}',
+                "text": '{{ template "aye.slack" . }}',
+            },
+        }
     return None
 
 
@@ -903,8 +992,9 @@ def contact_points(
         "apiVersion": 1,
         "contactPoints": [{"orgId": 1, "name": manifest.contact, "receivers": [receiver]}],
     }
-    if manifest.contact == "telegram":
-        points["templates"] = [{"orgId": 1, "name": "aye", "template": telegram_template(lang)}]
+    template = MESSAGE_TEMPLATES.get(manifest.contact)
+    if template is not None:
+        points["templates"] = [{"orgId": 1, "name": "aye", "template": template(lang)}]
     policy: dict[str, Any] = {
         "orgId": 1,
         "receiver": manifest.contact,

@@ -10,6 +10,9 @@ score = 97.9
 tests = ["tests/test_sql_checks.py"]
 score = 100.0
 
+[modules."src/ayeops/dashboard_sync.py"]
+tests = ["tests/test_dashboard_sync.py"]
+
 [modules."src/ayeops/dashboards.py"]
 tests = ["tests/test_dashboards.py"]
 score = 98.9
@@ -100,6 +103,10 @@ score = 100.0
 [modules."src/ayeops/render_index.py"]
 tests = ["tests/test_render_index.py"]
 score = 97.4
+
+[modules."src/ayeops/replication.py"]
+tests = ["tests/test_replication.py"]
+score = 100.0
 
 [modules."src/ayeops/sentinel.py"]
 tests = ["tests/test_sentinel_module.py"]

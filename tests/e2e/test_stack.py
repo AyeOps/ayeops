@@ -21,7 +21,10 @@ from typing import Any
 import pytest
 import yaml
 
-from ayeops.render import HOSTS_DOWN, NODE_UP
+from ayeops.cli import main as cli_main
+from ayeops.manifest import Manifest
+from ayeops.registry import load_modules
+from ayeops.render import HOSTS_DOWN, NODE_UP, render_tree
 from tests.e2e.stack import (
     BACKUP_FILE,
     CA_FILE,
@@ -223,6 +226,38 @@ def test_probes_and_checks_succeed() -> None:
             assert values(f'ayeops_check_sql_value{{check="{check}"}}'), check
 
 
+def test_the_check_blackbox_accepts_every_smtp_variant(tmp_path: Path) -> None:
+    data = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
+    alert = {"for": "5m", "severity": "warning", "runbook": "mail-down"}
+    variants = {"relay": (25, "none"), "submission": (587, "starttls"), "smtps": (465, "tls")}
+    data["services"]["web"]["checks"].update(
+        {
+            name: {
+                "type": "smtp",
+                "address": f"mail.example.com:{port}",
+                "tls": tls,
+                "ehlo": "probe.example.com",
+                "alert": alert,
+            }
+            for name, (port, tls) in variants.items()
+        }
+    )
+    tree = render_tree(Manifest(data, MANIFEST.parent), load_modules())
+    config = tmp_path / "blackbox.yml"
+    config.write_text(tree[f"{central()}/checks/blackbox.yml"], encoding="utf-8")
+    config.chmod(0o644)
+    assert {f"check_web_{name}" for name in variants} <= set(
+        yaml.safe_load(config.read_text())["modules"]
+    )
+    image = compose(central())["services"]["check-blackbox"]["image"]
+    mount = f"{config}:/etc/blackbox/blackbox.yml:ro"
+    args = ["docker", "run", "--rm", "-v", mount, image, "--config.check"]
+    result = subprocess.run(
+        [*args, "--config.file=/etc/blackbox/blackbox.yml"], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_grafana_datasources_are_provisioned_and_healthy() -> None:
     directory = RENDER / central() / "grafana" / "provisioning" / "datasources"
     expected = {
@@ -315,6 +350,63 @@ def test_grafana_dashboards_match_the_render() -> None:
     actual = [item["uid"] for item in grafana("/api/search?type=dash-db&limit=5000")]
     assert len(actual) == len(expected)
     assert set(actual) == expected
+
+
+def grafana_send(method: str, path: str, body: Any = None) -> int:
+    env = dotenv(central())
+    token = f"{env['AYE_GRAFANA_ADMIN_USER']}:{env['AYE_GRAFANA_ADMIN_PASSWORD']}"
+    request = urllib.request.Request(
+        f"http://{published(central(), 'grafana', 3000)}{path}",
+        data=None if body is None else json.dumps(body).encode(),
+        method=method,
+        headers={
+            "Authorization": "Basic " + base64.b64encode(token.encode()).decode(),
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return int(response.status)
+
+
+def test_dashboards_drift_finds_a_dashboard_drawn_in_the_ui_and_pull_writes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    env = dotenv(central())
+    monkeypatch.setenv("AYE_GRAFANA_ADMIN_USER", env["AYE_GRAFANA_ADMIN_USER"])
+    monkeypatch.setenv("AYE_GRAFANA_ADMIN_PASSWORD", env["AYE_GRAFANA_ADMIN_PASSWORD"])
+    url = f"http://{published(central(), 'grafana', 3000)}"
+    drift = ["dashboards", "drift", str(MANIFEST), "--url", url, "--format", "json"]
+
+    def counted() -> None:
+        assert values("ayeops_grafana_reader_dashboards_unmanaged") == [0.0]
+
+    eventually(counted)
+    assert cli_main(drift) == 0, capsys.readouterr()
+    panel = {
+        "id": 1,
+        "type": "timeseries",
+        "title": "Targets up",
+        "datasource": {"type": "prometheus", "uid": "victoriametrics"},
+        "targets": [{"refId": "A", "expr": "up"}],
+    }
+    board = {"uid": "e2e-drawn", "title": "E2E drawn by hand", "panels": [panel]}
+    assert grafana_send("POST", "/api/dashboards/db", {"dashboard": board}) == 200
+    try:
+        capsys.readouterr()
+        assert cli_main(drift) == 1
+        found = json.loads(capsys.readouterr().out)["drift"]
+        assert [(entry["kind"], entry["uid"]) for entry in found] == [("unmanaged", "e2e-drawn")]
+        pull = ["dashboards", "pull", str(MANIFEST), "--url", url, "-o", str(tmp_path)]
+        assert cli_main(pull) == 0
+        pulled = json.loads((tmp_path / "e2e-drawn.json").read_text(encoding="utf-8"))
+        assert "id" not in pulled and "version" not in pulled
+        assert (pulled["uid"], pulled["title"]) == ("e2e-drawn", "E2E drawn by hand")
+        assert pulled["panels"][0]["datasource"] == panel["datasource"]
+        assert cli_main(pull) == 0
+        assert "1 unchanged" in capsys.readouterr().out
+    finally:
+        grafana_send("DELETE", "/api/dashboards/uid/e2e-drawn")
+    assert cli_main(drift) == 0
 
 
 def loki(query: str, since: float) -> list[str]:

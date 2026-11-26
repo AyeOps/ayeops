@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from ayeops import __version__, render_index, status_deploy
+from ayeops import __version__, dashboard_sync, render_index, status_deploy
 from ayeops import deploy as deploy_command
 from ayeops import diff as diff_command
 from ayeops import doctor as doctor_command
@@ -242,6 +242,10 @@ EXAMPLES = {
         "aye discover --adopt web-1.json -o adopt/ayeops.yaml --until 2026-12-31",
     ],
     "secrets": ["aye secrets gen --env-file rendered/local/.env", "aye secrets pull -o .env"],
+    "dashboards": [
+        "aye dashboards drift ops/ayeops.yaml",
+        "aye dashboards pull ops/ayeops.yaml --uid sales-funnel",
+    ],
 }
 
 SECRETS_EXAMPLES = {
@@ -255,6 +259,17 @@ SECRETS_EXAMPLES = {
         "aye secrets gen AYE_AUTH_COOKIE_SECRET",
     ],
     "run": ["aye secrets run --folder /central -- docker compose up -d"],
+}
+
+DASHBOARDS_EXAMPLES = {
+    "drift": [
+        "aye dashboards drift ops/ayeops.yaml",
+        "aye dashboards drift --url http://127.0.0.1:3000 --format json",
+    ],
+    "pull": [
+        "aye dashboards pull ops/ayeops.yaml",
+        "aye dashboards pull --uid sales-funnel --force",
+    ],
 }
 
 
@@ -361,8 +376,10 @@ def build_parser() -> argparse.ArgumentParser:
     retire_command.add_parser(commands)
     discover.add_parser(commands)
     secrets_command.add_parser(commands)
+    dashboard_sync.add_parser(commands)
     explain(commands, EXAMPLES)
     explain(subcommands(commands.choices["secrets"]), SECRETS_EXAMPLES)
+    explain(subcommands(commands.choices["dashboards"]), DASHBOARDS_EXAMPLES)
     return parser
 
 
@@ -423,4 +440,6 @@ def run_command(arguments: list[str]) -> int:
         return discover.run(args)
     if args.command == "secrets":
         return secrets_command.run(args)
+    if args.command == "dashboards":
+        return dashboard_sync.run(args, os.environ, dashboard_sync.urlopen_http)
     return render(args.manifest, args.out, args.build_time, args.commit, args.check)

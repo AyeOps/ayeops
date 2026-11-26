@@ -7,7 +7,7 @@ the manifest into a docker compose project per host.
 - [Manifest reference](manifest.md): every field of the manifest
 - [Catalog rules](rules.md): what `aye check` enforces and why
 - [Modules](modules.md): what each module runs, its settings and alerts
-- [Checks](checks.md): HTTP, TCP, DNS, script and read-only SQL checks declared under a service, each with its metrics and alert
+- [Checks](checks.md): HTTP, TCP, SMTP, DNS, script and read-only SQL checks declared under a service, each with its metrics and alert
 - [Deploy](deploy.md): `aye deploy` swaps a host's files atomically and recreates exactly the services whose config changed, and rolls a fleet out canary first; `aye diff` shows beforehand what it would change
 - [Host init](host-init.md): `aye host-init` gives a host a deploy user that may run one helper on one directory, `aye permissions` lists the narrowest external credentials, and what neither can promise
 - [Ansible inventory](inventory.md): `aye inventory` writes the manifest's hosts as an Ansible inventory, grouped by zone, group, profile, module and service, for playbooks a team already runs
@@ -50,6 +50,8 @@ from the host's [`connect`](manifest.md#connect) when they are not given.
 | `aye inventory <manifest> [--format ansible-yaml\|ansible-json] [-o <file>] [--check]` | runs the check, then writes an [Ansible inventory](inventory.md) of the hosts to stdout or `<file>`: `ansible_host` from `address`, the vars `ayeops_arch`, `ayeops_zone`, `ayeops_group`, `ayeops_project` and the groups `zone_`, `group_`, `profile_`, `module_` and `service_`; `--check` writes nothing, prints a diff and exits 1 unless `<file>` matches |
 | `aye dns <manifest> [--apply]` | runs the check, then plans the Cloudflare A records of every [ingress](modules.md#ingress) route; `--apply` writes them |
 | `--build-time`, `--commit` | options of `render` (with or without `--check`), `portal`, `deploy` and `diff`: the footer stamp; the defaults are now (or `SOURCE_DATE_EPOCH`) and `git rev-parse --short HEAD` next to the manifest, with `+` when the tree is dirty. `examples/rendered` is rendered with `--build-time "2026-01-01 00:00 UTC" --commit example` |
+| `aye dashboards drift <manifest> [--url <url>] [--format text\|json]` | runs the check, then reads Grafana's dashboards with the admin credentials of the environment and lists those no file provisions (`unmanaged`), those provisioned that the render lost (`stale`) and the rendered ones Grafana does not provision (`not-deployed`); exit 1 on any, 2 when Grafana cannot be read, see [dashboards drawn in Grafana](modules.md#dashboards-drawn-in-grafana) |
+| `aye dashboards pull <manifest> [--uid <uid> ...] [-o <dir>] [--force]` | writes the dashboards no file provisions into `grafana.dashboards` (or `<dir>`) as `<uid>.json`: no `id` or `version`, the manifest's datasource uids, sorted keys; refuses a file that differs unless `--force` (exit 1), so the next render and deploy provision them under the same uid |
 | `aye retire-rules <live rules.yaml> <rendered rules.yaml>` | adds `deleteRules` to the rendered alert rules for every rule the live file has and the render lost, for deploys that copy the tree themselves, see [retired alert rules](deploy.md#retired-alert-rules) |
 | `aye discover --ssh <host> [--sudo] -o <file>` | runs the read-only [probe](discover.md) on a Linux host and saves its JSON report |
 | `aye discover --suggest <file>` | prints a manifest fragment for a report: host block, modules, service stubs |
@@ -69,8 +71,8 @@ from the host's [`connect`](manifest.md#connect) when they are not given.
 | Code | Meaning |
 |---|---|
 | 0 | done: the check passed, the files were written, the hosts are deployed and healthy, nothing differs |
-| 1 | findings or drift: the check found errors, `render --check` or `diff` found a difference, `doctor` a fail, a deploy or compose step failed, `aye up` found an unset variable |
-| 2 | usage or environment: bad arguments, no manifest or a missing file, an unknown host or no `--host` on a manifest with several, a missing token, identity or `docker`, a `--dir` the helper or the backup timers refuse |
+| 1 | findings or drift: the check found errors, `render --check` or `diff` found a difference, `doctor` a fail, `dashboards drift` a dashboard outside the render, `dashboards pull` a file it refused to replace, a deploy or compose step failed, `aye up` found an unset variable |
+| 2 | usage or environment: bad arguments, no manifest or a missing file, an unknown host or no `--host` on a manifest with several, a missing token, identity or `docker`, a Grafana that `aye dashboards` cannot read, a `--dir` the helper or the backup timers refuse |
 
 Three commands differ, as documented with them and kept so for the scripts that rely on it:
 `aye diff` follows diff(1) and exits 2 on every error, a failing check included, since its 1
