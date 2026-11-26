@@ -6,11 +6,14 @@ All notable changes to AyeOps are written here. The format follows
 manifest or the rendered output in a way that needs action, and a patch release must not
 ([releasing](docs/releasing.md)).
 
-`0.3.0` is the first release of the public repository. `0.2.0` was tagged while the repository
-was private and its build is not published here; `0.1.0` was the version of the code before it
-and was never tagged.
+`0.4.0` is the first release kept in the public repository. `0.3.0` was published for a day at
+the launch and withdrawn with its tag; `0.2.0` was tagged while the repository was private and
+its build is not published here; `0.1.0` was the version of the code before it and was never
+tagged.
 
 ## [Unreleased]
+
+## [0.4.0] - 2026-11-26
 
 ### Added
 

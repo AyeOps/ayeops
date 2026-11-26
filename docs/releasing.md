@@ -7,7 +7,7 @@ Nothing is published to PyPI.
 
 The version lives in one place, `version` in `pyproject.toml`; `aye --version` and the
 `ayeops-version` rule read it from the installed package. AyeOps follows semantic versioning,
-and while it is `0.x` a minor release (`0.4.0` after `0.3.x`) is the one that may change the
+and while it is `0.x` a minor release (`0.5.0` after `0.4.x`) is the one that may change the
 manifest or the rendered output in a way that needs action; a patch release must not.
 
 ## Cut a release
@@ -16,7 +16,7 @@ manifest or the rendered output in a way that needs action; a patch release must
    project's version). In [`CHANGELOG.md`](../CHANGELOG.md), move the entries of `Unreleased`
    under a new `## [<version>] - <YYYY-MM-DD>` heading and leave `Unreleased` empty.
 2. Move the pin of [`examples/acme.yaml`](../examples/acme.yaml) to the new line when the minor
-   version changes, e.g. `ayeops: ">=0.3,<0.4"`; a test fails while the example does not accept
+   version changes, e.g. `ayeops: ">=0.4,<0.5"`; a test fails while the example does not accept
    the running version.
 3. Run every command of the "Commands" section of `AGENTS.md`, regenerate `examples/rendered`
    if a module or template changed, and open a pull request. The commit subject is
@@ -33,8 +33,8 @@ manifest or the rendered output in a way that needs action; a patch release must
 
    ```sh
    git switch main && git pull --ff-only
-   git tag -a v0.3.0 -m "AyeOps 0.3.0"
-   git push origin v0.3.0
+   git tag -a v0.4.0 -m "AyeOps 0.4.0"
+   git push origin v0.4.0
    ```
 
 ## What the wheel carries
@@ -77,8 +77,8 @@ attestation needs; the workflow grants everything else `contents: read`. Every c
 (`persist-credentials: false`): `gh` publishes with `GH_TOKEN`, not with git. Artifact
 attestations work on public repositories on every plan; a private repository needs GitHub
 Enterprise Cloud, so tag the first release after the repository is public. When it fails
-nothing was published: fix the cause, delete the tag (`git push origin :refs/tags/v0.3.0` and
-`git tag -d v0.3.0`) and tag again. A release that went out with a defect is not replaced;
+nothing was published: fix the cause, delete the tag (`git push origin :refs/tags/v0.4.0` and
+`git tag -d v0.4.0`) and tag again. A release that went out with a defect is not replaced;
 cut the next patch release instead, so an installed `@v<version>` always means one build.
 
 ## Verify a release
@@ -86,11 +86,11 @@ cut the next patch release instead, so an installed `@v<version>` always means o
 Download the files of a release and check each against its attestation with the GitHub CLI:
 
 ```sh
-gh release download v0.3.0 --repo AyeOps/ayeops --dir ayeops-0.3.0
-gh attestation verify ayeops-0.3.0/ayeops-0.3.0-py3-none-any.whl   --repo AyeOps/ayeops   --signer-workflow AyeOps/ayeops/.github/workflows/release.yml   --source-ref refs/tags/v0.3.0   --deny-self-hosted-runners
+gh release download v0.4.0 --repo AyeOps/ayeops --dir ayeops-0.4.0
+gh attestation verify ayeops-0.4.0/ayeops-0.4.0-py3-none-any.whl   --repo AyeOps/ayeops   --signer-workflow AyeOps/ayeops/.github/workflows/release.yml   --source-ref refs/tags/v0.4.0   --deny-self-hosted-runners
 ```
 
-The same command checks `ayeops-0.3.0.tar.gz`. It succeeds only when the file's SHA-256 is one
+The same command checks `ayeops-0.4.0.tar.gz`. It succeeds only when the file's SHA-256 is one
 that `release.yml` of this repository attested on a GitHub-hosted runner for that tag; a file
 that was rebuilt, swapped on the release page or built from another ref fails. `--format json`
 prints the provenance, the commit SHA included. A `uv tool install git+...@v<version>` builds

@@ -1,6 +1,6 @@
 [project]
 name = "ayeops"
-version = "0.3.0"
+version = "0.4.0"
 description = "Open-source ops kit: a service catalog that refuses unmonitored services and the monitoring stack it renders."
 readme = "README.md"
 license = "Apache-2.0"

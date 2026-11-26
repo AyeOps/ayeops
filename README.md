@@ -165,7 +165,7 @@ aye --version
 
 ```yaml
 version: 1
-ayeops: ">=0.3,<0.4"
+ayeops: ">=0.4,<0.5"
 project: acme
 ```
 

@@ -46,7 +46,7 @@ There is no bug bounty.
 
 | Version | Supported |
 |---|---|
-| `0.3.x` | yes, until 1.0 |
+| `0.4.x` | yes, until 1.0 |
 | `main` | yes, fixes land here first |
 | anything older | no |
 
