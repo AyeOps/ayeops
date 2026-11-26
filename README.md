@@ -224,7 +224,7 @@ Ports bind to `127.0.0.1` unless the manifest exposes them on an explicit addres
 |---|---|---|
 | `metrics` | stable | VictoriaMetrics single-node and vmagent; `role: agent` ships to a central host over remote_write |
 | `logs` | stable | Loki and Alloy; Alloy ships the containers of the compose projects declared for its host, optionally journald, to a central Loki |
-| `node` | stable | node-exporter, plus textfile collectors for laptop battery capacity, status and AC, and for a pending reboot |
+| `node` | stable | node-exporter, plus textfile collectors for laptop battery capacity, status and AC, and for a pending reboot; `host-down` leaves out a host the manifest marks [`volatile`](docs/manifest.md#volatile-hosts-and-maintenance-windows), which warns only after a day away, and a host's declared maintenance windows hold its alerts back |
 | `containers` | stable | cAdvisor |
 | `smart` | stable | smartctl_exporter: SMART health, bad sectors, NVMe wear, drive temperature |
 | `gpu` | stable | nvidia_gpu_exporter: NVIDIA GPU temperature, memory and driver health |
@@ -242,7 +242,7 @@ Ports bind to `127.0.0.1` unless the manifest exposes them on an explicit addres
 | `delivery` | stable | optional: recording rules, the `Delivery` and `Quality` dashboards and alerts over what CI and deploy scripts push with `aye report`: deploy and CI durations and failures, tests, flaky tests, coverage, mutation score, merge lead time |
 | `github` | stable | optional: GitHub Actions minutes and billed usage of organizations and users, with an 80 % alert, and the importer of `aye report` artifacts from GitHub-hosted runners |
 | `ai-usage` | stable | optional: the month's and day's spend of Anthropic and OpenAI by model, tokens, rate limits and key expiry from their admin reports, with budget, spike and key-expiry alerts |
-| `sentinel` | stable | a 48 MB watcher on another host: one Telegram message when the central host stops answering, a reminder every 6 hours, an all-clear, and a dead-man ping while all is well |
+| `sentinel` | stable | a 48 MB watcher on another host: one Telegram message when the central host stops answering, a reminder every 6 hours, an all-clear, a dead-man ping while all is well, and on request a daily digest of every backup, so that "all fresh" also arrives |
 | `oncall` | preview | optional: on-call escalation for critical alerts with GoAlert: a Telegram message with an acknowledge button that repeats until someone presses it, quiet hours at night, email, escalation steps from the manifest |
 | `incidents` | preview | optional: the incident journal: every firing alert from Grafana's alert state history becomes one record with service, host, severity, start, end, duration and night, kept as JSON lines on the central host, and the `Incidents` dashboard with downtime weighted by service `criticality` (a host outage counts for every manifest service of the host), degraded minutes from warnings, requests lost behind the ingress against a four-week baseline, time to restore and night incidents; with `oncall` also who acknowledged each paged incident in GoAlert and when, and the time to acknowledge by criticality, day and night |
 | `status` | preview | optional: the status page reporter next to Grafana: the firing alerts and maintenance silences of the services behind each public component, pushed once a minute, signed, to the status page Worker |

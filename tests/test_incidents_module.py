@@ -237,9 +237,9 @@ def test_host_alerts_can_be_narrowed_and_an_unknown_one_is_refused(
         {"title": "Host down", "labels": {}}
     ]
     assert rules_hit(data) == set()
-    central(data)["incidents"] = {"host_alerts": ["host-gone"]}
+    central(data)["incidents"] = {"host_alerts": ["host-vanished"]}
     assert "incidents-host-alert" in rules_hit(data)
-    central(data)["incidents"] = {"host_alerts": [{"alert": "host-gone", "job": "node"}]}
+    central(data)["incidents"] = {"host_alerts": [{"alert": "host-vanished", "job": "node"}]}
     assert "incidents-host-alert" in rules_hit(data)
 
 

@@ -11,6 +11,7 @@ on:
       - "src/ayeops/datastores.py"
       - "src/ayeops/defaults.py"
       - "src/ayeops/deploy.py"
+      - "src/ayeops/downtime.py"
       - "src/ayeops/eol.py"
       - "src/ayeops/i18n.py"
       - "src/ayeops/inventory.py"

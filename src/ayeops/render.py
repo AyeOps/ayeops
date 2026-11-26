@@ -12,7 +12,7 @@ from typing import Any
 import jinja2
 import yaml
 
-from ayeops import grafana_reader
+from ayeops import downtime, grafana_reader
 from ayeops.alert_links import Board, board_from, link_annotations, pick_link
 from ayeops.autopilot import CATALOG_FILE as AUTOPILOT_CATALOG
 from ayeops.autopilot import NAME as AUTOPILOT
@@ -26,6 +26,7 @@ from ayeops.baseline import expand, is_baseline
 from ayeops.checks import baseline_sources, checks_context, service_alerts
 from ayeops.dashboards import build, localize, requirement_met
 from ayeops.datastores import job_rpos, offsite_max_age
+from ayeops.downtime import Downtime
 from ayeops.eol import tracked as eol_tracked
 from ayeops.i18n import LANGS
 from ayeops.incidents import incidents_context
@@ -723,24 +724,19 @@ def module_runbook(
 
 
 HOST_DOWN_MODULE = "node"
-HOST_DOWN_ALERT = "host-down"
-NODE_UP = 'last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)'
-HOSTS_DOWN = f"max by (host) ({NODE_UP}) == 0"
+NODE_UP = downtime.NODE_UP
+HOSTS_DOWN = downtime.HOSTS_DOWN
 
 
 def held_back(alert: dict[str, Any], hold: bool) -> dict[str, Any]:
-    if not hold:
-        return alert
-    expr = str(alert["expr"]).strip()
-    return {**alert, "expr": f"({expr}) unless on (host) ({HOSTS_DOWN}) or 0 * ({expr})"}
+    return downtime.guarded(alert, downtime.fleet_guards(hold))
 
 
 def held_module_alert(
-    manifest: Manifest, module: Module, alert: dict[str, Any], hold: bool
+    manifest: Manifest, module: Module, alert: dict[str, Any], hold: bool, down: Downtime
 ) -> tuple[dict[str, Any], str]:
     found, base = module_runbook(manifest, module, alert)
-    source = module.name == HOST_DOWN_MODULE and alert["name"] == HOST_DOWN_ALERT
-    return held_back(found, hold and not source), base
+    return downtime.module_alert(found, hold, down), base
 
 
 def reader_rendered(manifest: Manifest, modules: dict[str, Module]) -> bool:
@@ -754,6 +750,8 @@ def alert_applies(
     manifest: Manifest, modules: dict[str, Module], module: Module, alert: dict[str, Any]
 ) -> bool:
     if alert.get("only_with") == "grafana_reader" and not reader_rendered(manifest, modules):
+        return False
+    if alert.get("only_with") == "volatile_hosts" and not downtime.volatile_hosts(manifest):
         return False
     wanted = alert.get("provider")
     setting = alert.get("setting")
@@ -799,11 +797,12 @@ def grafana_rules(
     enabled = manifest.enabled_modules()
     base = manifest.runbook_base_url
     hold = HOST_DOWN_MODULE in enabled & set(modules)
+    down = downtime.downtime_of(manifest)
     groups: list[dict[str, Any]] = []
     for name in sorted(enabled & set(modules)):
         rules = [
             grafana_rule(
-                *held_module_alert(manifest, modules[name], a, hold),
+                *held_module_alert(manifest, modules[name], a, hold, down),
                 {"module": name},
                 module_silence(a),
                 link_annotations(pick_link(a, name, boards)),
@@ -817,7 +816,7 @@ def grafana_rules(
             )
     service_rules = [
         grafana_rule(
-            held_back(alert, hold),
+            downtime.service_alert(alert, str(service.get("host") or ""), hold, down),
             base,
             {"service": service_name},
             SERVICE_SILENCE,
