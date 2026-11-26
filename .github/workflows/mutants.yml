@@ -6,6 +6,7 @@ on:
       - "src/ayeops/backups.py"
       - "src/ayeops/baseline.py"
       - "src/ayeops/checks_sql.py"
+      - "src/ayeops/dashboard_sync.py"
       - "src/ayeops/dashboards.py"
       - "src/ayeops/datastores.py"
       - "src/ayeops/defaults.py"

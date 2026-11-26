@@ -91,11 +91,11 @@ services:
       internal: operator console, not a user-facing component
     login: Grafana sign-in form, user AYE_GRAFANA_ADMIN_USER and password AYE_GRAFANA_ADMIN_PASSWORD
   grafana-reader:
-    description: Keeps a Grafana service account with role Viewer and a token for it in the grafana-reader volume, so agents on the Grafana host read alert rules, silences, alerts and alert annotations without the admin password; checks the token every 5 minutes, writes a new one only when the file is missing or Grafana refuses it, and serves the result on 9137.
+    description: Keeps a Grafana service account with role Viewer and a token for it in the grafana-reader volume, so agents on the Grafana host read alert rules, silences, alerts and alert annotations without the admin password; checks the token every 5 minutes, writes a new one only when the file is missing or Grafana refuses it, counts the dashboards that no file provisions, and serves the result on 9137.
     memory: 32m
     cpus: 0.1
-    metrics: [ayeops_grafana_reader_ok, ayeops_grafana_reader_endpoint_ok, ayeops_grafana_reader_last_success_timestamp_seconds, ayeops_grafana_reader_rotations_total]
-    alerts: [grafana-reader-failing, target-down]
+    metrics: [ayeops_grafana_reader_ok, ayeops_grafana_reader_endpoint_ok, ayeops_grafana_reader_last_success_timestamp_seconds, ayeops_grafana_reader_rotations_total, ayeops_grafana_reader_dashboards_unmanaged]
+    alerts: [grafana-reader-failing, dashboards-unmanaged, target-down]
     logs: docker
     status:
       internal: credentials for agents that read Grafana, not a user-facing component
@@ -108,6 +108,14 @@ alerts:
     summary: "The Grafana reader on {{ .Labels.host }} has not had a working Viewer token for 15 minutes, so the agents that read Grafana with it see nothing"
     runbook: grafana-reader-failing
     no_data: alerting
+    only_with: grafana_reader
+  - name: dashboards-unmanaged
+    title: Dashboards drawn in Grafana, not in the repository
+    expr: max by (host, project, group) (ayeops_grafana_reader_dashboards_unmanaged) > bool 0
+    for: 1d
+    severity: info
+    summary: "Grafana on {{ .Labels.host }} has held dashboards for a day that no file provisions: they are not reviewed and go with the grafana-data volume; run aye dashboards pull"
+    runbook: dashboards-unmanaged
     only_with: grafana_reader
 dashboards: [health.json, services.json, reliability.json]
 files:

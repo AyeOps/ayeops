@@ -101,7 +101,7 @@ services:
       grafana:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9137/health', timeout=5)"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9137/health"]
       interval: 30s
       timeout: 10s
       retries: 3

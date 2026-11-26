@@ -577,7 +577,7 @@ services:
       timeout: 5s
     image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
     labels:
-      io.ayeops.config-hash: 571a5e27e748a7bc
+      io.ayeops.config-hash: efb795b2adc2338d
       io.ayeops.module: grafana
       io.ayeops.service: grafana
     logging:
@@ -618,13 +618,15 @@ services:
       start_period: 60s
       test:
       - CMD
-      - python
-      - -c
-      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:9137/health', timeout=5)
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:9137/health
       timeout: 10s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: ca8600ead4f00690
+      io.ayeops.config-hash: 036c48f8f09288f1
       io.ayeops.module: grafana
       io.ayeops.service: grafana-reader
     logging:
@@ -766,7 +768,7 @@ services:
       timeout: 5s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: 623b03280f0e6dba
+      io.ayeops.config-hash: 5164800ef0d51cb5
       io.ayeops.module: mcp
       io.ayeops.service: mcp-catalog
     logging:

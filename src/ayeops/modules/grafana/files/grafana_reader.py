@@ -30,6 +30,7 @@ ENDPOINTS = {
     "annotations": f"/api/annotations?type=alert&limit={ANNOTATION_LIMIT}",
 }
 FILTERED = ("rules", "annotations")
+SEARCH_LIMIT = 5000
 
 Http = Callable[[urllib.request.Request, float], tuple[int, bytes]]
 Clock = Callable[[], float]
@@ -60,6 +61,8 @@ class State:
     last_success: float | None = None
     rotations: int = 0
     ready: bool = False
+    unmanaged: int | None = None
+    dashboards_error: str = ""
 
 
 def basic(user: str, password: str) -> str:
@@ -155,6 +158,27 @@ def judge(reader: Mapping[str, Seen], admin: Mapping[str, Seen]) -> tuple[dict[s
             continue
         verdicts[endpoint] = False
     return verdicts, "; ".join(problems)
+
+
+def dashboard_uids(grafana: Grafana, admin: str) -> list[str]:
+    uids: list[str] = []
+    page = 1
+    while True:
+        query = urllib.parse.urlencode({"type": "dash-db", "limit": SEARCH_LIMIT, "page": page})
+        found = grafana.admin("GET", f"/api/search?{query}", admin)
+        uids.extend(str(hit["uid"]) for hit in found)
+        if len(found) < SEARCH_LIMIT:
+            return uids
+        page += 1
+
+
+def count_unmanaged(grafana: Grafana, admin: str) -> int:
+    count = 0
+    for uid in dashboard_uids(grafana, admin):
+        path = f"/api/dashboards/uid/{urllib.parse.quote(uid)}"
+        data = grafana.admin("GET", path, admin)
+        count += int(data["meta"].get("provisioned") is not True)
+    return count
 
 
 def find_account(grafana: Grafana, admin: str, name: str) -> dict[str, Any] | None:
@@ -259,11 +283,30 @@ class Reconciler:
                 self.state.last_success = now
         if report.error != previous.error:
             log(report.error if report.error else "the reader token reads every endpoint")
+        self.count_dashboards()
         return report
+
+    def count_dashboards(self) -> None:
+        try:
+            unmanaged: int | None = count_unmanaged(self.grafana, self.admin)
+            problem = ""
+        except (GrafanaError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+            unmanaged, problem = None, str(error) or type(error).__name__
+        with self.lock:
+            previous = self.state.dashboards_error
+            self.state.unmanaged = unmanaged
+            self.state.dashboards_error = problem
+        if problem != previous:
+            log(f"dashboards: {problem}" if problem else "dashboards: counted again")
 
     def metrics(self) -> str:
         with self.lock:
-            state = State(self.state.report, self.state.last_success, self.state.rotations)
+            state = State(
+                self.state.report,
+                self.state.last_success,
+                self.state.rotations,
+                unmanaged=self.state.unmanaged,
+            )
         return metrics_text(state)
 
     def ready(self) -> bool:
@@ -280,6 +323,8 @@ def metrics_text(state: State) -> str:
     lines.append(f"{PREFIX}rotations_total {state.rotations}")
     if state.last_success is not None:
         lines.append(f"{PREFIX}last_success_timestamp_seconds {int(state.last_success)}")
+    if state.unmanaged is not None:
+        lines.append(f"{PREFIX}dashboards_unmanaged {state.unmanaged}")
     return "".join(f"{line}\n" for line in lines)
 
 

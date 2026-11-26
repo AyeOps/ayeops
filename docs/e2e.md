@@ -124,6 +124,10 @@ rule, dashboard or datasource is covered without touching the test.
   from the `grafana-reader` volume sees every rendered rule and reads silences, alerts and alert
   annotations, and is refused (`403`) creating a silence, listing service accounts and reading
   the server settings.
+- Dashboards drawn in Grafana: the reader counts `0` unprovisioned dashboards and
+  `aye dashboards drift` exits `0`; a dashboard created through the API makes it exit `1` with
+  that uid as `unmanaged`, `aye dashboards pull -o <tmp>` writes it without `id` and `version`
+  and a second pull leaves it `unchanged`; the dashboard is deleted again.
 - Loki returns a line pushed to it, and holds container logs from every host that runs Alloy.
 - Offsite: the agent made a snapshot of `/tmp/aye-e2e-backups/e2e.dump` in Garage on `central`,
   its restore test passed, and `restic dump latest` gives back the same bytes.

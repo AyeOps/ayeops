@@ -14,6 +14,17 @@ and was never tagged.
 
 ### Added
 
+- `aye dashboards drift <manifest>`: lists the dashboards in Grafana that no file provisions,
+  the provisioned ones the render no longer has and the rendered ones Grafana lacks, and exits 1
+  on any, for CI or cron; `--format json` for scripts. `aye dashboards pull <manifest>` writes the
+  unprovisioned ones into `grafana.dashboards` as `<uid>.json` without `id` and `version`, with
+  the manifest's datasource uids and sorted keys, and refuses to replace a different file
+  without `--force`; the next deploy provisions each under the same uid. Both read Grafana with
+  `AYE_GRAFANA_ADMIN_USER` and `AYE_GRAFANA_ADMIN_PASSWORD` from the environment and refuse plain
+  `http` to anything but a loopback address.
+- `grafana`: `grafana-reader` counts the dashboards no file provisions as
+  `ayeops_grafana_reader_dashboards_unmanaged`, and the `info` alert `dashboards-unmanaged`
+  fires when there have been some for a day.
 - `probes`: `links` pings the private `address` of other hosts (a list of names, or `true` for
   every other host with an address that is not volatile), whatever VPN carries it. The new
   critical alert `link-down` fires when no probed host of a zone has answered for 3 minutes, and
@@ -68,6 +79,9 @@ and was never tagged.
 
 - `sentinel`: the alert `sentinel-notify-failing` is titled "Sentinel cannot deliver its
   messages", since the message may go to Slack.
+- `grafana`: `grafana-reader` checks its health with busybox `wget` instead of starting a
+  second Python interpreter every 30 seconds, which took about half of its 32 MB and, together
+  with the dashboard count, got the reader killed for memory (exit 137) on a starting stack.
 - `metrics`: vmagent runs with `-remoteWrite.inmemoryQueues=1` and sends fresh samples ahead of
   its on-disk backlog, so a host that reconnects after an outage reports at once and its backlog
   fills in behind it.
