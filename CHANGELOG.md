@@ -82,6 +82,18 @@ and was never tagged.
   (`replication-primary`), an engine other than `postgres` (`replication-engine`), a pair whose
   `metrics` lack the postgres_exporter series the alerts read (`replication-metrics`) and two
   replicas of one primary under one `application_name` (`replication-name`).
+- `metrics`: `backup: true` backs up the store itself. Once a day from `backup_hour` (UTC, `2`)
+  `victoriametrics-backup` takes a snapshot through the store's snapshot API, archives it with
+  its links resolved into `backup_dir` (`/var/backups/ayeops/metrics`) and deletes the
+  snapshot; the run reports as the built-in backup job `metrics`, with `backup-failed` and
+  `backup-missing`, and the archive is a file `offsite` can copy. Every `restore_test_days`
+  (`7`) it opens the newest archive in a scratch VictoriaMetrics and checks that it holds samples
+  of `up`; the alert `metrics-restore-test` fires when that fails or is overdue. Archives older
+  than `backup_keep_days` (`2`) are deleted. It runs on the pinned VictoriaMetrics image, so no
+  new image. Off by default, since every archive is a full copy of the store on the same disk
+  and the container counts 512 MiB towards the memory budget; `aye check` warns (rule
+  `metrics-backup`) for a `role: server` that runs `backups` without it.
+- Module `backup_jobs` take `when`, a setting the job exists only with.
 
 ### Changed
 

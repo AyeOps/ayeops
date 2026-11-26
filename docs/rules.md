@@ -15,8 +15,8 @@ error [service-alerts] services.web: service has no alert
 
 A warning is printed the same way, with `warning` in front, and does not fail `aye check`,
 `aye render` or `aye deploy`; `aye check --strict` fails on warnings too, for a pipeline that
-wants a clean manifest. Warnings are for what breaks nothing at run time: leftovers and
-waivers about to end.
+wants a clean manifest. Warnings are for what breaks nothing at run time: leftovers, waivers
+about to end and data nothing backs up yet.
 
 ## Unused entries
 
@@ -130,7 +130,8 @@ once, at the anchor. The same loader reads:
 | `mcp-open` | no `auth.open` route points at the MCP hub, which trusts whoever reaches it |
 | `backup-schedule` | a `backups` job's `schedule` is five cron fields within their ranges that fire at least twice in four years, so the longest gap between two runs, plus `grace`, is the age after which the job counts as missing |
 | `backup-textfile` | a host whose `backups` declares `jobs` runs `node` with a `textfile_dir`: those dump jobs run on the host and write their metrics there |
-| `backup-name` | a `backups` job is not named like a built-in dump of a module on the same host (`secrets`, `errors`), whose metrics carry the same `backup` label |
+| `backup-name` | a `backups` job is not named like a built-in dump of a module on the same host (`secrets`, `errors`, `metrics` with `backup: true`), whose metrics carry the same `backup` label |
+| `metrics-backup` | a `metrics` with `backup: true` has `role: server` and `backups` on its host, which declares the job `metrics` and alerts on it; it also **warns**, without failing, for a `role: server` without `backup: true` on a host that runs `backups`: its dumps are backed up and the store's history is not ([backup of the store](modules.md#backup-of-the-store)) |
 | `offsite-source` | the directory of an offsite `source` is a real directory below `/`, without wildcards |
 | `offsite-retention` | an offsite policy keeps at least one snapshot |
 | `offsite-drill` | a `restore_drill` has a `target: {host}` running a rest-server objectstore with `node`, a `verify: pg_dump` source, read-only checks with unique names, the same `version` as the other drills on that store, and a window from `schedule` for `max_minutes` that does not hold the store's `prune_schedule` |
@@ -177,7 +178,7 @@ hold the backups, offsite and objectstore settings of the manifest to it. All pa
 
 | Rule | Requirement | Why |
 |---|---|---|
-| `data-backup` | `backup` names a job of the `backups` module on the service's host: one of its `jobs` or a built-in dump (`secrets`, `errors`) | a promise about a dump nobody runs is a promise nobody keeps |
+| `data-backup` | `backup` names a job of the `backups` module on the service's host: one of its `jobs` or a built-in dump (`secrets`, `errors`, `metrics`) | a promise about a dump nobody runs is a promise nobody keeps |
 | `backup-rpo` | with an `rpo`: the job's longest gap between two scheduled runs plus `grace`, the age after which `backup-missing` fires, is at most the `rpo`; with `offsite` in `copies` also the age of the off-site copy, the longest gap between two daily copies in the offsite `timezone` (25 hours on the night the clocks go back) plus one `retry_minutes` | the threshold that pages someone must lie inside what the service may lose, or the backups can be healthy by every alert and still lose more than promised |
 | `backup-rto` | with an `rto` and a [restore drill](modules.md#restore-drill) on the off-site copy: the drill's `max_minutes` is at most the `rto` | a drill killed only after it ran longer than the `rto` passes while proving the restore too slow; with the limit, a restore slower than the `rto` fails the drill and fires `offsite-drill`. Without a drill the `rto` is documentation |
 | `backup-placement` | every entry of `copies` exists: `offsite` needs the offsite module on the host, and its `source` directory is where the job writes its `output` (not compared when the output's directory holds a `$(...)`); for a `criticality: critical` service also: at least two copies in different zones, one copy with another provider than the service's host when every copy's host names its `provider`, and at least one append-only copy | see below |

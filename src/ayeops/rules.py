@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ayeops.alert_links import board_from, dashboard_problems
 from ayeops.autopilot import autopilot_problems
-from ayeops.backups import backups_problems
+from ayeops.backups import backups_problems, metrics_backup_problems, metrics_backup_warnings
 from ayeops.baseline import DASHBOARD_UID as BASELINE_UID
 from ayeops.baseline import dashboard as baseline_dashboard
 from ayeops.baseline import is_baseline, rule_names, spec_problems
@@ -974,6 +974,7 @@ def check_warnings(
         return []
     day = today or today_in(manifest.timezone)
     problems = waiver_warnings(manifest, day) + datastore_warnings(manifest, compose_file_services)
+    problems += metrics_backup_warnings(manifest)
     if modules is not None:
         problems += unused_warnings(manifest, modules)
     return sorted(Finding(*problem, severity="warning") for problem in problems)
@@ -1019,6 +1020,7 @@ def check_manifest(
     findings += [Finding(*problem) for problem in downtime_problems(manifest)]
     findings += [Finding(*problem) for problem in offsite_problems(manifest)]
     findings += [Finding(*problem) for problem in backups_problems(manifest)]
+    findings += [Finding(*problem) for problem in metrics_backup_problems(manifest)]
     findings += [Finding(*problem) for problem in objectstore_problems(manifest)]
     findings += [Finding(*problem) for problem in datastore_problems(manifest)]
     findings += [Finding(*problem) for problem in replication_problems(manifest)]

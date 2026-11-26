@@ -227,7 +227,7 @@ Ports bind to `127.0.0.1` unless the manifest exposes them on an explicit addres
 
 | Module | Status | What it runs |
 |---|---|---|
-| `metrics` | stable | VictoriaMetrics single-node and vmagent; `role: agent` ships to a central host over remote_write |
+| `metrics` | stable | VictoriaMetrics single-node and vmagent; `role: agent` ships to a central host over remote_write; `backup: true` archives a snapshot of the store every day and opens the newest archive in a scratch VictoriaMetrics every week to prove it restores |
 | `logs` | stable | Loki and Alloy; Alloy ships the containers of the compose projects declared for its host, optionally journald, to a central Loki |
 | `node` | stable | node-exporter, plus textfile collectors for laptop battery capacity, status and AC, and for a pending reboot; `host-down` leaves out a host the manifest marks [`volatile`](docs/manifest.md#volatile-hosts-and-maintenance-windows), which warns only after a day away, and a host's declared maintenance windows hold its alerts back |
 | `containers` | stable | cAdvisor |
@@ -259,7 +259,7 @@ Ports bind to `127.0.0.1` unless the manifest exposes them on an explicit addres
 | `errors` | stable | self-hosted error tracking for the Sentry SDKs (GlitchTip by default) with its own PostgreSQL, Valkey and a daily dump; the UI behind the sign-in, ingest over the private network |
 | `mcp` | preview | optional: an MCP hub, agentgateway by default, with read-only tools from Grafana, VictoriaMetrics, S3 stores, the service catalog and its runbooks, other MCP servers and OpenAPI specs, reached over ssh on the host's loopback port; tools that write are denied unless allowed one by one |
 | `objectstore` | preview | the store for the off-site copies of other hosts: Garage (S3, one bucket with a quota) or an append-only restic REST server whose clients cannot delete their copies |
-| `backups` | preview | the metrics contract of every dump job, the host's own and the built-in dumps of `secrets` and `errors`: a wrapper writes start, end, success, size and duration of every run, alerts fire on a failed run and on a missing one with the threshold taken from the job's cron schedule, a job with a `command` becomes a systemd timer that `aye deploy` installs, and a service's [`data`](docs/manifest.md#data) declares the `rpo`, `rto` and copies its dump must meet, which `aye check` holds the jobs to |
+| `backups` | preview | the metrics contract of every dump job, the host's own and the built-in dumps of `secrets`, `errors` and the `metrics` store: a wrapper writes start, end, success, size and duration of every run, alerts fire on a failed run and on a missing one with the threshold taken from the job's cron schedule, a job with a `command` becomes a systemd timer that `aye deploy` installs, and a service's [`data`](docs/manifest.md#data) declares the `rpo`, `rto` and copies its dump must meet, which `aye check` holds the jobs to |
 | `offsite` | preview | restic copies of a host's newest backup file to an objectstore on another host or any restic repository, with retention (on the store when it is append-only), a weekly restore test and an optional restore drill that restores the copy into a throwaway PostgreSQL on the store and checks it |
 | `portal` | stable | two static pages generated from the manifest: where things run, and how to reach each service and where its secrets live, with product icons and live status, latency and resources read in the browser through a read-only metrics proxy; anything not described shows red |
 

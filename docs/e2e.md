@@ -96,7 +96,7 @@ daemon; `offline` is rendered and validated only.
 
 | Host | Modules | Started |
 |---|---|---|
-| `central` | metrics server, logs server, node, probes, grafana, checks, ingress, auth, portal, objectstore, secrets | everything |
+| `central` | metrics server with `backup: true`, logs server, node, probes, grafana, checks, ingress, auth, portal, objectstore, secrets, backups | everything |
 | `edge` | metrics agent, logs agent, node, containers, disk-forecast, network, offsite, hygiene (`dry_run`) | everything |
 | `offline` | metrics agent, cloudflare, smart, gpu | `docker compose config -q` only |
 
@@ -131,6 +131,10 @@ rule, dashboard or datasource is covered without touching the test.
 - Loki returns a line pushed to it, and holds container logs from every host that runs Alloy.
 - Offsite: the agent made a snapshot of `/tmp/aye-e2e-backups/e2e.dump` in Garage on `central`,
   its restore test passed, and `restic dump latest` gives back the same bytes.
+- Metrics store backup: two minutes after the start `victoriametrics-backup` archived a
+  snapshot of the store (`ayeops_backup_last_run_success{backup="metrics"} 1` with a size),
+  deleted the snapshot (`vm_snapshots 0`), and its restore test opened the archive in a scratch
+  VictoriaMetrics and found series of `up` (`ayeops_backup_restore_test_ok 1`).
 - Hygiene: one pass in dry-run removes no image and reports `ayeops_hygiene_dry_run 1`.
 - Portal: every page answers `200`, and `services.html` names every service of every host,
   `offline` included, and every catalog service.

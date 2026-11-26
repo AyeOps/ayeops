@@ -5,9 +5,10 @@ A dump job (label `backup`) has no successful run within the longest gap of its 
 declared, or it runs and its metrics do not arrive. Silence counts as failure: there may be no
 dump younger than the schedule promises. Setup: [backups](../modules.md#backups).
 
-The label names a job of the manifest or a built-in dump, `secrets` (`infisical-backup`) or
-`errors` (`glitchtip-backup`); for those two, start with
-[backup-failed, built-in dumps](backup-failed.md#built-in-dumps).
+The label names a job of the manifest or a built-in dump, `secrets` (`infisical-backup`),
+`errors` (`glitchtip-backup`) or `metrics` (`victoriametrics-backup`); for those, start with
+[backup-failed, built-in dumps](backup-failed.md#built-in-dumps) or
+[backup-failed, the metrics store](backup-failed.md#the-metrics-store).
 
 ## What to do
 

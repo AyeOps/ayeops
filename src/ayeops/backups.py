@@ -15,6 +15,8 @@ from ayeops.manifest import Manifest
 from ayeops.registry import load_modules
 
 MODULE = "backups"
+METRICS = "metrics"
+SERVER = "server"
 FIELDS = (
     ("minute", 0, 59),
     ("hour", 0, 23),
@@ -198,6 +200,8 @@ def builtin_jobs(all_settings: dict[str, Any]) -> list[Job]:
         if module is None:
             continue
         for entry in module.backup_jobs:
+            if "when" in entry and not settings.get(entry["when"]):
+                continue
             schedule = TEMPLATES.from_string(entry["schedule"]).render(settings=settings)
             jobs.append(
                 Job(
@@ -408,3 +412,52 @@ def backups_problems(manifest: Manifest) -> list[tuple[str, str, str]]:
                 )
             problems += job_problems(where, job)
     return problems
+
+
+def metrics_settings(manifest: Manifest) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
+    module = load_modules()[METRICS]
+    return [
+        (host, modules, module.settings(modules[METRICS]))
+        for host in sorted(manifest.hosts)
+        for modules in [manifest.host_modules(host)]
+        if METRICS in modules
+    ]
+
+
+def metrics_backup_problems(manifest: Manifest) -> list[tuple[str, str, str]]:
+    problems: list[tuple[str, str, str]] = []
+    for host, modules, settings in metrics_settings(manifest):
+        if not settings["backup"]:
+            continue
+        path = f"hosts.{host}.modules.{METRICS}.backup"
+        if settings["role"] != SERVER:
+            problems.append(
+                (
+                    path,
+                    "metrics-backup",
+                    "only role server keeps a store to back up; an agent ships its samples away",
+                )
+            )
+        if MODULE not in modules:
+            problems.append(
+                (
+                    path,
+                    "metrics-backup",
+                    f"the archive reports as the backup job {METRICS}, declared and alerted on by"
+                    " the backups module: add backups: {} to this host",
+                )
+            )
+    return problems
+
+
+def metrics_backup_warnings(manifest: Manifest) -> list[tuple[str, str, str]]:
+    return [
+        (
+            f"hosts.{host}.modules.{METRICS}",
+            "metrics-backup",
+            "this host backs up its dumps but not its metrics store: set backup: true for a daily"
+            " snapshot archive and a weekly restore test of it",
+        )
+        for host, modules, settings in metrics_settings(manifest)
+        if settings["role"] == SERVER and not settings["backup"] and MODULE in modules
+    ]

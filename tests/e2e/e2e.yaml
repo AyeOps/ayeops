@@ -17,6 +17,7 @@ hosts:
         role: server
         scrape_interval: 15s
         expose: [8428]
+        backup: true
       logs:
         role: server
         expose: [3100]
