@@ -161,6 +161,7 @@ once, at the anchor. The same loader reads:
 | `icon-known` | an `icon` on a host, service or external is a vendored icon or glyph, see [icons](manifest.md#icons) |
 | `brand-file` | `brand.logo`, `brand.logo_dark` and `brand.favicon` name an existing `.svg`, `.png`, `.webp` or `.ico` file next to the manifest |
 | `client-endpoint` | every entry in a service's `clients` is in the manifest |
+| `slack-webhook` | no value of the manifest holds a Slack webhook URL (`hooks.slack.com/` or `hooks.slack-gov.com/`, any case): the URL is the whole credential and goes into `AYE_SLACK_WEBHOOK_URL` in the `.env` of the host, see [Slack](manifest.md#slack) |
 | `text-hygiene` | no key or value carries a character a reader cannot see or tell apart, see [below](#the-text-hygiene-rule); typographic quotes and dashes are fine, values are prose |
 | `flow-endpoint` | both ends of every entry in `flows` are in the manifest |
 | `depends-known` | every `depends_on` entry is a service, a module service, a cloud dependency or `external:<name>` from `externals` |

@@ -224,6 +224,7 @@ PREFIXED: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
         ("github-token", EDGE, r"(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})"),
         ("gitlab-token", EDGE, r"glpat-[A-Za-z0-9_-]{20,}"),
         ("slack-token", EDGE, r"xox[abposr]-[A-Za-z0-9-]{10,}"),
+        ("slack-webhook", EDGE, r"https://hooks\.slack(?:-gov)?\.com/[^\s\"'<>]{8,}"),
         ("stripe-key", EDGE, r"(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}"),
         ("google-key", EDGE, r"AIza[0-9A-Za-z_-]{35}"),
         ("aws-key", EDGE, r"(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}(?![0-9A-Z])"),

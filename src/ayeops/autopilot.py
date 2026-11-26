@@ -163,8 +163,8 @@ def autopilot_problems(manifest: Manifest) -> list[Problem]:
                 (
                     "alerting.contact",
                     "autopilot-contact",
-                    "autopilot needs contact telegram or email: its webhook is a route of the "
-                    "notification policy, which needs a default contact",
+                    "autopilot needs contact telegram, slack or email: its webhook is a route "
+                    "of the notification policy, which needs a default contact",
                 )
             )
         if settings["runner"] == "claude-code" and not settings.get("claude_binary"):

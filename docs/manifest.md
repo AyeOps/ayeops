@@ -19,7 +19,7 @@ Names (project, hosts, services, alerts) match `^[a-z][a-z0-9-]{0,39}$`.
 | `timezone` | no | IANA time zone of the fleet, e.g. `Europe/Kyiv`, default `UTC`: the zone of night and quiet hours (`incidents`, `oncall`, whose incident topics also show their times in it) and of daily schedules (`updates`, `image-updates`, `vulns`, `eol`, `offsite`, the sentinel `digest`) wherever a module does not set its own `timezone`; an unknown zone fails rule `timezone`. `incidents`, `oncall` and `autopilot` read the zone from the host's `/usr/share/zoneinfo`, mounted read-only; on a host without it (Alpine without `tzdata`) `UTC` still works and any other zone stops the agent at its start |
 | `module_paths` | no | directories with your own modules, relative to the manifest, see [modules](modules.md#write-your-own-module) |
 | `rules.waivers_need_until` | no | `true` makes every [waiver](#waivers) name its end with `until`, default `false` |
-| `alerting.contact` | no | `telegram` (default), `email` (needs `mail` and `alerting.emails`) or `none` |
+| `alerting.contact` | no | `telegram` (default), `email` (needs `mail` and `alerting.emails`), `slack` (an incoming webhook, see [Slack](#slack)) or `none` |
 | `alerting.emails` | with contact `email` | addresses the `email` contact point sends alerts to |
 | `mail` | no | the SMTP relay for outgoing mail, see [mail](#mail) |
 | `status_page` | for `aye status` | `{hostname, title, locale, notify, access}` of the public [status page](status.md); `title` defaults to `project`, `locale` (`uk`, `en`, `ru`) to `en`; `notify: {telegram_chat_id, min_state}` turns on the Worker's [Telegram notices](status.md#notices); `access: {team, aud}` (the Zero Trust team name and the AUD tag of the Access application) opens the [admin API](status.md#admin), which refuses every request without it |
@@ -415,6 +415,39 @@ domain of `from` does not look like a domain), `mail-tls` (`tls: tls` without po
 `starttls`/`none` on 465), `mail-contact` (contact `email` without `mail` or `emails`, or
 `emails` with another contact).
 
+## Slack
+
+`alerting.contact: slack` sends the alerts through Grafana's Slack contact point to a Slack
+[incoming webhook](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks):
+
+```yaml
+alerting:
+  contact: slack
+```
+
+Create a Slack app in the workspace, turn on **Incoming Webhooks**, add a webhook for the alert
+channel and put its URL (`https://hooks.slack.com/services/...`) into `AYE_SLACK_WEBHOOK_URL`
+in the `.env` of the Grafana host and of every sentinel host. The channel is the one the
+webhook was made for; the manifest names none. The URL is the whole credential, so it never
+goes into the manifest (rule `slack-webhook`, which refuses `hooks.slack.com/` anywhere in it):
+the render writes only `${AYE_SLACK_WEBHOOK_URL}` into the provisioning file and
+`AYE_SLACK_WEBHOOK_URL=replace-me` into `.env.example`, Grafana reads the value from its
+environment and keeps it as a secure setting of the contact point, and `aye doctor` fails while
+the variable is missing. A Slack message carries what the Telegram one does: the title names the
+state, the alert and, for a group, its scope; the text holds the count, the hosts or the
+summaries and the runbook and dashboard links, see [notification grouping](modules.md#grafana).
+
+What follows the contact and what does not:
+
+| Part | With contact `slack` |
+|---|---|
+| Grafana alerts, every severity | Slack |
+| `oncall`, `autopilot` routes | their own webhooks first, then Slack as the catch-all, as with the other contacts |
+| [sentinel](modules.md#sentinel) | Slack, through the same webhook, the backup digest included |
+| [oncall](modules.md#oncall) messages to the person on call, topics in the ops group | Telegram only: the acknowledge button needs a bot; set `AYE_ONCALL_TELEGRAM_TOKEN` and `person.telegram_chat_id` as before |
+| [autopilot](modules.md#autopilot) notes to the person on call | Telegram only, through the oncall bot |
+| status Worker [notices](status.md#notices) | Telegram only, to `status_page.notify.telegram_chat_id` |
+
 ## Environment variables
 
 Rendered compose projects read these at `docker compose up`; [`.env.example`](../.env.example)
@@ -425,8 +458,9 @@ lists them and every rendered host gets its own `.env.example` with the subset i
 | `AYE_GRAFANA_ADMIN_USER` | grafana | admin login |
 | `AYE_GRAFANA_ADMIN_PASSWORD` | grafana | admin password |
 | each `password_env` | grafana `datasources` | password of that datasource; the example names it `AYE_GRAFANA_PG_PASSWORD` |
-| `AYE_TELEGRAM_BOT_TOKEN` | grafana, contact `telegram`; sentinel | bot token from BotFather |
-| `AYE_TELEGRAM_CHAT_ID` | grafana, contact `telegram`; sentinel | chat that receives alerts |
+| `AYE_TELEGRAM_BOT_TOKEN` | grafana, contact `telegram`; sentinel, unless contact `slack` | bot token from BotFather |
+| `AYE_TELEGRAM_CHAT_ID` | grafana, contact `telegram`; sentinel, unless contact `slack` | chat that receives alerts |
+| `AYE_SLACK_WEBHOOK_URL` | grafana and sentinel, contact `slack` | incoming webhook URL of the alert channel, see [Slack](#slack) |
 | `AYE_SENTINEL_PING_URL` | sentinel, optional | dead-man URL pinged after every round where all checks passed, e.g. `https://hc-ping.com/<uuid>`; empty turns the ping off |
 | `AYE_SMTP_USER` | grafana, secrets, with `mail` | SMTP login of the relay |
 | `AYE_SMTP_PASSWORD` | grafana, secrets, with `mail` | SMTP password or API key of the relay |
