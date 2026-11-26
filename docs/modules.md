@@ -15,8 +15,8 @@ Every built-in module, what it runs, its settings and its alerts. The module tab
 | [`gpu`](#gpu) | NVIDIA GPU temperature, memory and driver health |
 | [`network`](#network) | link state, speed, errors and Wi-Fi signal of the declared interfaces |
 | [`disk-forecast`](#disk-forecast) | an alert when a filesystem fills up within 7 days |
-| [`checks`](#checks) | the runners of the HTTP, TCP, SMTP, DNS, script and SQL checks declared under services |
 | [`probes`](#probes) | blackbox-exporter for HTTP, TLS expiry, the host's own internet and the private network links, RDAP for domains |
+| [`checks`](#checks) | the runners of the HTTP, TCP, SMTP, DNS, script and SQL checks declared under services |
 | [`hygiene`](#hygiene) | a nightly prune of stopped containers, unused images and build cache |
 | [`reconciler`](#reconciler) | starts again a declared container that Docker left down, with a back-off |
 | [`image-updates`](#image-updates) | Diun over the containers on a floating tag |
