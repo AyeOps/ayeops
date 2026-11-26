@@ -153,6 +153,7 @@ def test_a_replica_cannot_stream_from_itself(data: dict[str, Any]) -> None:
             "a service cannot be the replica of itself",
         )
     ]
+    assert pairs(manifest_from(data)) == []
 
 
 @pytest.mark.parametrize("state", ["planned", "disabled"])
@@ -316,6 +317,18 @@ def test_three_replicas_under_one_name_each_name_the_other_two(data: dict[str, A
         "acme-db-bi and acme-db-replica, acme-db-ro",
         "acme-db-replica and acme-db-bi, acme-db-ro",
         "acme-db-ro and acme-db-bi, acme-db-replica",
+    ]
+
+
+def test_a_unique_name_sorted_first_does_not_hide_a_shared_one_after_it(
+    data: dict[str, Any],
+) -> None:
+    second_replica(data, "acme-db-ro", application_name="walreceiver")
+    second_replica(data, "acme-db-bi", application_name="walreceiver")
+    found = [path for path, rule, _ in problems(data) if rule == "replication-name"]
+    assert found == [
+        "services.acme-db-bi.replication.application_name",
+        "services.acme-db-ro.replication.application_name",
     ]
 
 

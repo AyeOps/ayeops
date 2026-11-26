@@ -19,6 +19,7 @@ WAL_DIFF = "pg_stat_replication_pg_wal_lsn_diff"
 REPLICA_METRICS = (IS_REPLICA,)
 PRIMARY_METRICS = (IS_REPLICA, WAL_BYTES, WAL_DIFF)
 STREAMING = 'state="streaming"'
+ITSELF = "a service cannot be the replica of itself"
 
 Problem = tuple[str, str, str]
 
@@ -38,9 +39,7 @@ def spec_of(entry: dict[str, Any]) -> dict[str, Any] | None:
     return spec if isinstance(spec, dict) else None
 
 
-def primary_problem(manifest: Manifest, name: str, primary: str) -> str | None:
-    if primary == name:
-        return "a service cannot be the replica of itself"
+def primary_problem(manifest: Manifest, primary: str) -> str | None:
     if primary not in manifest.services:
         return f"no service {primary}: name the database service the replica streams from"
     entry = manifest.services[primary]
@@ -112,7 +111,7 @@ def pair_of(manifest: Manifest, name: str, entry: dict[str, Any]) -> Pair | None
     if spec is None:
         return None
     primary = str(spec["primary"])
-    if primary_problem(manifest, name, primary) is not None:
+    if primary_problem(manifest, primary) is not None:
         return None
     return Pair(
         name,
@@ -157,7 +156,7 @@ def replication_problems(manifest: Manifest) -> list[Problem]:
         if spec is None:
             continue
         primary = str(spec["primary"])
-        found = primary_problem(manifest, name, primary)
+        found = ITSELF if primary == name else primary_problem(manifest, primary)
         if found is not None:
             problems.append((f"services.{name}.replication.primary", "replication-primary", found))
             continue
