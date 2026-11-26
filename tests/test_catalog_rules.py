@@ -165,7 +165,7 @@ def test_agent_without_remote_write_is_rejected(data: dict[str, Any]) -> None:
 
 def test_remote_write_target_must_expose_the_metrics_port(data: dict[str, Any]) -> None:
     data["hosts"]["central"]["modules"]["metrics"]["expose"] = []
-    assert rules_hit(data) == {"remote-write-target"}
+    assert rules_hit(data) == {"remote-write-target", "sentinel-digest"}
 
 
 def test_remote_write_target_must_have_an_address(data: dict[str, Any]) -> None:

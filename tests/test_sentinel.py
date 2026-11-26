@@ -1462,8 +1462,11 @@ def test_main_starts_the_watch_in_a_daemon_thread_and_serves_the_endpoint(
     assert senders == [(("123:secret", "-100"), {})]
     assert len(sentinels) == len(threads) == 1
     sentinel, thread = sentinels[0], threads[0]
-    assert built == [(s.config_from(env), s.http_fetch, s.certificate_expiry, "send", wall)]
+    assert built == [
+        (s.config_from(env), s.http_fetch, s.certificate_expiry, "send", wall, s.query_fetch)
+    ]
     assert built[0][1] is s.http_fetch and built[0][2] is s.certificate_expiry
+    assert built[0][5] is s.query_fetch
     assert sentinel.last_round == 123.5
     assert thread.args == ()
     assert sorted(thread.kwargs) == ["args", "daemon", "target"]
@@ -1476,6 +1479,663 @@ def test_main_starts_the_watch_in_a_daemon_thread_and_serves_the_endpoint(
     assert (served, order) == ([1], ["watch", "serve"])
     flag = "true" if ping else "false"
     assert capsys.readouterr().out == (
-        '{"checks": ["v"], "event": "start", "failures_before_alert": 3, '
+        '{"checks": ["v"], "digest": "", "event": "start", "failures_before_alert": 3, '
         f'"ping": {flag}, "reminder_seconds": 21600, "watch": "central"}}\n'
     )
+
+
+DAY = 86400.0
+EIGHT = START + 8 * HOUR
+DIGEST_CALL = f"{VM_QUERY}?{s.urllib.parse.urlencode({'query': s.DIGEST_QUERY})}"
+FOOTER = "Read from central by the AyeOps sentinel on edge, every day at 08:00 UTC."
+
+
+def series(name: str, value: Any, **pairs: str) -> dict[str, Any]:
+    return {"metric": {"__name__": name, **pairs}, "value": [START, str(value)]}
+
+
+def vm_series(*items: Any) -> bytes:
+    return json.dumps(
+        {"status": "success", "data": {"resultType": "vector", "result": list(items)}}
+    ).encode()
+
+
+def job(name: str, value: Any, backup: str = "acme-db", host: str = "edge") -> dict[str, Any]:
+    return series(f"ayeops_backup_{name}", value, host=host, backup=backup)
+
+
+def copy(name: str, value: Any, host: str = "edge") -> dict[str, Any]:
+    return series(f"ayeops_offsite_{name}", value, host=host)
+
+
+FRESH_SERIES = (
+    job("max_age_seconds", 93600),
+    job("last_success_timestamp_seconds", EIGHT - 3 * HOUR),
+    job("last_run_success", 1),
+    job("last_size_bytes", 1_288_490_189),
+    copy("last_success_timestamp_seconds", EIGHT - 2 * HOUR),
+    copy("restore_test_ok", 1),
+    copy("restore_test_last_success_timestamp_seconds", EIGHT - 2 * DAY - HOUR),
+)
+FRESH_DIGEST = (
+    "💾 acme: backup digest, 2026-01-01 08:00 UTC\n"
+    "✅ All 2 backups fresh\n"
+    "• edge/acme-db: last success 3h 0m ago, 1.2 GiB\n"
+    "• edge off-site copy: last copy 2h 0m ago, restore test passed 2d 1h ago\n" + FOOTER
+)
+
+
+def digest_config(**changes: Any) -> Any:
+    return config(**{"digest_at": "08:00", "digest_url": VM_QUERY, **changes})
+
+
+@pytest.fixture
+def digest_rig() -> tuple[Any, FakeClock, FakeHttp, FakeTelegram]:
+    clock = FakeClock()
+    vm = FakeHttp()
+    vm.answers[VM_QUERY] = (200, vm_series(*FRESH_SERIES))
+    telegram = FakeTelegram()
+    sentinel = s.Sentinel(digest_config(), FakeHttp(), no_expiry, telegram, clock, vm)
+    return sentinel, clock, vm, telegram
+
+
+@pytest.mark.parametrize(
+    ("size", "text"),
+    [
+        (-5, "0 B"),
+        (0, "0 B"),
+        (0.4, "0 B"),
+        (1023, "1023 B"),
+        (1024, "1.0 KiB"),
+        (1536, "1.5 KiB"),
+        (1048575, "1024.0 KiB"),
+        (1048576, "1.0 MiB"),
+        (1.5 * 1024**3, "1.5 GiB"),
+        (1024**4, "1.0 TiB"),
+        (1024**5, "1024.0 TiB"),
+    ],
+)
+def test_format_bytes(size: float, text: str) -> None:
+    assert s.format_bytes(size) == text
+
+
+@pytest.mark.parametrize(
+    ("text", "at"), [("08:00", (8, 0)), (" 23:59 ", (23, 59)), ("00:07", (0, 7))]
+)
+def test_parse_clock_reads_hours_and_minutes(text: str, at: tuple[int, int]) -> None:
+    assert s.parse_clock(text) == at
+
+
+@pytest.mark.parametrize("text", ["24:00", "8:00", "08:60", "", "08:00:00", "0800"])
+def test_parse_clock_refuses_anything_but_hh_mm(text: str) -> None:
+    message = f"^not a time of day like 08:00: {re.escape(repr(text))}$"
+    with pytest.raises(ValueError, match=message):
+        s.parse_clock(text)
+
+
+def test_time_zone_falls_back_to_utc_only_for_utc(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert str(s.time_zone("Europe/Kyiv")) == "Europe/Kyiv"
+
+    def missing(key: str) -> Any:
+        raise s.ZoneInfoNotFoundError(key)
+
+    monkeypatch.setattr(s, "ZoneInfo", missing)
+    assert s.time_zone("UTC") is s.UTC
+    with pytest.raises(s.ZoneInfoNotFoundError):
+        s.time_zone("Europe/Kyiv")
+
+
+@pytest.mark.parametrize(
+    ("after", "at", "zone", "slot"),
+    [
+        (START + 5 * HOUR, "08:00", "UTC", EIGHT),
+        (EIGHT - 1, "08:00", "UTC", EIGHT),
+        (EIGHT, "08:00", "UTC", EIGHT + DAY),
+        (EIGHT + 1, "08:00", "UTC", EIGHT + DAY),
+        (START, "23:59", "UTC", START + 23 * HOUR + 59 * 60),
+        (START, "08:00", "Europe/Kyiv", START + 6 * HOUR),
+        (START + 7 * HOUR, "08:00", "Europe/Kyiv", START + DAY + 6 * HOUR),
+        (START + 2 * HOUR, "22:00", "America/New_York", START + 3 * HOUR),
+        (START + 20 * HOUR, "04:00", "Asia/Tokyo", START + DAY + 19 * HOUR),
+    ],
+)
+def test_next_digest_is_the_first_slot_after_the_moment(
+    after: float, at: str, zone: str, slot: float
+) -> None:
+    assert s.next_digest(after, at, s.time_zone(zone)) == slot
+
+
+def test_next_digest_keeps_the_local_time_across_a_clock_change() -> None:
+    zone = s.time_zone("Europe/Kyiv")
+    before = s.datetime(2026, 3, 28, 7, 0, tzinfo=s.UTC).timestamp()
+    after = s.datetime(2026, 3, 29, 5, 0, tzinfo=s.UTC).timestamp()
+    assert s.next_digest(before, "08:00", zone) == after
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        "junk",
+        {"value": [1, "1"]},
+        {"metric": "x", "value": [1, "1"]},
+        {"metric": {}, "value": "1"},
+        {"metric": {}, "value": [1]},
+        {"metric": {}, "value": [1, "1", 2]},
+        {"metric": {}, "value": [1, "x"]},
+        {"metric": {}, "value": [1, None]},
+        {"metric": {}, "value": [1, "NaN"]},
+        {"metric": {}, "value": [1, "+Inf"]},
+        {"metric": {}, "value": [1, "-Inf"]},
+    ],
+)
+def test_series_value_skips_what_is_not_one_finite_sample(item: Any) -> None:
+    assert s.series_value(item) is None
+
+
+def test_series_value_reads_the_name_the_labels_and_the_number() -> None:
+    assert s.series_value(series("a", "1.5", host="h")) == (
+        "a",
+        {"__name__": "a", "host": "h"},
+        1.5,
+    )
+    plain = {"metric": {"host": "h"}, "value": [1, "2"]}
+    assert s.series_value(plain) == ("", {"host": "h"}, 2.0)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        [],
+        {"status": "error"},
+        {"data": {"result": []}},
+        {"status": "success"},
+        {"status": "success", "data": None},
+        {"status": "success", "data": {"result": "x"}},
+    ],
+)
+def test_backups_from_refuses_what_is_not_a_query_result(answer: Any) -> None:
+    assert s.backups_from(answer) is None
+
+
+def test_backups_from_an_empty_result_is_an_empty_list() -> None:
+    assert s.backups_from(json.loads(vm_series())) == []
+
+
+def test_backups_from_groups_by_host_and_job_and_keeps_the_worst_verdict() -> None:
+    answer = json.loads(
+        vm_series(
+            "junk",
+            series("up", 1, host="edge"),
+            {"metric": {"host": "x"}, "value": [1, "1"]},
+            job("max_age_seconds", 93600),
+            job("max_age_seconds", 90000),
+            job("last_success_timestamp_seconds", 100),
+            job("last_success_timestamp_seconds", 200),
+            job("declared_timestamp_seconds", 50),
+            job("last_run_success", 1),
+            job("last_run_success", 0),
+            job("last_size_bytes", 10),
+            job("last_success_timestamp_seconds", 300, backup="gone"),
+            job("max_age_seconds", 7200, backup="glitchtip-db", host="central"),
+            copy("last_success_timestamp_seconds", 400),
+            copy("restore_test_ok", 0),
+            copy("restore_test_ok", 1),
+            copy("restore_test_last_success_timestamp_seconds", 600),
+            copy("restore_test_last_success_timestamp_seconds", 500),
+            copy("max_age_seconds", 3600),
+            copy("restore_test_ok", 1, host="central"),
+            series("ayeops_backup_max_age_seconds", 60, backup="nohost"),
+            series("ayeops_backup_max_age_seconds", 5, host="z"),
+            series("up", 1, host="edge"),
+            "junk",
+        )
+    )
+    assert s.backups_from(answer) == [
+        s.Backup("", "dump", "nohost", limit=60.0),
+        s.Backup("central", "dump", "glitchtip-db", limit=7200.0),
+        s.Backup("central", "offsite", "", restore_ok=1.0),
+        s.Backup(
+            "edge",
+            "dump",
+            "acme-db",
+            limit=93600.0,
+            success=200.0,
+            declared=50.0,
+            run_ok=0.0,
+            size=10.0,
+        ),
+        s.Backup(
+            "edge", "offsite", "", limit=3600.0, success=400.0, restore_ok=0.0, restore_at=600.0
+        ),
+        s.Backup("z", "dump", "", limit=5.0),
+    ]
+
+
+def test_backup_labels_and_defaults() -> None:
+    backup = s.Backup("edge", "dump", "acme-db")
+    assert backup.label == "edge/acme-db"
+    assert s.Backup("edge", "offsite").label == "edge off-site copy"
+    assert s.Backup("edge", "offsite").name == ""
+    assert (backup.limit, backup.success, backup.declared, backup.run_ok) == (None,) * 4
+    assert (backup.size, backup.restore_ok, backup.restore_at) == (None,) * 3
+    with pytest.raises(AttributeError):
+        backup.host = "x"
+
+
+@pytest.mark.parametrize(
+    ("fields", "ok", "line"),
+    [
+        ({"limit": 3600, "success": EIGHT - 3600}, True, "last success 1h 0m ago"),
+        (
+            {"limit": 3600, "success": EIGHT - 3601},
+            False,
+            "stale, last success 1h 0m ago, limit 1h 0m",
+        ),
+        (
+            {"limit": 3600, "success": EIGHT - 60, "run_ok": 0},
+            False,
+            "last run failed, last success 1m ago",
+        ),
+        ({"limit": 3600, "success": EIGHT - 60, "run_ok": 1}, True, "last success 1m ago"),
+        (
+            {"limit": 3600, "success": EIGHT - 7200, "run_ok": 0, "size": 2048},
+            False,
+            "stale, last run failed, last success 2h 0m ago, limit 1h 0m, 2.0 KiB",
+        ),
+        ({"limit": 3600, "declared": EIGHT - 300}, True, "no success yet, declared 5m ago"),
+        (
+            {"limit": 3600, "declared": EIGHT - 3601},
+            False,
+            "stale, no success yet, declared 1h 0m ago, limit 1h 0m",
+        ),
+        (
+            {"limit": 3600, "success": EIGHT - 60, "declared": EIGHT - 7200, "size": 2048},
+            True,
+            "last success 1m ago, 2.0 KiB",
+        ),
+        ({"limit": 3600, "success": EIGHT, "size": 0}, True, "last success 0s ago, 0 B"),
+        ({"limit": 3600}, False, "no run recorded"),
+        ({"success": EIGHT, "declared": EIGHT}, False, "no run recorded"),
+    ],
+)
+def test_a_dump_line_tells_its_age_against_its_limit(
+    fields: dict[str, float], ok: bool, line: str
+) -> None:
+    backup = s.Backup("h", "dump", "j", **fields)
+    assert s.backup_line(backup, EIGHT) == (ok, f"• h/j: {line}")
+
+
+@pytest.mark.parametrize(
+    ("fields", "ok", "line"),
+    [
+        (
+            {"success": EIGHT - 93600, "restore_ok": 1, "restore_at": EIGHT - 691200},
+            True,
+            "last copy 1d 2h ago, restore test passed 8d 0h ago",
+        ),
+        (
+            {"success": EIGHT - 93601, "restore_ok": 1, "restore_at": EIGHT - 60},
+            False,
+            "stale, last copy 1d 2h ago, restore test passed 1m ago",
+        ),
+        (
+            {"limit": 3600, "success": EIGHT - 3600, "restore_at": EIGHT - 60},
+            True,
+            "last copy 1h 0m ago, restore test passed 1m ago",
+        ),
+        (
+            {"limit": 3600, "success": EIGHT - 3601, "restore_at": EIGHT - 60},
+            False,
+            "stale, last copy 1h 0m ago, restore test passed 1m ago",
+        ),
+        (
+            {"restore_ok": 1, "restore_at": EIGHT - 60},
+            False,
+            "no copy recorded, restore test passed 1m ago",
+        ),
+        (
+            {"success": EIGHT - 60, "restore_ok": 0, "restore_at": EIGHT - 60},
+            False,
+            "restore test failed, last copy 1m ago, restore test passed 1m ago",
+        ),
+        (
+            {"success": EIGHT - 60, "restore_ok": 1},
+            False,
+            "no restore test passed, last copy 1m ago",
+        ),
+        (
+            {"success": EIGHT - 60, "restore_at": EIGHT - 691201},
+            False,
+            "restore test overdue, last copy 1m ago, restore test passed 8d 0h ago",
+        ),
+        ({}, False, "no copy recorded, no restore test passed"),
+    ],
+)
+def test_an_off_site_line_tells_the_copy_and_the_restore_test(
+    fields: dict[str, float], ok: bool, line: str
+) -> None:
+    backup = s.Backup("h", "offsite", **fields)
+    assert s.backup_line(backup, EIGHT) == (ok, f"• h off-site copy: {line}")
+
+
+def test_fit_keeps_every_line_up_to_the_limit_and_counts_the_rest() -> None:
+    lines = ["x" * 20, "y" * 20]
+    full = "h\n" + "x" * 20 + "\n" + "y" * 20 + "\nt"
+    one = "h\n" + "x" * 20 + "\n• and 1 more\nt"
+    assert (len(full), len(one)) == (45, 37)
+    assert s.fit(["h"], lines, ["t"], 45) == full
+    assert s.fit(["h"], lines, ["t"], 44) == one
+    assert s.fit(["h"], lines, ["t"], 37) == one
+    assert s.fit(["h"], lines, ["t"], 36) == "h\n• and 2 more\nt"
+    assert s.fit(["h"], lines, ["t"], 1) == "h\n• and 2 more\nt"
+    assert s.fit(["h", "o"], [], ["t"], 1) == "h\no\nt"
+    assert lines == ["x" * 20, "y" * 20]
+
+
+def test_digest_of_fresh_backups_says_so_and_lists_each() -> None:
+    backups = s.backups_from(json.loads(vm_series(*FRESH_SERIES)))
+    assert s.digest_text(digest_config(), backups, "", EIGHT) == FRESH_DIGEST
+
+
+def test_digest_puts_the_stale_and_failed_backups_first_and_names_them() -> None:
+    backups = [
+        s.Backup("central", "dump", "glitchtip-db", limit=93600, success=EIGHT - 60),
+        s.Backup("edge", "dump", "acme-db", limit=90000, success=EIGHT - 26 * HOUR, size=1024),
+        s.Backup("edge", "offsite", success=EIGHT - 60, restore_ok=0, restore_at=EIGHT - DAY),
+    ]
+    assert s.digest_text(digest_config(), backups, "", EIGHT) == (
+        "💾 acme: backup digest, 2026-01-01 08:00 UTC\n"
+        "🟠 2 of 3 backups stale or failed: edge/acme-db, edge off-site copy\n"
+        "• edge/acme-db: stale, last success 1d 2h ago, limit 1d 1h, 1.0 KiB\n"
+        "• edge off-site copy: restore test failed, last copy 1m ago,"
+        " restore test passed 1d 0h ago\n"
+        "• central/glitchtip-db: last success 1m ago\n" + FOOTER
+    )
+
+
+def test_digest_without_backups_says_none_are_reported() -> None:
+    assert s.digest_text(digest_config(), [], "", EIGHT) == (
+        "💾 acme: backup digest, 2026-01-01 08:00 UTC\n"
+        "🟠 No backups reported to central: no dump job, no off-site copy\n" + FOOTER
+    )
+
+
+def test_digest_without_metrics_names_the_reason() -> None:
+    changed = digest_config(digest_at="21:30", digest_timezone="Europe/Kyiv", origin="web")
+    assert s.digest_text(changed, None, "HTTP 503", EIGHT) == (
+        "💾 acme: backup digest, 2026-01-01 08:00 UTC\n"
+        "🟠 Cannot read the backup metrics from central: HTTP 503\n"
+        "Read from central by the AyeOps sentinel on web, every day at 21:30 Europe/Kyiv."
+    )
+
+
+@pytest.mark.parametrize(
+    ("count", "names"),
+    [
+        (5, "h/a, h/b, h/c, h/d, h/e"),
+        (6, "h/a, h/b, h/c, h/d, h/e and 1 more"),
+        (7, "h/a, h/b, h/c, h/d, h/e and 2 more"),
+    ],
+)
+def test_digest_names_five_problems_in_its_summary(count: int, names: str) -> None:
+    backups = [s.Backup("h", "dump", name, limit=1) for name in "abcdefg"[:count]]
+    text = s.digest_text(digest_config(), backups, "", EIGHT)
+    assert text.split("\n")[1] == f"🟠 {count} of {count} backups stale or failed: {names}"
+    assert text.count("no run recorded") == count
+
+
+def test_a_long_digest_stays_under_the_telegram_limit() -> None:
+    backups = [
+        s.Backup(f"host-{index:03d}", "dump", "db", limit=HOUR, success=EIGHT - 60)
+        for index in range(300)
+    ]
+    text = s.digest_text(digest_config(), backups, "", EIGHT)
+    assert len(text) <= s.DIGEST_LIMIT
+    lines = text.split("\n")
+    kept = len(lines) - 4
+    assert lines[1] == "✅ All 300 backups fresh"
+    assert lines[2] == "• host-000/db: last success 1m ago"
+    assert lines[-2] == f"• and {300 - kept} more"
+    assert lines[-1] == FOOTER
+    extra = f"• host-{kept:03d}/db: last success 1m ago"
+    assert len("\n".join([*lines[:-2], extra, f"• and {299 - kept} more", FOOTER])) > 4000
+
+
+def test_digest_query_selects_every_backup_and_off_site_series() -> None:
+    assert s.DIGEST_QUERY == (
+        '{__name__=~"ayeops_backup_declared_timestamp_seconds'
+        "|ayeops_backup_last_run_success|ayeops_backup_last_size_bytes"
+        "|ayeops_backup_last_success_timestamp_seconds|ayeops_backup_max_age_seconds"
+        "|ayeops_offsite_last_success_timestamp_seconds|ayeops_offsite_max_age_seconds"
+        "|ayeops_offsite_restore_test_last_success_timestamp_seconds"
+        '|ayeops_offsite_restore_test_ok"}'
+    )
+
+
+def test_the_digest_goes_out_once_a_day_at_its_time(
+    digest_rig: tuple[Any, FakeClock, FakeHttp, FakeTelegram],
+) -> None:
+    sentinel, clock, vm, telegram = digest_rig
+    text = sentinel.metrics()
+    assert 'ayeops_sentinel_digest_due_timestamp_seconds{watch="central"} 1767254400' in text
+    assert "ayeops_sentinel_digest_last_sent_timestamp_seconds" not in text
+    assert 'ayeops_sentinel_notices_total{kind="digest",watch="central"} 0' in text
+    clock.advance(8 * HOUR - 1)
+    assert sentinel.digest(clock.now) is None
+    sentinel.tick()
+    assert (telegram.sent, vm.calls) == ([], [])
+    clock.advance(1)
+    sentinel.tick()
+    assert telegram.sent == [FRESH_DIGEST]
+    assert (vm.calls, vm.timeouts) == ([DIGEST_CALL], [10])
+    assert (sentinel.digest_sent, sentinel.digest_due) == (EIGHT, EIGHT + DAY)
+    text = sentinel.metrics()
+    assert 'ayeops_sentinel_digest_due_timestamp_seconds{watch="central"} 1767340800' in text
+    sent = 'ayeops_sentinel_digest_last_sent_timestamp_seconds{watch="central"} 1767254400'
+    assert sent in text
+    assert 'ayeops_sentinel_notices_total{kind="digest",watch="central"} 1' in text
+    assert 'ayeops_sentinel_notice_failures_total{kind="digest",watch="central"} 0' in text
+    minutes(sentinel, clock, 3)
+    assert len(telegram.sent) == 1
+    clock.now = EIGHT + DAY
+    assert sentinel.digest(clock.now) is True
+    assert len(telegram.sent) == 2
+    assert sentinel.digest_due == EIGHT + 2 * DAY
+    assert (sentinel.notices["digest"], sentinel.notice_failures["digest"]) == (2, 0)
+
+
+def test_a_digest_telegram_refused_is_sent_again_next_round(
+    digest_rig: tuple[Any, FakeClock, FakeHttp, FakeTelegram],
+) -> None:
+    sentinel, clock, _, telegram = digest_rig
+    clock.now = EIGHT
+    telegram.working = False
+    assert sentinel.digest(clock.now) is False
+    assert (sentinel.digest_sent, sentinel.digest_due) == (None, EIGHT)
+    assert sentinel.last_notice_ok == 0
+    assert sentinel.notice_failures["digest"] == 1
+    assert sentinel.notices["digest"] == 0
+    assert 'ayeops_sentinel_last_notice_ok{watch="central"} 0' in sentinel.metrics()
+    clock.advance(60)
+    telegram.working = True
+    assert sentinel.digest(clock.now) is True
+    assert (sentinel.digest_sent, sentinel.digest_due) == (EIGHT + 60, EIGHT + DAY)
+    assert sentinel.last_notice_ok == 1
+    assert (sentinel.notices["digest"], sentinel.notice_failures["digest"]) == (1, 1)
+
+
+def test_the_digest_logs_one_line(
+    digest_rig: tuple[Any, FakeClock, FakeHttp, FakeTelegram],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sentinel, _, vm, _ = digest_rig
+    sentinel.digest(EIGHT)
+    vm.answers[VM_QUERY] = (503, b"")
+    sentinel.digest(EIGHT + DAY)
+    assert capsys.readouterr().out == (
+        '{"backups": 2, "delivered": true, "error": "", "event": "digest"}\n'
+        '{"backups": null, "delivered": true, "error": "HTTP 503", "event": "digest"}\n'
+    )
+
+
+@pytest.mark.parametrize(
+    ("answer", "error"),
+    [
+        ((199, vm_series()), "HTTP 199"),
+        ((300, vm_series()), "HTTP 300"),
+        (TimeoutError("timed out"), "TimeoutError: timed out"),
+        ((200, b"not json"), "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"),
+        ((200, b'{"status": "error"}'), "the answer is not a query result"),
+    ],
+)
+def test_a_digest_without_metrics_still_goes_out_with_the_reason(
+    digest_rig: tuple[Any, FakeClock, FakeHttp, FakeTelegram], answer: Any, error: str
+) -> None:
+    sentinel, _, vm, telegram = digest_rig
+    vm.answers[VM_QUERY] = answer
+    assert sentinel.read_backups() == (None, error)
+    assert sentinel.digest(EIGHT) is True
+    assert f"🟠 Cannot read the backup metrics from central: {error}\n" in telegram.sent[0]
+    assert sentinel.digest_due == EIGHT + DAY
+
+
+@pytest.mark.parametrize("status", [200, 299])
+def test_read_backups_takes_any_2xx(
+    digest_rig: tuple[Any, FakeClock, FakeHttp, FakeTelegram], status: int
+) -> None:
+    sentinel, _, vm, _ = digest_rig
+    vm.answers[VM_QUERY] = (status, vm_series())
+    assert sentinel.read_backups() == ([], "")
+
+
+def test_the_digest_query_uses_the_round_timeout() -> None:
+    vm = FakeHttp()
+    vm.answers[VM_QUERY] = (200, vm_series())
+    changed = digest_config(timeout_seconds=7)
+    sentinel = s.Sentinel(changed, FakeHttp(), no_expiry, FakeTelegram(), FakeClock(), vm)
+    sentinel.read_backups()
+    assert vm.timeouts == [7]
+
+
+def test_the_digest_follows_its_time_zone() -> None:
+    changed = digest_config(digest_timezone="Europe/Kyiv")
+    sentinel = s.Sentinel(changed, FakeHttp(), no_expiry, FakeTelegram(), FakeClock())
+    assert sentinel.digest_due == START + 6 * HOUR
+    assert sentinel.next_digest(START + 6 * HOUR) == START + DAY + 6 * HOUR
+
+
+def test_without_a_query_fetch_the_digest_uses_the_check_fetch() -> None:
+    http = FakeHttp()
+    other = FakeHttp()
+    plain = s.Sentinel(digest_config(), http, no_expiry, FakeTelegram(), FakeClock())
+    given = s.Sentinel(digest_config(), http, no_expiry, FakeTelegram(), FakeClock(), other)
+    assert plain.query is http
+    assert given.query is other
+
+
+def test_a_sentinel_without_digest_never_sends_or_exports_one(
+    rig: tuple[Any, FakeClock, FakeHttp, FakeTelegram],
+) -> None:
+    sentinel, clock, http, telegram = rig
+    assert sentinel.kinds == s.NOTICES
+    assert sentinel.digest_due is None
+    clock.now = EIGHT
+    assert sentinel.digest(EIGHT) is None
+    sentinel.tick()
+    assert telegram.sent == []
+    assert DIGEST_CALL not in http.calls
+    assert "digest" not in sentinel.metrics()
+    assert sentinel.round_budget() == 30
+
+
+def test_the_digest_adds_one_fetch_to_the_round_budget(
+    digest_rig: tuple[Any, FakeClock, FakeHttp, FakeTelegram],
+) -> None:
+    sentinel = digest_rig[0]
+    assert sentinel.kinds == ("alert", "reminder", "recovery", "digest")
+    assert sentinel.round_budget() == 40
+
+
+def test_digest_settings_default_to_off() -> None:
+    assert s.digest_from({}) == ("", "UTC", "")
+    unused = {"AYE_SENTINEL_DIGEST_URL": "http://v", "AYE_SENTINEL_DIGEST_TIMEZONE": "Asia/Tokyo"}
+    assert s.digest_from(unused) == ("", "UTC", "")
+    assert (config().digest_at, config().digest_timezone, config().digest_url) == ("", "UTC", "")
+
+
+def test_digest_settings_are_read_and_trimmed() -> None:
+    env = {
+        **ENV,
+        "AYE_SENTINEL_DIGEST_AT": " 08:30 ",
+        "AYE_SENTINEL_DIGEST_TIMEZONE": " Europe/Kyiv ",
+        "AYE_SENTINEL_DIGEST_URL": " http://vm/api/v1/query ",
+    }
+    loaded = s.config_from(env)
+    assert (loaded.digest_at, loaded.digest_timezone, loaded.digest_url) == (
+        "08:30",
+        "Europe/Kyiv",
+        "http://vm/api/v1/query",
+    )
+    plain = {"AYE_SENTINEL_DIGEST_AT": "08:30", "AYE_SENTINEL_DIGEST_URL": "https://vm/q"}
+    assert s.digest_from(plain) == ("08:30", "UTC", "https://vm/q")
+    blank = {**plain, "AYE_SENTINEL_DIGEST_TIMEZONE": " "}
+    assert s.digest_from(blank) == ("08:30", "UTC", "https://vm/q")
+
+
+@pytest.mark.parametrize(
+    ("given", "shown"),
+    [
+        ({}, "''"),
+        ({"AYE_SENTINEL_DIGEST_URL": ""}, "''"),
+        ({"AYE_SENTINEL_DIGEST_URL": " ftp://vm/q "}, "'ftp://vm/q'"),
+        ({"AYE_SENTINEL_DIGEST_URL": "vm/api/v1/query"}, "'vm/api/v1/query'"),
+    ],
+)
+def test_a_digest_needs_the_url_of_the_query_api(given: dict[str, str], shown: str) -> None:
+    env = {"AYE_SENTINEL_DIGEST_AT": "08:30", **given}
+    message = f"AYE_SENTINEL_DIGEST_URL must be the http(s) url of /api/v1/query, not {shown}"
+    with pytest.raises(ValueError, match=f"^{re.escape(message)}$"):
+        s.digest_from(env)
+
+
+@pytest.mark.parametrize(
+    "name", ["AYE_SENTINEL_INTERVAL", "AYE_SENTINEL_TIMEOUT", "AYE_SENTINEL_REMINDER"]
+)
+def test_a_duration_set_but_empty_is_refused_not_defaulted(name: str) -> None:
+    with pytest.raises(ValueError, match=r"^not a duration: ''$"):
+        s.config_from({**ENV, name: ""})
+
+
+def test_env_seconds_parses_a_set_value_and_falls_back_only_when_unset() -> None:
+    assert s.env_seconds({"X": "2m"}, "X", 7) == 120
+    assert s.env_seconds({}, "X", 7) == 7
+
+
+def test_a_digest_with_a_bad_time_or_zone_stops_the_start() -> None:
+    env = {"AYE_SENTINEL_DIGEST_AT": "8:30", "AYE_SENTINEL_DIGEST_URL": "http://vm/q"}
+    with pytest.raises(ValueError, match=r"^not a time of day like 08:00: '8:30'$"):
+        s.digest_from(env)
+    zoned = {**env, "AYE_SENTINEL_DIGEST_AT": "08:30", "AYE_SENTINEL_DIGEST_TIMEZONE": "No/City"}
+    with pytest.raises(s.ZoneInfoNotFoundError):
+        s.digest_from(zoned)
+
+
+def test_http_fetch_reads_up_to_the_given_limit_and_the_query_fetch_up_to_1_mib(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answer = Answer("200", b"body")
+    web = Web(answer)
+    monkeypatch.setattr(s, "urllib", web)
+    monkeypatch.setattr(s, "OPENER", web)
+    assert s.http_fetch("http://v/q", 2.5, 7) == (200, b"body")
+    assert answer.sizes == [(7,)]
+    calls: list[tuple[Any, ...]] = []
+
+    def fetch(*args: Any) -> tuple[int, bytes]:
+        calls.append(args)
+        return 200, b"x"
+
+    monkeypatch.setattr(s, "http_fetch", fetch)
+    assert s.query_fetch("http://v/q", 2.5) == (200, b"x")
+    assert calls == [("http://v/q", 2.5, 1048576)]

@@ -902,6 +902,17 @@
       "summary": "The reconciler on {{ .Labels.host }} has not finished a pass over the declared containers for 5 minutes",
       "title": "Reconciler stopped checking"
     },
+    "sentinel-digest-overdue": {
+      "expr": "time() - ayeops_sentinel_digest_due_timestamp_seconds > bool 7200",
+      "for": "5m",
+      "module": "sentinel",
+      "name": "sentinel-digest-overdue",
+      "runbook": "sentinel-digest-overdue",
+      "runbook_url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-digest-overdue.md",
+      "severity": "warning",
+      "summary": "The daily backup digest of the sentinel on {{ .Labels.host }} is more than 2 hours overdue",
+      "title": "Backup digest overdue"
+    },
     "sentinel-notify-failing": {
       "expr": "ayeops_sentinel_last_notice_ok == bool 0",
       "for": "1m",
@@ -1510,6 +1521,11 @@
       "name": "reconciler-stale",
       "text": "# Reconciler stopped checking\n\n`ayeops_reconciler_last_run_timestamp_seconds` on this host is more than 5 minutes old: the\n[reconciler](../modules.md#reconciler) has not finished a pass over the declared containers. A\ncontainer that goes down now stays down until a person or Docker's own restart policy brings it\nback.\n\n## What to do\n\n1. `docker compose ps reconciler` and `docker compose logs --tail 50 reconciler` in the rendered\n   project of the host. A pass that could not read Docker logs one line with\n   `\"event\": \"error\"` and the reason.\n2. `docker compose exec -e AYE_RECONCILER_ONCE=1 reconciler python -I /app/reconciler.py` runs\n   one pass now and writes the textfile; the alert clears on the next scrape once it succeeds.\n3. `permission denied` or `connection refused` on `/var/run/docker.sock`: the socket is not\n   reachable as root inside the container, for example a rootless docker with its socket\n   elsewhere.\n4. The container runs and logs no error, but the metric stays old: the textfile directory is not\n   the one node-exporter reads, or node-exporter is down (`target-down`, `host-down`).\n5. A pass that hangs: an attempt waits at most `timeout` (2 minutes) for its containers and each\n   Docker call at most 30 seconds, so a pass much longer than that points at a daemon that does\n   not answer; `docker info` on the host tells.\n",
       "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/reconciler-stale.md"
+    },
+    "sentinel-digest-overdue": {
+      "name": "sentinel-digest-overdue",
+      "text": "# Backup digest overdue\n\nThe sentinel should have delivered its daily backup digest more than 2 hours ago, about 26 hours\nafter the last one, and has not. The backups themselves may be fine: this alert says only that\nthe daily \"all backups fresh\" did not arrive, so a quiet chat no longer proves anything.\n\n## What to do\n\n1. `docker compose logs --tail 50 sentinel` on the sentinel's host. A `digest` line with\n   `\"delivered\": false` next to `telegram_failed` lines means Telegram refused the message:\n   follow [sentinel-notify-failing](sentinel-notify-failing.md), which fires with it.\n2. No `digest` line at all since the due time: a `round_failed` line names the error that ended\n   the round, no lines at all point to stopped rounds ([sentinel-stalled](sentinel-stalled.md)).\n   `docker compose restart sentinel` moves the next digest to the next `at` and clears this\n   alert.\n3. Check the setting: `AYE_SENTINEL_DIGEST_AT` and `AYE_SENTINEL_DIGEST_TIMEZONE` in the\n   rendered `compose.yaml` of the sentinel's host are the time you expect.\n4. Until a digest arrives, look at the backups directly: the **Last good dump against its RPO**\n   table of the Reliability dashboard, and the `backup-missing`, `backup-failed` and\n   `offsite-stale` alerts.\n",
+      "url": "https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-digest-overdue.md"
     },
     "sentinel-notify-failing": {
       "name": "sentinel-notify-failing",
@@ -2745,7 +2761,8 @@
         "target-down",
         "sentinel-notify-failing",
         "sentinel-ping-failing",
-        "sentinel-stalled"
+        "sentinel-stalled",
+        "sentinel-digest-overdue"
       ],
       "description": "Checks Grafana, VictoriaMetrics and the freshness of up on the watched host every minute and tells Telegram when they stop answering.",
       "host": "edge",
@@ -2756,7 +2773,8 @@
         "ayeops_sentinel_failure_streak",
         "ayeops_sentinel_alerting",
         "ayeops_sentinel_last_notice_ok",
-        "ayeops_sentinel_ping_success"
+        "ayeops_sentinel_ping_success",
+        "ayeops_sentinel_digest_due_timestamp_seconds"
       ],
       "name": "sentinel",
       "source": "module sentinel",
