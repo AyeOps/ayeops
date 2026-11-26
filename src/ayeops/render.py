@@ -32,6 +32,8 @@ from ayeops.duties import overdue_alert, runbook_annotation
 from ayeops.eol import tracked as eol_tracked
 from ayeops.i18n import LANGS
 from ayeops.incidents import incidents_context
+from ayeops.links import linked as links_linked
+from ayeops.links import links_context
 from ayeops.local_modules import with_local_modules
 from ayeops.logs import compose_project, declared_projects, logs_context, loki_datasource
 from ayeops.manifest import Manifest
@@ -298,7 +300,7 @@ def mail_context(manifest: Manifest) -> dict[str, Any] | None:
 
 
 def blackbox_wanted(probes: dict[str, Any] | None) -> bool:
-    return any((probes or {}).get(key) for key in ("http", "internet", "gateway"))
+    return any((probes or {}).get(key) for key in ("http", "internet", "gateway", "links"))
 
 
 def host_context(
@@ -332,6 +334,7 @@ def host_context(
         "incidents": incidents_context(manifest, all_settings),
         "status": reporter_context(manifest, all_settings.get("status")),
         "blackbox": blackbox_wanted(all_settings.get("probes")),
+        "links": links_context(manifest, host, all_settings.get("probes")),
         "mcp": mcp_context(manifest, host, all_settings.get("mcp")),
         "autopilot": autopilot_context(manifest, host, all_settings),
         "grafana_reader": grafana_reader.context(reader and "grafana" in all_settings),
@@ -754,6 +757,8 @@ def alert_applies(
     if alert.get("only_with") == "grafana_reader" and not reader_rendered(manifest, modules):
         return False
     if alert.get("only_with") == "volatile_hosts" and not downtime.volatile_hosts(manifest):
+        return False
+    if alert.get("only_with") == "links" and not links_linked(manifest):
         return False
     wanted = alert.get("provider")
     setting = alert.get("setting")

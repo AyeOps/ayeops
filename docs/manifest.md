@@ -39,7 +39,7 @@ Names (project, hosts, services, alerts) match `^[a-z][a-z0-9-]{0,39}$`.
 | `arch` | yes, here or in the profile | `amd64` or `arm64`; rendered as `platform: linux/<arch>` on every service |
 | `profile` | no | the [profile](#profiles) the host starts from |
 | `group` | no | the `group` label of the host's metrics and logs, e.g. `workers`, so alerts and dashboards can group hosts; defaults to the host's `profile`, without either the host has no `group` label |
-| `address` | for a remote_write target or ingress | address other hosts use to reach this one, e.g. a VPN address; an IPv4 address with ingress, since its names are A records |
+| `address` | for a remote_write target, ingress or a link probe | address other hosts use to reach this one, e.g. a VPN address; an IPv4 address with ingress, since its names are A records; [`probes.links`](modules.md#probes) pings it |
 | `public_bind` | when a module exposes a port, and with ingress | address that exposed ports bind to; there is no default |
 | `memory` | no | memory of the host, e.g. `12g`; the `mem_limit` of all services plus `reserved` must fit into `memory_budget_pct` of it |
 | `memory_budget_pct` | no | share of `memory` the budget may use, 1 to 100, default `85`; the rest is for the kernel, the page cache and whatever nobody declared |

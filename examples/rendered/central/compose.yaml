@@ -175,7 +175,7 @@ services:
       timeout: 10s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: 77ca902f4ea2e3a0
+      io.ayeops.config-hash: 5db1745214d5767e
       io.ayeops.module: autopilot
       io.ayeops.service: autopilot
     logging:
@@ -213,7 +213,7 @@ services:
       timeout: 5s
     image: prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
     labels:
-      io.ayeops.config-hash: 6cb112ecf2c28187
+      io.ayeops.config-hash: 64f8b727eefa69f6
       io.ayeops.module: probes
       io.ayeops.service: blackbox
     logging:
@@ -226,6 +226,8 @@ services:
     ports:
     - 127.0.0.1:9115:9115
     restart: unless-stopped
+    sysctls:
+      net.ipv4.ping_group_range: 0 2147483647
     volumes:
     - ./probes/blackbox.yml:/etc/blackbox/blackbox.yml:ro
   cadvisor:
@@ -575,7 +577,7 @@ services:
       timeout: 5s
     image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
     labels:
-      io.ayeops.config-hash: 3c6381d60ae882e5
+      io.ayeops.config-hash: d33af048ef8217b7
       io.ayeops.module: grafana
       io.ayeops.service: grafana
     logging:
@@ -764,7 +766,7 @@ services:
       timeout: 5s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: 1c675ec538bdd4a2
+      io.ayeops.config-hash: 4556cca42759e226
       io.ayeops.module: mcp
       io.ayeops.service: mcp-catalog
     logging:
@@ -1395,7 +1397,7 @@ services:
       timeout: 5s
     image: victoriametrics/vmagent:v1.153.0@sha256:474135388ae700b842007d3e186a8ae60ccf7de3dfd776fb6ed27cf8522d8331
     labels:
-      io.ayeops.config-hash: 598d64a4c879469a
+      io.ayeops.config-hash: 2a83a90b54e95378
       io.ayeops.module: metrics
       io.ayeops.service: vmagent
     logging:

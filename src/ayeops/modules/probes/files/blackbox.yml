@@ -13,6 +13,14 @@ modules:
       preferred_ip_protocol: ip4
       ip_protocol_fallback: false
 {% endif %}
+{% if links %}
+  link:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: true
+{% endif %}
 {% if settings.internet %}
   dns:
     prober: dns

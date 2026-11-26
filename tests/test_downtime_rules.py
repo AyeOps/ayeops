@@ -34,6 +34,7 @@ def expr(rule: dict[str, Any]) -> str:
 def test_a_fleet_without_downtime_renders_no_host_gone_and_the_plain_host_down(
     data: dict[str, Any], modules: dict[str, Module]
 ) -> None:
+    del data["hosts"]["central"]["modules"]["probes"]["links"]
     rules = rendered_rules(data, modules)
     assert "aye-host-gone" not in rules
     plain = str(modules["node"].alerts[0]["expr"]).strip()

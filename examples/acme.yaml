@@ -49,6 +49,7 @@ hosts:
           - https://portal.ops.acme.example
         domains:
           - acme.example
+        links: true
       grafana:
         root_url: https://grafana.ops.acme.example
         dashboards: dashboards
@@ -131,6 +132,7 @@ hosts:
   edge:
     arch: amd64
     zone: office
+    address: 10.8.0.2
     icon: ubuntu
     memory: 16g
     units:

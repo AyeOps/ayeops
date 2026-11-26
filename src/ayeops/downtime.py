@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from ayeops import links
 from ayeops.baseline import DAYS, minutes
 from ayeops.manifest import Manifest
 
@@ -140,10 +141,11 @@ def volatile_down(host: str, after: int) -> str:
 class Downtime:
     volatile: dict[str, int]
     windows: dict[str, str]
+    linked: bool = False
 
 
 def downtime_of(manifest: Manifest) -> Downtime:
-    return Downtime(volatile_hosts(manifest), maintenance_hosts(manifest))
+    return Downtime(volatile_hosts(manifest), maintenance_hosts(manifest), links.linked(manifest))
 
 
 def guarded(alert: dict[str, Any], guards: list[Guard]) -> dict[str, Any]:
@@ -165,6 +167,8 @@ def window_guards(down: Downtime) -> list[Guard]:
 def alert_guards(name: str, hold: bool, down: Downtime) -> list[Guard]:
     if name == HOST_DOWN:
         first = [("host", host_set(list(down.volatile)))] if down.volatile else []
+        if down.linked:
+            first.append(("host", links.UNREACHABLE))
     elif name == HOST_GONE:
         first = []
     else:
@@ -176,6 +180,8 @@ def module_alert(alert: dict[str, Any], hold: bool, down: Downtime) -> dict[str,
     name = str(alert["name"])
     if name == HOST_GONE:
         alert = {**alert, "expr": gone_expr(down.volatile)}
+    if name == links.LINK_DOWN and down.windows:
+        alert = {**alert, "expr": links.link_down_expr(down.windows)}
     return guarded(alert, alert_guards(name, hold, down))
 
 

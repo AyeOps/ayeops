@@ -15,6 +15,7 @@ on:
       - "src/ayeops/eol.py"
       - "src/ayeops/i18n.py"
       - "src/ayeops/inventory.py"
+      - "src/ayeops/links.py"
       - "src/ayeops/modules/eol/files/eol_agent.py"
       - "src/ayeops/modules/hygiene/files/hygiene_runner.py"
       - "src/ayeops/modules/mcp/files/catalog_server.py"

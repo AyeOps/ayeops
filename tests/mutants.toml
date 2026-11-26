@@ -45,6 +45,10 @@ score = 98.4
 tests = ["tests/test_inventory.py"]
 score = 85.5
 
+[modules."src/ayeops/links.py"]
+tests = ["tests/test_links.py"]
+score = 100.0
+
 [modules."src/ayeops/modules/eol/files/eol_agent.py"]
 tests = ["tests/test_eol.py"]
 score = 93.1
