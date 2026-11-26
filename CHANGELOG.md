@@ -20,6 +20,13 @@ and was never tagged.
   while it holds the `host-down` of those hosts is held back, so a dropped tunnel or site pages
   once with the zone's name instead of once per host. Peers in a maintenance window drop out of
   it; rule `probe-links` checks the list. The `AyeOps / Probes` dashboard shows every link.
+- `alerting.contact: slack`: Grafana sends alerts to a Slack incoming webhook from
+  `AYE_SLACK_WEBHOOK_URL` in the `.env` of its host, with the layout of the Telegram message
+  (count, scope, hosts or summaries, runbook and dashboard links) in Slack's link syntax. The
+  sentinel sends to the same webhook instead of Telegram; on-call, autopilot and the status
+  Worker's notices stay on Telegram. The new rule `slack-webhook` refuses a Slack webhook URL
+  anywhere in the manifest, and the autopilot masks one as `slack-webhook`
+  ([manifest](docs/manifest.md#slack)).
 - `metrics`: the alerts `metrics-shipping-backlog` (warning), when for 15 minutes a host's
   vmagent queue holds more than 30 minutes of its own traffic or more than half of its room, and
   `metrics-shipping-dropped` (critical), when in the last hour the full queue dropped blocks or
@@ -41,6 +48,8 @@ and was never tagged.
 
 ### Changed
 
+- `sentinel`: the alert `sentinel-notify-failing` is titled "Sentinel cannot deliver its
+  messages", since the message may go to Slack.
 - `metrics`: vmagent runs with `-remoteWrite.inmemoryQueues=1` and sends fresh samples ahead of
   its on-disk backlog, so a host that reconnects after an outage reports at once and its backlog
   fills in behind it.

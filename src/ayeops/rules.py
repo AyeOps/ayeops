@@ -45,6 +45,7 @@ from ayeops.render import (
     DATASOURCE_UID,
     METRICS_PORT,
     SERVICE_SILENCE,
+    SLACK_WEBHOOK_ENV,
     FleetRender,
     all_baseline_sources,
     compose_entries,
@@ -837,6 +838,38 @@ def check_mail(manifest: Manifest) -> list[Finding]:
     return findings
 
 
+SLACK_WEBHOOK = re.compile(r"hooks\.slack(-gov)?\.com/", re.IGNORECASE)
+
+
+def text_values(value: Any, path: str) -> list[tuple[str, str]]:
+    if isinstance(value, dict):
+        return [
+            found
+            for key, item in value.items()
+            for found in text_values(item, f"{path}.{key}" if path else str(key))
+        ]
+    if isinstance(value, list):
+        return [
+            found
+            for index, item in enumerate(value)
+            for found in text_values(item, f"{path}[{index}]")
+        ]
+    return [(path, value)] if isinstance(value, str) else []
+
+
+def check_slack(manifest: Manifest) -> list[Finding]:
+    return [
+        Finding(
+            path,
+            "slack-webhook",
+            f"a Slack webhook URL is a secret: put it into {SLACK_WEBHOOK_ENV} in the .env of "
+            "the host, not into the manifest",
+        )
+        for path, text in text_values(manifest.raw, "")
+        if SLACK_WEBHOOK.search(text)
+    ]
+
+
 def check_references(
     manifest: Manifest, modules: dict[str, Module], renders: FleetRender | None = None
 ) -> list[Finding]:
@@ -867,7 +900,7 @@ def check_oncall(manifest: Manifest) -> list[Finding]:
                 Finding(
                     "alerting.contact",
                     "oncall-fallback",
-                    "oncall needs contact telegram or email: critical alerts go there too, "
+                    "oncall needs contact telegram, slack or email: critical alerts go there too, "
                     "so a stopped on-call path never means silence",
                 )
             )
@@ -962,6 +995,7 @@ def check_manifest(
     findings += check_auth(manifest, modules, renders)
     findings += check_icons(manifest)
     findings += check_mail(manifest)
+    findings += check_slack(manifest)
     findings += check_oncall(manifest)
     findings += check_timezones(manifest)
     findings += [Finding(*problem) for problem in incidents_problems(manifest)]

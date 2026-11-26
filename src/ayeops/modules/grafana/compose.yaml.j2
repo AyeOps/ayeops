@@ -55,6 +55,9 @@ services:
       AYE_TELEGRAM_BOT_TOKEN: "${AYE_TELEGRAM_BOT_TOKEN:?set AYE_TELEGRAM_BOT_TOKEN}"
       AYE_TELEGRAM_CHAT_ID: "${AYE_TELEGRAM_CHAT_ID:?set AYE_TELEGRAM_CHAT_ID}"
 {% endif %}
+{% if contact == "slack" %}
+      AYE_SLACK_WEBHOOK_URL: "${AYE_SLACK_WEBHOOK_URL:?set AYE_SLACK_WEBHOOK_URL}"
+{% endif %}
 {% if "oncall" in modules %}
       AYE_ONCALL_WEBHOOK_SECRET: "${AYE_ONCALL_WEBHOOK_SECRET:?set AYE_ONCALL_WEBHOOK_SECRET}"
 {% endif %}
