@@ -39,6 +39,26 @@
     - target_label: __address__
       replacement: "blackbox:9115"
 {% endif %}
+{% if links %}
+- job_name: blackbox-link
+  metrics_path: /probe
+  params:
+    module: [link]
+  static_configs:
+{% for link in links %}
+    - targets: [{{ link.address | tojson }}]
+      labels:
+        peer: {{ link.peer | tojson }}
+        zone: {{ link.zone | tojson }}
+{% endfor %}
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: "blackbox:9115"
+{% endif %}
 {% if settings.internet %}
 - job_name: blackbox-dns
   scrape_interval: {{ settings.internet_interval | tojson }}

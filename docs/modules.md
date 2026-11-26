@@ -15,7 +15,7 @@ Every built-in module, what it runs, its settings and its alerts. The module tab
 | [`gpu`](#gpu) | NVIDIA GPU temperature, memory and driver health |
 | [`network`](#network) | link state, speed, errors and Wi-Fi signal of the declared interfaces |
 | [`disk-forecast`](#disk-forecast) | an alert when a filesystem fills up within 7 days |
-| [`probes`](#probes) | blackbox-exporter for HTTP, TLS expiry and the host's own internet, RDAP for domains |
+| [`probes`](#probes) | blackbox-exporter for HTTP, TLS expiry, the host's own internet and the private network links, RDAP for domains |
 | [`checks`](#checks) | the runners of the HTTP, TCP, DNS, script and SQL checks declared under services |
 | [`hygiene`](#hygiene) | a nightly prune of stopped containers, unused images and build cache |
 | [`reconciler`](#reconciler) | starts again a declared container that Docker left down, with a back-off |
@@ -81,7 +81,9 @@ would otherwise page forever. Likewise an alert with a `setting` is rendered onl
 host sets that setting of the module, so `offsite-drill` exists only with a `restore_drill`.
 An alert with `only_with: grafana_reader` is rendered only when the
 [`grafana-reader`](#grafana-reader) is, so `grafana-reader-failing` does not page on an install
-without a consumer of the reader.
+without a consumer of the reader. `only_with: links` renders an alert only when some host's
+[`probes.links`](#links-between-hosts) names a host to ping, so `link-down` and its hold on
+`host-down` come together.
 
 A module alert that aggregates by host keeps the `project` and `group` labels that
 [vmagent](#metrics) puts on every sample: `max by (host, project, group) (...)`, not
@@ -375,6 +377,7 @@ domain from the IANA bootstrap file and reads the `expiration` event.
 | `dns_query` | `example.com` | the name asked for, an A record |
 | `gateway` | none | the router's IPv4 address, pinged for the `gateway` layer; `aye discover` suggests it from the default route |
 | `internet_interval` | `15s` | scrape interval of the ping and DNS probes |
+| `links` | `[]` | hosts whose `address` this host pings over the private network, by name, or `true` for every other host with an `address` that is not `volatile`; see [links](#links-between-hosts) |
 | `domains` | `[]` | domains whose expiry is looked up over RDAP |
 | `rdap_bootstrap_url` | IANA `dns.json` | bootstrap file |
 | `rdap_refresh_seconds` | `21600` | how often RDAP is asked |
@@ -386,7 +389,8 @@ failed lookup is reported as `0`, not dropped. Its variables: `AYE_RDAP_DOMAINS`
 
 Alerts: `probe-failing` (5m), `tls-expiring` (< 14 days), `domain-expiring-60d` (info),
 `domain-expiring-30d` (warning), `domain-expiring-7d` (critical), `domain-expiry-unknown` (RDAP
-silent for a day). Dashboard: `AyeOps / Probes`.
+silent for a day), [`link-down`](runbooks/link-down.md) (critical, with `links`). Dashboard:
+`AyeOps / Probes`.
 
 The internet probes run on the host whose connection they describe, usually one at home or in an
 office, so enable `probes` there with `internet: true`. blackbox-exporter pings without raw
@@ -402,6 +406,53 @@ There is no internet-down alert on purpose: while the link is down the host cann
 failing probes to the central host, so an alert there would fire late, after the link is back.
 vmagent keeps the samples in its queue and sends them on reconnection, so the dashboard shows
 the outage afterwards.
+
+### Links between hosts
+
+Hosts reach each other over a private network, a WireGuard tunnel, Tailscale or any VPN, at the
+`address` the manifest gives them. AyeOps does not run that network and does not care which one
+it is: `links` pings the addresses, so it sees what the fleet depends on, whatever carries it.
+When a tunnel or a whole site drops, the central host stops receiving the metrics of every host
+there and each of them fires `host-down`; with `links` that wave is one alert per zone:
+
+```yaml
+hosts:
+  central:
+    arch: arm64
+    address: 10.8.0.1
+    modules: {metrics: {role: server}, node: {}, probes: {links: true}}
+  shop-1:
+    arch: amd64
+    zone: shop
+    address: 10.8.0.11
+    modules: {metrics: {role: agent, remote_write: {host: central}}, node: {}}
+  shop-2:
+    arch: amd64
+    zone: shop
+    address: 10.8.0.12
+    modules: {metrics: {role: agent, remote_write: {host: central}}, node: {}}
+```
+
+The job `blackbox-link` pings each peer through the blackbox module `link` (ICMP, IPv4, falling
+back to IPv6 for an IPv6 address, 5 s timeout) at the host's scrape interval, without raw
+sockets, as the internet probes do. Its series carry `peer` (the host pinged) and `zone` (the
+peer's `zone`, else the peer's name, so a host without a zone is a zone of its own); `host` is
+the prober, as on every series. `link-down` (critical, 3 minutes) is
+`max by (host, project, group, zone) (probe_success{job="blackbox-link"}) == bool 0`: no probed
+host of the zone answers. While that holds, `host-down` of the zone's probed hosts is held back
+(see [grafana](#grafana)), so the alert that pages is the one that names the zone. A probed host
+whose zone still answers, or that answers ping itself, keeps its `host-down`: the link is up and
+the host stopped reporting. A peer in an open `maintenance` window drops out of `link-down`, so
+a site rebooted in its window does not page; a `volatile` host is not probed at all (`true`
+skips it, a list naming one fails rule `probe-links`), since it is expected to disappear.
+
+Ping from the host that runs the metrics server, usually the central one: its probe results do
+not cross the link they test. From another host the results of a broken link queue in its
+vmagent and arrive after the link is back, too late for the alert. Probing every host of a zone
+(`true`) folds the whole wave; a list may name one host per site, and then only that host's
+`host-down` is held. The peers must answer ICMP echo on their private address; a peer that
+filters it fires `link-down` while everything works. Dashboard `AyeOps / Probes`: reachability
+and round-trip time of every link.
 
 ## checks
 
@@ -2223,6 +2274,8 @@ at 0 instead of vanishing:
 | Rule | Guard |
 |---|---|
 | `host-down` | `unless on (host) (label_replace(vector(1), "host", "<volatile host>", "", "") or ...)`: the volatile hosts are left out |
+| `host-down`, with [`probes.links`](#links-between-hosts) | also `unless on (host) (label_replace(max by (peer) (<link> unless on (zone) (max by (zone) (<link>) > 0)), "host", "$1", "peer", "(.+)"))` with `<link>` `probe_success{job="blackbox-link"}`: the probed hosts of a zone none of whose probes succeed |
+| `link-down` | none from it; with windows its query drops the peers in an open window, `<link> unless on (peer) (label_replace(<windows>, "peer", "<host>", "", "") or ...)` |
 | `host-gone` | none from the hold: it judges the volatile hosts itself, by `1 - ((max by (host) (max_over_time(<up>[<volatile>])) + on (host) group_right () (0 * last_over_time(<up>[<volatile> + 7d]))) or 0 * last_over_time(<up>[<volatile> + 7d]))` with `<up>` `up{job="node", host=~"<hosts>"}`, one term per duration |
 | every rule, both of these included | `unless on (host) (label_replace(<windows>, "host", "<host>", "", "") or ...)` for every host with a window |
 | a service rule of a service whose `host` is volatile | also `unless on () (max by (host) (<node up of that host over <volatile> + 7d>) == 0)` |
