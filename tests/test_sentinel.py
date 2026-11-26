@@ -2040,6 +2040,70 @@ def test_a_digest_telegram_refused_is_sent_again_next_round(
     assert (sentinel.notices["digest"], sentinel.notice_failures["digest"]) == (1, 1)
 
 
+SLACK_DIGEST_HOOK = "https://hooks.slack.test/services/T/B/digest"
+
+
+def slack_digest_rig(monkeypatch: pytest.MonkeyPatch, *answers: Any) -> tuple[Any, Web]:
+    web = Web(*answers)
+    monkeypatch.setattr(web, "parse", s.urllib.parse, raising=False)
+    monkeypatch.setattr(s, "urllib", web)
+    vm = FakeHttp()
+    vm.answers[VM_QUERY] = TimeoutError("vm <down> & out")
+    send = s.sender_from({"AYE_SLACK_WEBHOOK_URL": SLACK_DIGEST_HOOK})
+    return s.Sentinel(digest_config(), FakeHttp(), no_expiry, send, FakeClock(), vm), web
+
+
+def slack_digest_body(minute: str) -> bytes:
+    text = (
+        f"💾 acme: backup digest, 2026-01-01 08:{minute} UTC\n"
+        "🟠 Cannot read the backup metrics from central: TimeoutError: vm &lt;down&gt; &amp; out\n"
+        + FOOTER
+    )
+    return json.dumps({"text": text, "mrkdwn": False}).encode()
+
+
+def test_with_slack_the_digest_goes_to_the_webhook_escaped_like_every_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sentinel, web = slack_digest_rig(monkeypatch, Answer(200))
+    assert sentinel.digest(EIGHT) is True
+    assert web.built == [
+        (
+            (SLACK_DIGEST_HOOK,),
+            {
+                "data": slack_digest_body("00"),
+                "headers": {"Content-Type": "application/json"},
+                "method": "POST",
+            },
+        )
+    ]
+    assert web.opened == [(("request",), {"timeout": 15})]
+    assert (sentinel.digest_sent, sentinel.digest_due) == (EIGHT, EIGHT + DAY)
+    assert (sentinel.notices["digest"], sentinel.notice_failures["digest"]) == (1, 0)
+
+
+def test_a_digest_slack_refused_is_sent_again_next_round(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sentinel, web = slack_digest_rig(monkeypatch, http_error(404), Answer(200))
+    assert sentinel.digest(EIGHT) is False
+    assert (sentinel.digest_sent, sentinel.digest_due) == (None, EIGHT)
+    assert sentinel.last_notice_ok == 0
+    assert (sentinel.notices["digest"], sentinel.notice_failures["digest"]) == (0, 1)
+    assert 'ayeops_sentinel_last_notice_ok{watch="central"} 0' in sentinel.metrics()
+    assert sentinel.digest(EIGHT + 60) is True
+    assert [kwargs["data"] for _, kwargs in web.built] == [
+        slack_digest_body("00"),
+        slack_digest_body("01"),
+    ]
+    assert (sentinel.digest_sent, sentinel.digest_due) == (EIGHT + 60, EIGHT + DAY)
+    assert sentinel.last_notice_ok == 1
+    assert (sentinel.notices["digest"], sentinel.notice_failures["digest"]) == (1, 1)
+    logged = capsys.readouterr().out.splitlines()
+    assert logged[0] == '{"event": "slack_failed", "status": 404}'
+    assert "hooks" not in "".join(logged)
+
+
 def test_the_digest_logs_one_line(
     digest_rig: tuple[Any, FakeClock, FakeHttp, FakeTelegram],
     capsys: pytest.CaptureFixture[str],
