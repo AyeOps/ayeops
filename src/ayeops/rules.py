@@ -464,7 +464,6 @@ def check_services(
         for name, service in sorted(manifest.services.items())
         for alert in replication_alerts(manifest, name, service)
     ]
-    for alert, count in sorted(Counter(module_alerts + service_alerts).items()):
     duty_alerts = [DUTY_ALERT] if manifest.data.get("duties") else []
     for alert, count in sorted(Counter(module_alerts + service_alerts + duty_alerts).items()):
         if count > 1:
