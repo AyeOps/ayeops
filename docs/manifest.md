@@ -442,7 +442,7 @@ What follows the contact and what does not:
 |---|---|
 | Grafana alerts, every severity | Slack |
 | `oncall`, `autopilot` routes | their own webhooks first, then Slack as the catch-all, as with the other contacts |
-| [sentinel](modules.md#sentinel) | Slack, through the same webhook |
+| [sentinel](modules.md#sentinel) | Slack, through the same webhook, the backup digest included |
 | [oncall](modules.md#oncall) messages to the person on call, topics in the ops group | Telegram only: the acknowledge button needs a bot; set `AYE_ONCALL_TELEGRAM_TOKEN` and `person.telegram_chat_id` as before |
 | [autopilot](modules.md#autopilot) notes to the person on call | Telegram only, through the oncall bot |
 | status Worker [notices](status.md#notices) | Telegram only, to `status_page.notify.telegram_chat_id` |
