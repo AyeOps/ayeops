@@ -929,6 +929,36 @@ def test_a_built_in_dump_with_when_exists_only_while_its_setting_is_true() -> No
     assert job_ages([METRICS_JOB]) == {"metrics": 26 * HOUR}
 
 
+FAKE_JOBS = [
+    {
+        "name": "fake-a",
+        "service": "fake-dump",
+        "schedule": "0 {{ settings.hour }} * * *",
+        "timezone": "UTC",
+        "grace": "30m",
+        "when": "on",
+    },
+    {
+        "name": "fake-b",
+        "service": "fake-dump",
+        "schedule": "0 1 * * *",
+        "timezone": "Europe/Berlin",
+    },
+]
+
+
+def test_each_built_in_job_keeps_its_own_grace_zone_and_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = Module("fake", MODULES_DIR / "fake", {"backup_jobs": FAKE_JOBS})
+    monkeypatch.setattr("ayeops.backups.load_modules", lambda: {"fake": fake})
+    second = Job("fake-b", "0 1 * * *", "Europe/Berlin", "2h", module="fake", service="fake-dump")
+    first = Job("fake-a", "0 4 * * *", "UTC", "30m", module="fake", service="fake-dump")
+    assert builtin_jobs({"aaa": {}, "fake": {"on": False, "hour": 4}}) == [second]
+    assert builtin_jobs({"aaa": {}, "fake": {"on": True, "hour": 4}}) == [first, second]
+    assert builtin_jobs({"zzz": {}}) == []
+
+
 def modules_of(data: dict[str, Any], host: str) -> dict[str, Any]:
     modules: dict[str, Any] = data["hosts"][host]["modules"]
     return modules
