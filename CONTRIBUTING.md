@@ -324,7 +324,8 @@ here; a built-in one is held to these steps:
 2. `compose.yaml.j2` and `scrape.yaml.j2`. The renderer adds memory and CPU limits, platform,
    restart policy, labels, log rotation and the `127.0.0.1` port binding; do not repeat them.
 3. Every service passes the catalog rules: a description, metrics, alerts, `logs` and a
-   `status` mark. Every alert has a severity and a page in `docs/runbooks/<alert>.md`.
+   `status` mark. Every alert has a severity and a page in `docs/runbooks/<alert>.md`, and
+   passes the checks of [adding an alert](#adding-an-alert).
 4. Every `${AYE_*}` variable the templates read is declared in `permissions` (a credential
    someone issues, with the narrowest grant) or `generated` (with its `format`), and listed in
    `.env.example`; a test checks the declarations.
@@ -336,6 +337,39 @@ here; a built-in one is held to these steps:
    settings, metrics, alerts), a row in the module table of README.md, and an entry in
    CHANGELOG.md, marked preview until it has run on a real fleet.
 8. If `examples/acme.yaml` enables it, regenerate `examples/rendered`.
+
+## Adding an alert
+
+An alert whose expression misspells a metric or a label returns nothing, and nothing looks like
+healthy: it stays silent for good. A threshold nobody tried may sit on the wrong side of a
+healthy value and fire all day. `tests/test_alert_metrics.py` holds every alert of a built-in
+module to both, through the small PromQL reader `parse` of `src/ayeops/promql.py`, which returns
+the selectors (metric and matchers) and the labels of `by`, `without`, `on`, `ignoring`,
+`group_left` and `group_right`, and refuses what it cannot read (an unknown function, a broken
+matcher, an unbalanced bracket) instead of skipping it:
+
+- **Every metric is produced somewhere.** Each metric the expression reads is in a captured
+  exporter list under `tests/fixtures/exporters/` (one name per line, taken from the `/metrics`
+  of the pinned image), is written by a script of a module's `files/` (the full name, or
+  `PREFIX` plus a word of the script), or is recorded by a rule of the rendered example
+  (`examples/rendered/*/*/rules.yml`). A metric of an exporter nobody has captured yet goes into
+  `tests/fixtures/alerts/unfixtured-metrics.yaml` with the reason; the test fails on an entry
+  that a fixture now covers or no alert reads any more, so capture the exporter and drop the
+  entry when you can.
+- **Every label is real where the repository can tell.** A `job` matcher names a scrape job of
+  a `scrape.yaml.j2`. For an alert that reads only series of AyeOps scripts, every label it
+  matches or groups by, other than `job`, `instance` and the `-remoteWrite.label` ones of the
+  metrics module (`host`, `project`, `group`), appears in the script that writes the series.
+  Labels of third-party exporters are not checked: the captured lists hold names only.
+- **Every simple threshold has a healthy and a failing value.** An alert that compares one
+  metric (or one function of it, like `time() - x` or `max by (...) (x)`) with a constant,
+  `x > bool 85`, needs a row in `tests/fixtures/alerts/thresholds.yaml`: the comparison as the
+  expression has it (`when: "> 85"`), a value of a healthy system, a value of a failing one, and
+  `why` when the healthy value comes from an interval or a schedule. The test fails when the
+  healthy value fires, the failing one stays quiet, the expression's comparison no longer
+  matches `when`, or a simple alert has no row. Alerts that combine several metrics (ratios,
+  `and`, `or`, a comparison with another series) are not covered by the table; their tests
+  pin the expression instead.
 
 ## Pull requests
 

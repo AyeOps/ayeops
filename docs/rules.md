@@ -54,7 +54,10 @@ alert has a page under [runbooks](runbooks/). Tests enforce both, and the other 
 every page under runbooks is named after an alert of a built-in module (or the sentinel's
 `sentinel-central-down`, or `duty-overdue` of the [duties](manifest.md#duties)), or is one of the few operating pages of a module (`glitchtip`,
 `infisical`, `oauth2-proxy`, `offsite`, `offsite-append-only`, `flow-baseline`), listed in
-`tests/test_unused.py` and linked from [modules](modules.md).
+`tests/test_unused.py` and linked from [modules](modules.md). Tests also read every built-in
+alert expression: each metric must be produced by a captured exporter, a module script or a
+recording rule, and a threshold of one metric against a constant must separate a reviewed
+healthy value from a failing one ([adding an alert](../CONTRIBUTING.md#adding-an-alert)).
 
 ## YAML rules
 
