@@ -16,7 +16,7 @@ Names (project, hosts, services, alerts) match `^[a-z][a-z0-9-]{0,39}$`.
 | `ayeops` | no | the AyeOps releases this manifest is written for, a [PEP 440](https://peps.python.org/pep-0440/#version-specifiers) specifier such as `">=0.2,<0.3"` or `"==0.2.0"` (quote it in YAML); every command that checks the manifest fails first with rule `ayeops-version` when the running AyeOps (`aye --version`) is outside it, see [pinning a release](#pinning-a-release) |
 | `project` | yes | prefix of every compose project name: `<project>-<host>` |
 | `runbook_base_url` | when any alert exists | base of `runbook_url` in alert rules: `<base>/<runbook>` |
-| `timezone` | no | IANA time zone of the fleet, e.g. `Europe/Kyiv`, default `UTC`: the zone of night and quiet hours (`incidents`, `oncall`, whose incident topics also show their times in it) and of daily schedules (`updates`, `image-updates`, `vulns`, `eol`, `offsite`) wherever a module does not set its own `timezone`; an unknown zone fails rule `timezone`. `incidents`, `oncall` and `autopilot` read the zone from the host's `/usr/share/zoneinfo`, mounted read-only; on a host without it (Alpine without `tzdata`) `UTC` still works and any other zone stops the agent at its start |
+| `timezone` | no | IANA time zone of the fleet, e.g. `Europe/Kyiv`, default `UTC`: the zone of night and quiet hours (`incidents`, `oncall`, whose incident topics also show their times in it) and of daily schedules (`updates`, `image-updates`, `vulns`, `eol`, `offsite`, the sentinel `digest`) wherever a module does not set its own `timezone`; an unknown zone fails rule `timezone`. `incidents`, `oncall` and `autopilot` read the zone from the host's `/usr/share/zoneinfo`, mounted read-only; on a host without it (Alpine without `tzdata`) `UTC` still works and any other zone stops the agent at its start |
 | `module_paths` | no | directories with your own modules, relative to the manifest, see [modules](modules.md#write-your-own-module) |
 | `rules.waivers_need_until` | no | `true` makes every [waiver](#waivers) name its end with `until`, default `false` |
 | `alerting.contact` | no | `telegram` (default), `email` (needs `mail` and `alerting.emails`) or `none` |
@@ -46,6 +46,8 @@ Names (project, hosts, services, alerts) match `^[a-z][a-z0-9-]{0,39}$`.
 | `zone` | no | where the host stands, e.g. `office`; the portal groups hosts by `zone`, else by `provider`, else one zone per host; a host's sentinel and its off-site copies must stand in another zone (rules `sentinel-watch`, `offsite-target`) |
 | `provider` | no | who runs the machine, e.g. a cloud; shown above the zone |
 | `icon` | no | portal icon of the host, e.g. `ubuntu`; see [icons](#icons) |
+| `volatile` | no | `true`, or a duration from `1h` to `7d`, for a host that is expected to disappear: `host-down` leaves it out and `host-gone` warns once it has been away for a day, or for the duration; see [volatile hosts](#volatile-hosts-and-maintenance-windows) |
+| `maintenance` | no | planned windows in UTC, `{days, start, duration}`, during which the host's alerts are held back; see [maintenance windows](#volatile-hosts-and-maintenance-windows) |
 | `connect` | no | how `aye deploy`, `diff` and `doctor` reach the host, so their `--ssh`, `--sudo`, `--helper` and `--dir` need not be typed; see [connect](#connect) |
 | `units` | no | services that run as systemd units on this host, as `<service>: <unit>` (`.service`, `.timer`, `.socket` or `.path`); they count as provided, like a cron backup or a host check that no container runs |
 | `compose` | no | your own compose files on this host, relative to the manifest; services defined there count as provided. An entry is a path or `{file: <path>, name: <project>}`: `name` is the compose project name, shown as the stack on the portal and used to match its containers |
@@ -82,6 +84,55 @@ and `--sudo` or `--helper` replaces the whole mode, so `--helper` on a host with
 runs through the helper only. A fleet takes each host's own `connect`, which `--ssh` cannot do
 for more than one host. A [profile](#profiles) may carry `connect` for all its hosts, e.g.
 `{helper: true}`, and each host adds its `ssh`.
+
+### Volatile hosts and maintenance windows
+
+Some hosts are expected to go away: a workstation switched off at night, a lab box parked over
+the weekend, a machine on an unreliable link. Others go down on a schedule for planned work.
+Both are facts about the host, so they belong in the manifest rather than in a silence clicked
+in Grafana, which nobody sees in review and everybody forgets:
+
+```yaml
+hosts:
+  workstation:
+    arch: amd64
+    volatile: true
+    modules: {metrics: {role: agent, remote_write: {host: central}}, node: {}}
+  lab:
+    arch: arm64
+    volatile: 3d
+    modules: {metrics: {role: agent, remote_write: {host: central}}, node: {}}
+  db:
+    arch: amd64
+    maintenance:
+      - {days: [sun], start: "23:00", duration: 3h}
+      - {start: "04:00", duration: 30m}
+    modules: {metrics: {role: agent, remote_write: {host: central}}, node: {}}
+```
+
+**`volatile`** is `true` (a day) or how long the host may be gone, `1h` to `7d` (rule
+`host-volatile`; it needs `node` on the host, since it softens `host-down`). `host-down` (critical)
+leaves the host out; [`host-gone`](runbooks/host-gone.md) (warning, so it never pages on-call)
+fires once the host has had no successful node scrape for that long, and stays firing for a
+week more before the host leaves the query window. While the host is down its other alerts are
+held back as for every host, and so are the alerts of the [services](#service) declared on it,
+whichever host probes them: a laptop switched off is not a website outage worth a page.
+
+**`maintenance`** is a list of windows, each starting at `start` (`"HH:MM"` in UTC, quoted, since
+YAML reads an unquoted `23:00` as the number 1380) on every day in
+`days` (`mon` to `sun`; every day when left out) and lasting `duration` (`30m`, `2h`, `1d`). A
+window may cross midnight and the end of the week: `{days: [sun], start: "23:00", duration: 3h}`
+runs from Sunday 23:00 to Monday 02:00. While a window is open every alert of the host,
+`host-down` included, is held back with the value 0, and so are the alerts of the services
+declared on the host. When it closes the rules evaluate again: a host still down pages two
+minutes later (`host-down`'s `for`). A window is longer than 0 and at most 24 hours, and a
+24-hour window every day, which never closes, is refused (rule `maintenance-window`); a longer
+outage is two windows on consecutive days. A malformed `start`, an unknown day or a duration
+such as `1w` fails the `schema`.
+
+Both fields go into a [profile](#profiles) like any other host field, so every host of the
+profile shares its windows. How the rules are rendered is in
+[modules](modules.md#grafana), under "Volatile hosts and maintenance windows".
 
 ## Pinning a release
 

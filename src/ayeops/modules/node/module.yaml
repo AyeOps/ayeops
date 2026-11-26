@@ -40,7 +40,7 @@ services:
     memory: 64m
     cpus: 0.25
     metrics: [node_memory_MemAvailable_bytes, node_filesystem_avail_bytes, node_cpu_seconds_total]
-    alerts: [host-down, disk-full, memory-low, swap-out-sustained]
+    alerts: [host-down, host-gone, disk-full, memory-low, swap-out-sustained]
     logs: docker
     status:
       internal: host telemetry, not a user-facing component
@@ -73,6 +73,17 @@ alerts:
     summary: "{{ .Labels.host }} stopped reporting node metrics"
     runbook: host-down
     no_data: alerting
+  - name: host-gone
+    only_with: volatile_hosts
+    title: Volatile host gone
+    expr: >-
+      1 - ((max by (host) (max_over_time(up{job="node"}[1d]))
+      + on (host) group_right () (0 * last_over_time(up{job="node"}[8d])))
+      or 0 * last_over_time(up{job="node"}[8d]))
+    for: 5m
+    severity: warning
+    summary: "{{ .Labels.host }} is volatile and has not reported node metrics for longer than its volatile duration"
+    runbook: host-gone
   - name: disk-full
     title: Disk above 80 %
     expr: (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|nsfs"}) * 100 > bool 80

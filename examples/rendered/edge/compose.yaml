@@ -717,6 +717,9 @@ services:
     cpus: 0.05
     environment:
       AYE_SENTINEL_CHECKS: '[{"contains": "\"database\": \"ok\"", "kind": "http", "name": "grafana", "url": "https://grafana.ops.acme.example/api/health"}, {"kind": "http", "name": "victoriametrics", "url": "http://10.8.0.1:8428/health"}, {"kind": "fresh", "max_age_seconds": 180, "name": "samples", "url": "http://10.8.0.1:8428/api/v1/query"}]'
+      AYE_SENTINEL_DIGEST_AT: 08:00
+      AYE_SENTINEL_DIGEST_TIMEZONE: Europe/Kyiv
+      AYE_SENTINEL_DIGEST_URL: http://10.8.0.1:8428/api/v1/query
       AYE_SENTINEL_FAILURES_BEFORE_ALERT: '3'
       AYE_SENTINEL_HOST: edge
       AYE_SENTINEL_INTERVAL: 60s
@@ -742,7 +745,7 @@ services:
       timeout: 10s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: f030a1df9f91a47e
+      io.ayeops.config-hash: 09148ceaa0806c61
       io.ayeops.module: sentinel
       io.ayeops.service: sentinel
     logging:
