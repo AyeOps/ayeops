@@ -14,6 +14,12 @@ and was never tagged.
 
 ### Added
 
+- `probes`: `links` pings the private `address` of other hosts (a list of names, or `true` for
+  every other host with an address that is not volatile), whatever VPN carries it. The new
+  critical alert `link-down` fires when no probed host of a zone has answered for 3 minutes, and
+  while it holds the `host-down` of those hosts is held back, so a dropped tunnel or site pages
+  once with the zone's name instead of once per host. Peers in a maintenance window drop out of
+  it; rule `probe-links` checks the list. The `AyeOps / Probes` dashboard shows every link.
 - [`smtp` checks](docs/checks.md#smtp): `type: smtp` with an `address` greets a mail server
   through blackbox-exporter's `tcp` prober instead of only opening its port: `220`, `EHLO`,
   `250`, then `STARTTLS` and a second `EHLO` over TLS (`tls: starttls`, the default on 25 and

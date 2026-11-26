@@ -62,7 +62,12 @@ def test_hosts_carry_the_address_and_the_catalog_fields_as_host_vars(
             "ayeops_project": "acme",
             "ayeops_zone": "datacenter",
         },
-        "edge": {"ayeops_arch": "amd64", "ayeops_project": "acme", "ayeops_zone": "office"},
+        "edge": {
+            "ansible_host": "10.8.0.2",
+            "ayeops_arch": "amd64",
+            "ayeops_project": "acme",
+            "ayeops_zone": "office",
+        },
     }
 
 
