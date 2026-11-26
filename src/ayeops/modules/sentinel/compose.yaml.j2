@@ -17,6 +17,11 @@ services:
       AYE_SENTINEL_TIMEOUT: {{ settings.timeout | tojson }}
       AYE_SENTINEL_RUNBOOK: {{ sentinel.runbook | tojson }}
       AYE_SENTINEL_PORT: "9134"
+{% if settings.digest %}
+      AYE_SENTINEL_DIGEST_AT: {{ settings.digest.at | tojson }}
+      AYE_SENTINEL_DIGEST_TIMEZONE: {{ settings.digest.timezone | default("UTC") | tojson }}
+      AYE_SENTINEL_DIGEST_URL: {{ sentinel.digest_url | tojson }}
+{% endif %}
     volumes:
       - "./sentinel/sentinel.py:/app/sentinel.py:ro"
     ports: [9134]

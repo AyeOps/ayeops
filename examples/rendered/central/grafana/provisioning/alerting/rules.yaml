@@ -3302,6 +3302,43 @@ groups:
     noDataState: OK
     title: Sentinel stopped checking
     uid: aye-sentinel-stalled
+  - annotations:
+      runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-digest-overdue.md
+      summary: The daily backup digest of the sentinel on {{ .Labels.host }} is more than 2 hours overdue
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: (time() - ayeops_sentinel_digest_due_timestamp_seconds > bool 7200) unless on (host) (max by (host) (last_over_time(up{job="node"}[1d]) * (lag(up{job="node"}[1d]) < bool 180)) == 0) or 0 * (time() - ayeops_sentinel_digest_due_timestamp_seconds > bool 7200)
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 5m
+    labels:
+      module: sentinel
+      scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
+      severity: warning
+    noDataState: OK
+    title: Backup digest overdue
+    uid: aye-sentinel-digest-overdue
 - folder: AyeOps
   interval: 1m
   name: smart

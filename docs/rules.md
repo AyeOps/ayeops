@@ -138,6 +138,7 @@ once, at the anchor. The same loader reads:
 | `sentinel-watch` | a sentinel's `watch` names a host of the manifest other than its own, in another `zone` when both hosts name one: one outage must not silence both |
 | `probe-links` | each host in a `probes.links` list is another host of the manifest with an `address` and not `volatile`; `links: true` finds at least one such host, see [probes](modules.md#probes) |
 | `sentinel-checks` | a sentinel has at least one check after the defaults and overrides, and each has a known kind with its `url` or `host` |
+| `sentinel-digest` | a sentinel with `digest` knows where to read the backup metrics: its `digest.url`, or a `samples` check of kind `fresh` to take the url from |
 | `status-reporter` | the `status` module has a `status_page.hostname` to push to and at least one public component without a `probe`, which waits for its pushes |
 | `host-volatile` | a host's `volatile` is `true` or a duration from `1h` to `7d`, and the host runs `node`, whose `host-down` it softens, see [volatile hosts](manifest.md#volatile-hosts-and-maintenance-windows) |
 | `maintenance-window` | a host's `maintenance` window lasts longer than 0 and at most 24 hours, and is not 24 hours on every day, which would never close; its `start` (`"HH:MM"`) and `days` (`mon` to `sun`) are checked by the `schema` |
