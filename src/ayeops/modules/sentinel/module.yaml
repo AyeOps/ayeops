@@ -1,5 +1,5 @@
 name: sentinel
-summary: Watches the central host from another host and sends one message to Telegram, or to Slack with contact slack, when it stops answering, plus a dead-man ping while it answers.
+summary: Watches the central host from another host and sends one message to Telegram, or to Slack with contact slack, when it stops answering, plus a dead-man ping while it answers and, when asked, a daily digest of every backup.
 requires: {}
 defaults:
   checks: []
@@ -8,6 +8,7 @@ defaults:
   interval: 60s
   timeout: 10s
   expose: []
+  digest: null
   resources: {}
 settings_schema:
   type: object
@@ -69,6 +70,20 @@ settings_schema:
       type: array
       items:
         enum: [9134]
+    digest:
+      type: [object, "null"]
+      additionalProperties: false
+      required: [at]
+      properties:
+        at:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+        timezone:
+          type: string
+          pattern: '^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$'
+        url:
+          type: string
+          pattern: '^https?://'
 services:
   sentinel:
     description: Checks Grafana, VictoriaMetrics and the freshness of up on the watched host every minute and tells Telegram, or Slack with contact slack, when they stop answering.
@@ -80,11 +95,13 @@ services:
       - ayeops_sentinel_alerting
       - ayeops_sentinel_last_notice_ok
       - ayeops_sentinel_ping_success
+      - ayeops_sentinel_digest_due_timestamp_seconds
     alerts:
       - target-down
       - sentinel-notify-failing
       - sentinel-ping-failing
       - sentinel-stalled
+      - sentinel-digest-overdue
     logs: docker
     status:
       internal: watches the monitoring itself, not a user-facing component
@@ -110,6 +127,14 @@ alerts:
     severity: warning
     summary: "The sentinel on {{ .Labels.host }} has not finished a round of checks for 5 minutes"
     runbook: sentinel-stalled
+  - name: sentinel-digest-overdue
+    setting: digest
+    title: Backup digest overdue
+    expr: time() - ayeops_sentinel_digest_due_timestamp_seconds > bool 7200
+    for: 5m
+    severity: warning
+    summary: "The daily backup digest of the sentinel on {{ .Labels.host }} is more than 2 hours overdue"
+    runbook: sentinel-digest-overdue
 files:
   - src: files/sentinel.py
     dest: sentinel/sentinel.py

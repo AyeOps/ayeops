@@ -27,7 +27,7 @@ Every built-in module, what it runs, its settings and its alerts. The module tab
 | [`delivery`](#delivery) | deploy, CI, test and quality metrics from `aye report` |
 | [`github`](#github) | GitHub Actions minutes and billed usage, and the importer of `aye report` artifacts |
 | [`ai-usage`](#ai-usage) | spend and limits of AI providers |
-| [`sentinel`](#sentinel) | a watcher on another host that messages when the central host stops answering |
+| [`sentinel`](#sentinel) | a watcher on another host that messages when the central host stops answering, and once a day with a digest of every backup |
 | [`oncall`](#oncall) | GoAlert escalation of critical alerts with a Telegram acknowledge button |
 | [`incidents`](#incidents) | the incident journal and the `Incidents` dashboard |
 | [`status`](#status) | the reporter that pushes signed component states to the status page Worker |
@@ -1301,6 +1301,7 @@ hosts:
 | `reminder` | `6h` | how often a message repeats while the host stays down |
 | `interval` | `60s` | time between rounds |
 | `timeout` | `10s` | per check |
+| `digest` | `null` (off) | `{at, timezone, url}`: the daily [backup digest](#backup-digest); `at` (`HH:MM`) is required, `timezone` defaults to the manifest's [`timezone`](manifest.md#top-level), `url` to the `url` of the `samples` check (rule `sentinel-digest`) |
 
 Without `checks`, the watched host's own modules give the defaults:
 
@@ -1342,6 +1343,54 @@ well: the Worker runs on Cloudflare, sees the same outage through its probes and
 still pages when the provider is down. With no second host at all, the Worker is the watch
 instead of the sentinel, limited to what is public or pushed.
 
+### Backup digest
+
+Backups are heard from only when they fail, so silence reads as success; but a dead dump job,
+a dead alerting path or a dead notifier are silent too. With `digest`, the sentinel also sends
+one message a day that says every backup is fine, and a missing message becomes a signal of its
+own:
+
+```yaml
+sentinel:
+  watch: central
+  digest:
+    at: "08:00"
+```
+
+At `at` in `timezone` the round asks the VictoriaMetrics of the watched host (`url`, the
+`/api/v1/query` of the `samples` check unless set) for one instant query over the
+[backups](#backups) and [offsite](#offsite) metrics of every host, and sends:
+
+```text
+💾 acme: backup digest, 2026-01-01 06:00 UTC
+🟠 1 of 3 backups stale or failed: edge/acme-db
+• edge/acme-db: stale, last run failed, last success 1d 2h ago, limit 1d 1h, 1.2 GiB
+• central/glitchtip-db: last success 5h 12m ago, 50.0 MiB
+• edge off-site copy: last copy 2h 0m ago, restore test passed 2d 1h ago
+Read from central by the AyeOps sentinel on edge, every day at 08:00 Europe/Kyiv.
+```
+
+The summary line is `✅ All N backups fresh` when nothing is wrong, names at most five
+problems, and the stale and failed lines come first. The verdicts are those of the alerts:
+
+| Line | Fresh when |
+|---|---|
+| a dump job (`host/job`, every series of `ayeops_backup_max_age_seconds`) | the last success, or the declaration while there is none, is at most `ayeops_backup_max_age_seconds` old (`backup-missing`) and `ayeops_backup_last_run_success` is not `0` (`backup-failed`); the size is `ayeops_backup_last_size_bytes` |
+| an off-site copy (`host off-site copy`) | the last snapshot is at most `ayeops_offsite_max_age_seconds` (26 hours without one) old (`offsite-stale`), and the restore test passed within 8 days and did not fail since (`offsite-restore-test`) |
+
+When the query fails, the digest still goes out and names the reason (`Cannot read the backup
+metrics from central: HTTP 503`); with no backup series at all it says `No backups reported`.
+A digest longer than Telegram allows (4096 characters, kept with Slack too) drops lines from
+the end, the fresh ones first, and says `• and N more`. With contact `slack` it goes to the same
+webhook as the other messages, with `&`, `<` and `>` escaped. The query reads up to 1 MiB, about 4000 series.
+
+A digest that Telegram or Slack did not accept is sent again next round, and counts in
+`ayeops_sentinel_last_notice_ok` like any other message (`sentinel-notify-failing`). The time
+of the next digest is `ayeops_sentinel_digest_due_timestamp_seconds`; it moves to the next day
+only once a digest is delivered, and `sentinel-digest-overdue` fires when it is 2 hours in the
+past, 26 hours after the last one. A restart counts from the next `at`, so a sentinel restarted
+just after `at` skips one day without an alert.
+
 ### Dead-man ping
 
 When a whole round passes, the sentinel fetches `AYE_SENTINEL_PING_URL`. If the sentinel's host
@@ -1379,12 +1428,15 @@ connection error while the central host's own alerts keep arriving.
 `ayeops_sentinel_check_duration_seconds`, `ayeops_sentinel_failure_streak{watch}`,
 `ayeops_sentinel_alerting`, `ayeops_sentinel_last_round_timestamp_seconds`,
 `ayeops_sentinel_last_notice_ok`, `ayeops_sentinel_notices_total{kind}`,
-`ayeops_sentinel_notice_failures_total{kind}`, `ayeops_sentinel_ping_success`. With `metrics`
-on the sentinel's host vmagent scrapes it and ships it to the central storage, so the central
-Grafana watches the sentinel in turn: `target-down`, `sentinel-notify-failing` (the last
-message did not reach Telegram or Slack), `sentinel-ping-failing` (15m), `sentinel-stalled` (no finished
-round for 5 minutes). `/health` answers 503 once rounds stop. `node` on the same host adds
-`host-down` for the sentinel's machine.
+`ayeops_sentinel_notice_failures_total{kind}`, `ayeops_sentinel_ping_success`, and with
+`digest` `ayeops_sentinel_digest_due_timestamp_seconds`,
+`ayeops_sentinel_digest_last_sent_timestamp_seconds` and the `kind="digest"` counters. With
+`metrics` on the sentinel's host vmagent scrapes it and ships it to the central storage, so the
+central Grafana watches the sentinel in turn: `target-down`, `sentinel-notify-failing` (the
+last message did not reach Telegram or Slack), `sentinel-ping-failing` (15m),
+`sentinel-stalled` (no finished round for 5 minutes), `sentinel-digest-overdue` (with
+`digest`, 2 hours past its time). `/health` answers 503 once rounds stop. `node` on the same
+host adds `host-down` for the sentinel's machine.
 
 Each check logs one JSON line when it starts failing, when its error changes and when it
 passes again, not every minute.
@@ -1404,8 +1456,8 @@ Restart=always
 ```
 
 `sentinel.env` holds the `AYE_SENTINEL_*` lines of the rendered `compose.yaml` plus the two
-`AYE_TELEGRAM_*` values (or `AYE_SLACK_WEBHOOK_URL`) and `AYE_SENTINEL_PING_URL`. `aye deploy` and the config hash do not
-cover this path.
+`AYE_TELEGRAM_*` values (or `AYE_SLACK_WEBHOOK_URL`) and `AYE_SENTINEL_PING_URL`. `aye deploy`
+and the config hash do not cover this path.
 
 ## oncall
 
@@ -3141,7 +3193,9 @@ and duration into the [node](#node) textfile directory; the manifest declares th
 cron schedule, and `aye check` turns the schedule into the age after which a job without a
 success counts as failed. Silence is not success: a job that stopped, hangs or never ran alerts
 like one that fails. Requires `metrics` and `node` on the same host, and a node `textfile_dir`
-when the manifest declares jobs of its own (rule `backup-textfile`).
+when the manifest declares jobs of its own (rule `backup-textfile`). The
+[sentinel's digest](#backup-digest) lists every job once a day, so that "all backups fresh" also
+arrives.
 
 A job with a `command` is installed by the kit: `aye render` writes a systemd timer and service
 for it, and `aye deploy` puts them in place, so the schedule is written once, in the manifest.

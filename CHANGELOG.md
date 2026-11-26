@@ -25,6 +25,11 @@ and was never tagged.
   vmagent queue holds more than 30 minutes of its own traffic or more than half of its room, and
   `metrics-shipping-dropped` (critical), when in the last hour the full queue dropped blocks or
   storage rejected one.
+- `sentinel`: `digest: {at, timezone, url}` sends a daily backup digest to the alert chat: one
+  line per dump job and off-site copy with its last success, size and restore test, and a
+  summary of what is stale or failed, so that a quiet day also says the backups are fine. The
+  new alert `sentinel-digest-overdue` fires when a digest is 2 hours late, and the rule
+  `sentinel-digest` asks for `digest.url` when there is no `samples` check to read it from.
 - Hosts declare expected downtime in the manifest instead of a silence in Grafana
   ([volatile hosts and maintenance windows](docs/manifest.md#volatile-hosts-and-maintenance-windows)).
   `volatile: true`, or a duration from `1h` to `7d`, leaves a host out of `host-down`; the new
