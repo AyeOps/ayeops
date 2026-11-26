@@ -62,6 +62,11 @@ so a service declares what its backups promise in [`data`](manifest.md#data): th
 The `rpo` is what a `state: restore` failover loses at worst; the drill's measured duration is
 the part of the `rto` the kit can measure today.
 
+A `state: replicated` service needs a replica that keeps up. That part ships too: a database
+service declares the replica it streams to with [`replication`](manifest.md#replication), and
+AyeOps alerts when the replica lags more than `max_lag`, stops streaming, or is promoted while
+the primary still takes writes ([database replication](modules.md#database-replication)).
+
 ## What aye check proves in advance
 
 A failover plan that was never checked fails on the day it is needed. So `aye check` refuses a

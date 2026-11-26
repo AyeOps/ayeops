@@ -7,7 +7,7 @@ the manifest into a docker compose project per host.
 - [Manifest reference](manifest.md): every field of the manifest
 - [Catalog rules](rules.md): what `aye check` enforces and why
 - [Modules](modules.md): what each module runs, its settings and alerts
-- [Checks](checks.md): HTTP, TCP, DNS, script and read-only SQL checks declared under a service, each with its metrics and alert
+- [Checks](checks.md): HTTP, TCP, SMTP, DNS, script and read-only SQL checks declared under a service, each with its metrics and alert
 - [Deploy](deploy.md): `aye deploy` swaps a host's files atomically and recreates exactly the services whose config changed, and rolls a fleet out canary first; `aye diff` shows beforehand what it would change
 - [Host init](host-init.md): `aye host-init` gives a host a deploy user that may run one helper on one directory, `aye permissions` lists the narrowest external credentials, and what neither can promise
 - [Ansible inventory](inventory.md): `aye inventory` writes the manifest's hosts as an Ansible inventory, grouped by zone, group, profile, module and service, for playbooks a team already runs

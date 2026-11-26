@@ -22,7 +22,9 @@ import pytest
 import yaml
 
 from ayeops.cli import main as cli_main
-from ayeops.render import HOSTS_DOWN, NODE_UP
+from ayeops.manifest import Manifest
+from ayeops.registry import load_modules
+from ayeops.render import HOSTS_DOWN, NODE_UP, render_tree
 from tests.e2e.stack import (
     BACKUP_FILE,
     CA_FILE,
@@ -222,6 +224,38 @@ def test_probes_and_checks_succeed() -> None:
     for check, kind in checks:
         if kind == "sql":
             assert values(f'ayeops_check_sql_value{{check="{check}"}}'), check
+
+
+def test_the_check_blackbox_accepts_every_smtp_variant(tmp_path: Path) -> None:
+    data = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
+    alert = {"for": "5m", "severity": "warning", "runbook": "mail-down"}
+    variants = {"relay": (25, "none"), "submission": (587, "starttls"), "smtps": (465, "tls")}
+    data["services"]["web"]["checks"].update(
+        {
+            name: {
+                "type": "smtp",
+                "address": f"mail.example.com:{port}",
+                "tls": tls,
+                "ehlo": "probe.example.com",
+                "alert": alert,
+            }
+            for name, (port, tls) in variants.items()
+        }
+    )
+    tree = render_tree(Manifest(data, MANIFEST.parent), load_modules())
+    config = tmp_path / "blackbox.yml"
+    config.write_text(tree[f"{central()}/checks/blackbox.yml"], encoding="utf-8")
+    config.chmod(0o644)
+    assert {f"check_web_{name}" for name in variants} <= set(
+        yaml.safe_load(config.read_text())["modules"]
+    )
+    image = compose(central())["services"]["check-blackbox"]["image"]
+    mount = f"{config}:/etc/blackbox/blackbox.yml:ro"
+    args = ["docker", "run", "--rm", "-v", mount, image, "--config.check"]
+    result = subprocess.run(
+        [*args, "--config.file=/etc/blackbox/blackbox.yml"], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_grafana_datasources_are_provisioned_and_healthy() -> None:

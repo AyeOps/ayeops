@@ -16,7 +16,7 @@ Every built-in module, what it runs, its settings and its alerts. The module tab
 | [`network`](#network) | link state, speed, errors and Wi-Fi signal of the declared interfaces |
 | [`disk-forecast`](#disk-forecast) | an alert when a filesystem fills up within 7 days |
 | [`probes`](#probes) | blackbox-exporter for HTTP, TLS expiry, the host's own internet and the private network links, RDAP for domains |
-| [`checks`](#checks) | the runners of the HTTP, TCP, DNS, script and SQL checks declared under services |
+| [`checks`](#checks) | the runners of the HTTP, TCP, SMTP, DNS, script and SQL checks declared under services |
 | [`hygiene`](#hygiene) | a nightly prune of stopped containers, unused images and build cache |
 | [`reconciler`](#reconciler) | starts again a declared container that Docker left down, with a back-off |
 | [`image-updates`](#image-updates) | Diun over the containers on a floating tag |
@@ -44,7 +44,8 @@ Every built-in module, what it runs, its settings and its alerts. The module tab
 | [`offsite`](#offsite) | restic copies of a host's newest backup to another host, with restore tests |
 
 After the modules: [flow baselines](#flow-baselines), an alert that compares a flow with its
-own usual level, and [write your own module](#write-your-own-module).
+own usual level, [database replication](#database-replication), the alerts of a declared
+primary and replica pair, and [write your own module](#write-your-own-module).
 
 ## How a module renders
 
@@ -455,9 +456,10 @@ and round-trip time of every link.
 
 ## checks
 
-The runners of the [checks](checks.md) declared under `services.<name>.checks`: HTTP, TCP and
-DNS through blackbox-exporter, scripts in a sandboxed runner, read-only SQL queries against a
-Postgres datasource. Requires `metrics` on the same host; script and SQL checks also need
+The runners of the [checks](checks.md) declared under `services.<name>.checks`: HTTP, TCP,
+SMTP and DNS through blackbox-exporter, scripts in a sandboxed runner, read-only SQL queries
+against a Postgres datasource. An [`smtp`](checks.md#smtp) check greets a mail server, with
+`STARTTLS` on 25 and 587 or TLS from the first byte on 465, instead of only opening its port. Requires `metrics` on the same host; script and SQL checks also need
 `node`, whose textfile directory serves their results.
 
 | Setting | Default | Meaning |
@@ -467,7 +469,9 @@ Postgres datasource. Requires `metrics` on the same host; script and SQL checks 
 
 It renders only what the checks of its host need: `check-blackbox`, `check-scripts`,
 `check-scripts-net` and `check-sql`. Every check gets its own alert; the module adds
-`target-down` for the blackbox and
+`target-down` for the blackbox,
+[`check-tls-expiring`](runbooks/check-tls-expiring.md) when the certificate an `https` or TLS
+`smtp` check sees expires in less than 14 days, and
 [`check-runner-stale`](runbooks/check-runner-stale.md) when a runner has not written results
 for 5 minutes. Fields, sandboxes and metrics of each check type:
 [the checks module](checks.md#the-checks-module).
@@ -1334,7 +1338,7 @@ hit rate, not its list price.
 Who watches the watcher. Every alert of the kit leaves through the Grafana of the central host,
 so when that host dies, nobody hears about it. The sentinel is one stdlib Python script on
 `python:3.13.16-alpine3.23` (48 MB limit) that runs on **another** host, checks the central
-one every minute and talks to Telegram itself.
+one every minute and talks to Telegram itself, or to Slack with `alerting.contact: slack`.
 
 ```yaml
 hosts:
@@ -1383,7 +1387,10 @@ check and the time of the first failure, then one every `reminder` while it stay
 all-clear with the length of the outage when a round passes again. A message that Telegram did
 not accept is sent again next round; an all-clear that did not arrive keeps the alert open, so a
 relapse is not announced twice. Messages are plain text to `AYE_TELEGRAM_BOT_TOKEN` and
-`AYE_TELEGRAM_CHAT_ID`, the same chat as the Grafana contact point.
+`AYE_TELEGRAM_CHAT_ID`, the same chat as the Grafana contact point. With
+[`alerting.contact: slack`](manifest.md#slack) they go to the Grafana contact point's incoming
+webhook in `AYE_SLACK_WEBHOOK_URL` instead, as plain text with `&`, `<` and `>` escaped, and the
+host needs no Telegram bot; with `email` or `none` the sentinel stays on Telegram.
 
 The sentinel shares the fate of its own host. When it and the host it watches sit with one
 provider (or in one zone of it), turn on the status Worker's [notices](status.md#notices) as
@@ -1428,10 +1435,11 @@ problems, and the stale and failed lines come first. The verdicts are those of t
 
 When the query fails, the digest still goes out and names the reason (`Cannot read the backup
 metrics from central: HTTP 503`); with no backup series at all it says `No backups reported`.
-A digest longer than Telegram allows (4096 characters) drops lines from the end, the fresh ones
-first, and says `• and N more`. The query reads up to 1 MiB, about 4000 series.
+A digest longer than Telegram allows (4096 characters, kept with Slack too) drops lines from
+the end, the fresh ones first, and says `• and N more`. With contact `slack` it goes to the same
+webhook as the other messages, with `&`, `<` and `>` escaped. The query reads up to 1 MiB, about 4000 series.
 
-A digest that Telegram did not accept is sent again next round, and counts in
+A digest that Telegram or Slack did not accept is sent again next round, and counts in
 `ayeops_sentinel_last_notice_ok` like any other message (`sentinel-notify-failing`). The time
 of the next digest is `ayeops_sentinel_digest_due_timestamp_seconds`; it moves to the next day
 only once a digest is delivered, and `sentinel-digest-overdue` fires when it is 2 hours in the
@@ -1480,10 +1488,10 @@ connection error while the central host's own alerts keep arriving.
 `ayeops_sentinel_digest_last_sent_timestamp_seconds` and the `kind="digest"` counters. With
 `metrics` on the sentinel's host vmagent scrapes it and ships it to the central storage, so the
 central Grafana watches the sentinel in turn: `target-down`, `sentinel-notify-failing` (the
-last message did not reach Telegram), `sentinel-ping-failing` (15m), `sentinel-stalled` (no
-finished round for 5 minutes), `sentinel-digest-overdue` (with `digest`, 2 hours past its
-time). `/health` answers 503 once rounds stop. `node` on the same host adds `host-down` for the
-sentinel's machine.
+last message did not reach Telegram or Slack), `sentinel-ping-failing` (15m),
+`sentinel-stalled` (no finished round for 5 minutes), `sentinel-digest-overdue` (with
+`digest`, 2 hours past its time). `/health` answers 503 once rounds stop. `node` on the same
+host adds `host-down` for the sentinel's machine.
 
 Each check logs one JSON line when it starts failing, when its error changes and when it
 passes again, not every minute.
@@ -1503,8 +1511,8 @@ Restart=always
 ```
 
 `sentinel.env` holds the `AYE_SENTINEL_*` lines of the rendered `compose.yaml` plus the two
-`AYE_TELEGRAM_*` values and `AYE_SENTINEL_PING_URL`. `aye deploy` and the config hash do not
-cover this path.
+`AYE_TELEGRAM_*` values (or `AYE_SLACK_WEBHOOK_URL`) and `AYE_SENTINEL_PING_URL`. `aye deploy`
+and the config hash do not cover this path.
 
 ## oncall
 
@@ -1551,7 +1559,9 @@ hosts:
 to the `oncall` contact point with `continue: true`, then a catch-all to the ops contact. So a
 critical alert reaches both, and a stopped GoAlert, bridge or Telegram bot never means silence:
 the ops channel still gets it. `aye check` refuses the module with `alerting.contact: none`
-(rule `oncall-fallback`). `warning` and `info` never reach GoAlert.
+(rule `oncall-fallback`). `warning` and `info` never reach GoAlert. With
+[`alerting.contact: slack`](manifest.md#slack) the ops channel is Slack, while the messages to
+the person on call and the topics stay in Telegram: the acknowledge button needs a bot.
 
 **How a message travels.** Grafana posts to `http://oncall-bridge:8080/grafana` with
 `Authorization: Bearer $AYE_ONCALL_WEBHOOK_SECRET`. The bridge adds `dashboard_url` from
@@ -2212,7 +2222,8 @@ Provisioned: the VictoriaMetrics datasource (uid `victoriametrics`), the dashboa
 rules of every module enabled on any host plus the alerts of your services, and with
 `alerting.contact: telegram` a Telegram contact point and the default notification policy.
 With `alerting.contact: email` the contact point is an `email` one that sends to
-`alerting.emails`. Both carry a link to the dashboard panel of the alert, see
+`alerting.emails`; with `alerting.contact: slack` a `slack` one that posts to the incoming
+webhook in `AYE_SLACK_WEBHOOK_URL` ([Slack](manifest.md#slack)). All three carry a link to the dashboard panel of the alert, see
 [alerts](#modules); the links point at `root_url`, so without one they lead to Grafana's
 `localhost`. With [`mail`](manifest.md#mail) Grafana sends through that relay
 (`GF_SMTP_*`; `tls: starttls` becomes `GF_SMTP_STARTTLS_POLICY=MandatoryStartTLS`, `tls` and
@@ -2242,7 +2253,11 @@ worker-01, worker-02, worker-03, ...
 with the hosts of the firing alerts (their `instance` for an alert without a host), or each
 alert's summary when they all are on one host (two full disks of one host name their mount
 points), and a `✅ 3 x Host down` part for the alerts that resolved since. A single alert reads
-as before. Grafana cuts a Telegram message at 4096 characters, about 300 host names. The email
+as before. Grafana cuts a Telegram message at 4096 characters, about 300 host names. A Slack
+message has the same lines with Slack links (`<url|runbook>`) instead of HTML and `&`, `<` and
+`>` escaped in alert names, scopes and summaries; its title is the mark, the alert name and, for
+a group, the scope (`🔴 Host down · workers`), and links to the alert rule. Slack collapses a text
+of more than 700 characters or 5 lines behind "Show more". The email
 contact point uses Grafana's default template, which already lists every alert of the group;
 [oncall](#oncall) folds the group into one GoAlert alert.
 
@@ -3750,6 +3765,67 @@ With at least one baseline alert Grafana gets `AyeOps / Flow baselines` (uid
 `below` to `above` shaded, the actual window against the dashed usual level, and the weeks of
 history per series, blue while learning. Every rule of the alert links to its share panel, so
 the alert opens on the series that tripped it. Runbook: [flow-baseline](runbooks/flow-baseline.md).
+
+## Database replication
+
+A service with a [`replication`](manifest.md#replication) block is a PostgreSQL streaming
+replica of its `primary`, and gets three alerts in the `services` group, named after the
+replica. Every one returns a series while healthy, so missing data never fires them by itself;
+`replication-broken` is the one that says when a node reports nothing.
+
+| Alert | Severity, for | Fires when |
+|---|---|---|
+| `<replica>-replication-lag` | warning, 5m | the replica has not replayed the WAL position the primary had `max_lag` ago |
+| `<replica>-replication-broken` | critical, 5m | the replica left recovery or reports nothing, or the primary is up and writable and lists no standby of that `application_name` in state `streaming`; or the primary reports nothing |
+| `<replica>-replication-two-primaries` | critical, 2m | neither node is in recovery: both accept writes |
+
+The series come from postgres_exporter (default collectors, checked against v0.20.1) on both
+nodes, each scrape target labelled `service: <service name>`. A module of your own that scrapes
+two exporters on the vmagent network:
+
+```yaml
+- job_name: postgres
+  static_configs:
+    - targets: ["orders-exporter:9187"]
+      labels: {service: orders}
+    - targets: ["orders-replica-exporter:9187"]
+      labels: {service: orders-replica}
+```
+
+| Series | Node | From |
+|---|---|---|
+| `pg_replication_is_replica` | both | `pg_is_in_recovery()`: 1 on a standby, 0 on a writable node |
+| `pg_stat_replication_pg_current_wal_lsn_bytes` | primary | one series per row of `pg_stat_replication`, labelled `application_name`, `client_addr`, `state`, `slot_name`: the primary's current WAL position in bytes |
+| `pg_stat_replication_pg_wal_lsn_diff` | primary | the same rows: bytes the standby has not replayed yet, the current position minus its `replay_lsn` |
+
+**Why the lag is measured on the primary.** The usual replica-side lag,
+`now() - pg_last_xact_replay_timestamp()`, is the age of the last replayed transaction, so it
+grows while the primary is idle and a quiet night looks like a replica hours behind.
+postgres_exporter's `pg_replication_lag_seconds` reports 0 once the replica has replayed all it
+received, which fixes the idle case but reads 0 for a replica that receives nothing, and it
+jumps to the idle time for the moment between receiving the first write after a pause and
+replaying it. The rule compares positions instead: it fires when the bytes the replica has not
+replayed exceed what the primary wrote within the last `max_lag`, that is when its replay
+position is older than the oldest position the primary reported in that window
+(`min_over_time` of the current position over `max_lag`). An idle primary writes nothing and
+its standby has replayed everything, so both sides are 0 and the rule stays quiet; a replica
+that stops replaying while the primary keeps writing crosses it after `max_lag`, and one that
+was behind before the primary fell idle still counts. The window starts at the oldest sample
+it holds, up to one scrape interval inside `max_lag`. For the first `max_lag` after the standby
+connects the window is shorter, and the `for` of 5 minutes keeps that from firing on its own.
+
+**Broken and two primaries.** A replica that left recovery (promoted, or restarted without its
+standby signal) is broken; so is one that stays in recovery but does not stream: the primary
+lists it under another state, or not at all, as when it restores from the archive or cannot
+connect. While both nodes are writable only `two-primaries` fires, not `broken` as well. A
+primary whose PostgreSQL is down reports nothing, and `broken` fires with `side="primary"`; a
+replica that reports nothing fires it with `side="replica"`. Each series carries the `host` of
+its node in the manifest, not the host that scraped it, so while a whole host is down
+`host-down` holds back the series of that host only.
+
+Runbooks: [replication-lag](runbooks/replication-lag.md),
+[replication-broken](runbooks/replication-broken.md) and
+[replication-two-primaries](runbooks/replication-two-primaries.md).
 
 ## Write your own module
 

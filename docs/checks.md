@@ -1,7 +1,8 @@
 # Checks
 
 A check watches one thing about a service without writing a module: an HTTP answer, an open
-TCP port, a DNS record, a script's exit code, or a number a read-only SQL query returns. Declare it under the service, enable the
+TCP port, a mail server's SMTP greeting, a DNS record, a script's exit code, or a number a
+read-only SQL query returns. Declare it under the service, enable the
 `checks` module on the host that runs it, and every check gets its metrics and its alert.
 
 ```yaml
@@ -32,7 +33,7 @@ The check name is its key, `^[a-z][a-z0-9-]{0,39}$`; `<service>-<check>` is its 
 
 | Field | Default | Meaning |
 |---|---|---|
-| `type` | required | `http`, `tcp`, `dns`, `script` or `sql` |
+| `type` | required | `http`, `tcp`, `smtp`, `dns`, `script` or `sql` |
 | `alert` | required | `{for, severity, runbook}` are required by the rules (`alert-for`, `alert-severity`, `alert-runbook`); `name`, `title`, `summary` and `dashboard` (as for [service alerts](manifest.md#alert)) are optional; `sql` checks add their condition, see [sql](#sql) |
 | `from` | the service host | host that runs the check; it needs the `checks` module (`check-module`) |
 | `interval` | `60` | seconds between runs, `15` to `3600` (`86400` for scripts and SQL) |
@@ -64,6 +65,64 @@ Redirects are followed and IPv4 is preferred. Metrics: `probe_success{check}`,
 
 The check passes when the connection opens. Metrics: `probe_success{check}`,
 `probe_duration_seconds{check}`.
+
+## smtp
+
+```yaml
+services:
+  mail:
+    host: central
+    checks:
+      mx:
+        type: smtp
+        address: mail.example.com:25
+        alert: {for: 5m, severity: critical, runbook: mail-down}
+      submission:
+        type: smtp
+        address: mail.example.com:587
+        alert: {for: 5m, severity: critical, runbook: mail-down}
+      smtps:
+        type: smtp
+        address: mail.example.com:465
+        alert: {for: 5m, severity: warning, runbook: mail-down}
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `address` | required | `host:port` or `[ipv6]:port` of the mail server |
+| `tls` | `tls` on port 465, `starttls` on any other | `starttls`: greet, upgrade with `STARTTLS` and greet again over TLS, the probe fails when the server does not offer it; `tls`: TLS from the first byte; `none`: greet in plain text only, for a relay on port 25 where STARTTLS is optional or a relay on a trusted network |
+| `ehlo` | the domain of [`mail.from`](manifest.md#mail) | the name the probe gives in `EHLO`, a host name such as `probe.example.com` |
+
+The check is a mail server answering as one, not just an open port: blackbox-exporter's `tcp`
+prober waits for the `220` greeting, sends `EHLO <ehlo>` and waits for `250`; with `starttls`
+it then sends `STARTTLS`, waits for `220`, upgrades the connection, sends `EHLO` again and waits
+for `250`; it ends with `QUIT`. It waits for the last line of a multi-line reply (`220 ` or
+`250 `, not `220-`), so a server that delays its greeting, like Postfix's postscreen, sees a
+client that waits its turn. With `tls` or `starttls` the certificate is verified against the
+host of `address`, so name the server as its certificate does, not by its IP address.
+
+`aye check` refuses `tls: tls` on 25 and 587, which greet in plain text, `starttls` or `none` on
+465, which speaks TLS from the first byte, and an `smtp` check without `ehlo` in a manifest
+without `mail` (`check-smtp`). Other ports, such as 2525, take any `tls`.
+
+A server that answers with another code fails the check, at the latest when the timeout ends.
+Metrics: `probe_success{check}`, `probe_duration_seconds{check}`,
+`probe_failed_due_to_regex{check}` (`1` when the server closed the connection before the
+expected code) and, with TLS, `probe_ssl_earliest_cert_expiry{check}`, which
+[`check-tls-expiring`](runbooks/check-tls-expiring.md) watches.
+
+To see what the probe sees, from the host that runs it:
+
+```sh
+nc -C mail.example.com 25
+openssl s_client -starttls smtp -crlf -connect mail.example.com:587 -servername mail.example.com
+openssl s_client -crlf -connect mail.example.com:465 -servername mail.example.com
+```
+
+Type `EHLO probe.example.com` once the server has greeted, after the `220` line with `nc` and
+after the certificate summary with `openssl` (`-starttls smtp` has already sent `EHLO` and
+`STARTTLS` itself), and expect `250` lines back; `Verify return code: 0 (ok)` in the summary is
+what the probe needs of the certificate. `QUIT` ends the session.
 
 ## dns
 
@@ -165,7 +224,9 @@ directory like the script runners, so SQL checks need the `node` module on their
 | `dns_server` | `1.1.1.1` | resolver of `dns` checks without `server` |
 | `expose` | `[]` | `9116` publishes the check blackbox on `public_bind` |
 
-It renders only what the checks of its host need: `check-blackbox` (blackbox-exporter `v0.28.0`
+It renders only what the checks of its host need: `check-blackbox` (blackbox-exporter `v0.29.1`
 on port `9116`, one module and one scrape job per check, so each check keeps its own interval),
 the two script runners and the SQL runner. Alerts: `target-down` for the blackbox,
-`check-runner-stale` when a runner has not written results for 5 minutes.
+[`check-tls-expiring`](runbooks/check-tls-expiring.md) when the certificate seen by an `https`
+or TLS `smtp` check expires in less than 14 days, `check-runner-stale` when a runner has not
+written results for 5 minutes.

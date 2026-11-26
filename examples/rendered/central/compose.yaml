@@ -175,7 +175,7 @@ services:
       timeout: 10s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: 5db1745214d5767e
+      io.ayeops.config-hash: 60d0f33fe79f3ac1
       io.ayeops.module: autopilot
       io.ayeops.service: autopilot
     logging:
@@ -577,7 +577,7 @@ services:
       timeout: 5s
     image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
     labels:
-      io.ayeops.config-hash: 2e2a385214a788e4
+      io.ayeops.config-hash: efb795b2adc2338d
       io.ayeops.module: grafana
       io.ayeops.service: grafana
     logging:
@@ -768,7 +768,7 @@ services:
       timeout: 5s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
-      io.ayeops.config-hash: e6849a41b8ac76fc
+      io.ayeops.config-hash: 5164800ef0d51cb5
       io.ayeops.module: mcp
       io.ayeops.service: mcp-catalog
     logging:

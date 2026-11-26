@@ -31,6 +31,21 @@ and was never tagged.
   while it holds the `host-down` of those hosts is held back, so a dropped tunnel or site pages
   once with the zone's name instead of once per host. Peers in a maintenance window drop out of
   it; rule `probe-links` checks the list. The `AyeOps / Probes` dashboard shows every link.
+- `alerting.contact: slack`: Grafana sends alerts to a Slack incoming webhook from
+  `AYE_SLACK_WEBHOOK_URL` in the `.env` of its host, with the layout of the Telegram message
+  (count, scope, hosts or summaries, runbook and dashboard links) in Slack's link syntax. The
+  sentinel sends to the same webhook instead of Telegram; on-call, autopilot and the status
+  Worker's notices stay on Telegram. The new rule `slack-webhook` refuses a Slack webhook URL
+  anywhere in the manifest, and the autopilot masks one as `slack-webhook`
+  ([manifest](docs/manifest.md#slack)).
+- [`smtp` checks](docs/checks.md#smtp): `type: smtp` with an `address` greets a mail server
+  through blackbox-exporter's `tcp` prober instead of only opening its port: `220`, `EHLO`,
+  `250`, then `STARTTLS` and a second `EHLO` over TLS (`tls: starttls`, the default on 25 and
+  587), TLS from the first byte (`tls: tls`, the default on 465), or the greeting alone
+  (`tls: none`). `EHLO` gives `ehlo`, or the domain of `mail.from`. Rule `check-smtp` refuses
+  `tls: tls` on 25 or 587, plain text on 465 and a check without an `EHLO` name.
+- `checks`: the alert `check-tls-expiring` (warning) when the certificate an `https` or TLS
+  `smtp` check sees expires in less than 14 days, like `tls-expiring` for `probes.http`.
 - `metrics`: the alerts `metrics-shipping-backlog` (warning), when for 15 minutes a host's
   vmagent queue holds more than 30 minutes of its own traffic or more than half of its room, and
   `metrics-shipping-dropped` (critical), when in the last hour the full queue dropped blocks or
@@ -49,9 +64,21 @@ and was never tagged.
   `host-down` included, while a window is open. The alerts of the services declared on such a
   host are held too, whichever host probes them. Rules `host-volatile` and
   `maintenance-window` check both.
+- `replication` on a service declares it the PostgreSQL streaming replica of its `primary`,
+  with an optional `max_lag` (default `5m`) and `application_name`. AyeOps then writes
+  `<replica>-replication-lag` (warning), when the replica has not replayed the WAL position the
+  primary had `max_lag` ago, measured on the primary so an idle primary never reads as lag;
+  `<replica>-replication-broken` (critical), when the replica left recovery, does not stream or
+  a node reports nothing; and `<replica>-replication-two-primaries` (critical), when both nodes
+  accept writes. `aye check` refuses an unknown, planned or cascaded primary
+  (`replication-primary`), an engine other than `postgres` (`replication-engine`), a pair whose
+  `metrics` lack the postgres_exporter series the alerts read (`replication-metrics`) and two
+  replicas of one primary under one `application_name` (`replication-name`).
 
 ### Changed
 
+- `sentinel`: the alert `sentinel-notify-failing` is titled "Sentinel cannot deliver its
+  messages", since the message may go to Slack.
 - `grafana`: `grafana-reader` checks its health with busybox `wget` instead of starting a
   second Python interpreter every 30 seconds, which took about half of its 32 MB and, together
   with the dashboard count, got the reader killed for memory (exit 137) on a starting stack.

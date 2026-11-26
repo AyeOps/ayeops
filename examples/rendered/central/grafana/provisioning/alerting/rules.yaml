@@ -3263,7 +3263,7 @@ groups:
       scope: '{{ if $$labels.group }}{{ $$labels.group }}{{ else if $$labels.host }}{{ $$labels.host }}{{ end }}'
       severity: critical
     noDataState: OK
-    title: Sentinel cannot reach Telegram
+    title: Sentinel cannot deliver its messages
     uid: aye-sentinel-notify-failing
   - annotations:
       runbook_url: https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/sentinel-ping-failing.md
