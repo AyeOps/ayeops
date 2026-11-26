@@ -25,6 +25,14 @@ and was never tagged.
 - `grafana`: `grafana-reader` counts the dashboards no file provisions as
   `ayeops_grafana_reader_dashboards_unmanaged`, and the `info` alert `dashboards-unmanaged`
   fires when there have been some for a day.
+- `duties` in the manifest: recurring work only a person can do (an access review, a manual
+  restore, a credential rotation), each with `title`, `every`, `last_done` and an optional
+  `owner` and `runbook`. One Grafana rule, `duty-overdue` (warning), fires per duty from the day
+  after its due day in the manifest's `timezone`; the due moment is rendered from the manifest
+  and compared with `time()` when the rule runs, so the render does not change by the day.
+  `aye check` refuses a `last_done` after today or not a day (`duty-done`) and an `every` over
+  ten years (`duty-every`); `aye duties` lists the duties with their days left and exits 1 when
+  one is overdue.
 - `probes`: `links` pings the private `address` of other hosts (a list of names, or `true` for
   every other host with an address that is not volatile), whatever VPN carries it. The new
   critical alert `link-down` fires when no probed host of a zone has answered for 3 minutes, and

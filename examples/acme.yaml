@@ -307,3 +307,14 @@ flows:
     to: central/victoriametrics
     label: request metrics
     state: planned
+duties:
+  access-review:
+    title: Review who can sign in to Grafana, the portal and the hosts
+    every: 90d
+    last_done: 2026-10-01
+    owner: ops
+    runbook: access-review
+  token-rotation:
+    title: Rotate the Cloudflare and Telegram API tokens
+    every: 365d
+    last_done: 2026-03-02

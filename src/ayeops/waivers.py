@@ -48,9 +48,9 @@ def waiver(path: str, rule: str, value: Any) -> Waiver:
     return Waiver(path, rule, reason_of(value), until_of(value))
 
 
-def parse_day(value: Any) -> date:
+def parse_day(value: Any, field: str = "until") -> date:
     if isinstance(value, datetime):
-        raise ValueError(f"until is a day without a time, YYYY-MM-DD, not {value.isoformat()!r}")
+        raise ValueError(f"{field} is a day without a time, YYYY-MM-DD, not {value.isoformat()!r}")
     if isinstance(value, date):
         return value
     text = str(value).strip() if isinstance(value, str) else ""
@@ -59,7 +59,7 @@ def parse_day(value: Any) -> date:
             return date.fromisoformat(text)
         except ValueError:
             pass
-    raise ValueError(f"until is a day as YYYY-MM-DD, not {value!r}")
+    raise ValueError(f"{field} is a day as YYYY-MM-DD, not {value!r}")
 
 
 def today_in(zone: str, now: datetime | None = None) -> date:

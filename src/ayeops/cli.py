@@ -12,6 +12,7 @@ from ayeops import __version__, dashboard_sync, render_index, status_deploy
 from ayeops import deploy as deploy_command
 from ayeops import diff as diff_command
 from ayeops import doctor as doctor_command
+from ayeops import duties as duties_command
 from ayeops import hostinit as hostinit_command
 from ayeops import inventory as inventory_command
 from ayeops import permissions as permissions_command
@@ -215,6 +216,7 @@ AyeOps: one manifest describes the hosts and services of a small fleet.
 
 EXAMPLES = {
     "check": ["aye check", "aye check ops/ayeops.yaml --strict --today 2026-12-01"],
+    "duties": ["aye duties", "aye duties ops/ayeops.yaml --today 2027-01-15"],
     "render": ["aye render", "aye render ops/ayeops.yaml -o ops/rendered --check"],
     "up": ["aye up examples/quickstart.yaml --start", "aye up --host local"],
     "down": ["aye down examples/quickstart.yaml --stop", "aye down --volumes --stop"],
@@ -307,13 +309,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--today",
         type=day,
         metavar="YYYY-MM-DD",
-        help="the day waiver ends are measured against, default today in the manifest timezone",
+        help="the day waiver ends and duty last_done days are measured against,"
+        " default today in the manifest timezone",
     )
     check_parser.add_argument(
         "--strict",
         action="store_true",
         help="fail on warnings too: unused modules, externals, profiles and runbook pages,"
         " waivers about to end",
+    )
+    duties_parser = commands.add_parser(
+        "duties", help="list the recurring duties with their due day, exit 1 when one is overdue"
+    )
+    add_manifest(duties_parser)
+    duties_parser.add_argument(
+        "--today",
+        type=day,
+        metavar="YYYY-MM-DD",
+        help="the day due days are measured against, default today in the manifest timezone",
     )
     render_parser = commands.add_parser("render", help="render compose projects per host")
     add_manifest(render_parser)
@@ -399,6 +412,8 @@ def run_command(arguments: list[str]) -> int:
         args.manifest = find_manifest(None)
     if args.command == "check":
         return check(args.manifest, args.today, args.strict)
+    if args.command == "duties":
+        return duties_command.run(args.manifest, args.today)
     if args.command in ("up", "down"):
         return up_command.run(args, render)
     if args.command == "dns":

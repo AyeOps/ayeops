@@ -4101,3 +4101,44 @@ groups:
     noDataState: Alerting
     title: Website down
     uid: aye-web-down
+- folder: AyeOps
+  interval: 1m
+  name: duties
+  orgId: 1
+  rules:
+  - annotations:
+      runbook_url: '{{ if $$labels.runbook }}{{ $$labels.runbook }}{{ else }}https://github.com/AyeOps/ayeops/blob/main/docs/runbooks/duty-overdue.md{{ end }}'
+      summary: '{{ .Labels.title }} ({{ .Labels.duty }}, every {{ .Labels.every }}) was due on {{ .Labels.due }}{{ if .Labels.owner }}, owner {{ .Labels.owner }}{{ end }}'
+    condition: C
+    data:
+    - datasourceUid: victoriametrics
+      model:
+        expr: label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(vector(time() >= bool 1798668000), "duty", "access-review", "", ""), "title", "Review who can sign in to Grafana, the portal and the hosts", "", ""), "due", "2026-12-30", "", ""), "every", "90d", "", ""), "owner", "ops", "", ""), "runbook", "https://runbooks.acme.example/access-review", "", "") or label_replace(label_replace(label_replace(label_replace(vector(time() >= bool 1804024800), "duty", "token-rotation", "", ""), "title", "Rotate the Cloudflare and Telegram API tokens", "", ""), "due", "2027-03-02", "", ""), "every", "365d", "", "")
+        instant: true
+        refId: A
+      refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+    - datasourceUid: __expr__
+      model:
+        conditions:
+        - evaluator:
+            params:
+            - 0
+            type: gt
+        expression: A
+        refId: C
+        type: threshold
+      refId: C
+      relativeTimeRange:
+        from: 0
+        to: 0
+    execErrState: Error
+    for: 1h
+    labels:
+      scope: '{{ $$labels.duty }}'
+      severity: warning
+    noDataState: OK
+    title: A recurring duty is overdue
+    uid: aye-duty-overdue

@@ -43,7 +43,7 @@ or an external kept while its last client moves, is work in progress, not a brok
 | `cloud-limit` | each cloud dependency has `limit` and `on_exceed` | free tiers and quotas end in throttling or bills; both should be known before they happen |
 | `service-provided` | a module, a compose file or a declared unit on the service's host provides it | dead entries make the catalog lie |
 | `alert-dashboard` | an alert's `dashboard` names a dashboard uid, and a panel id, that a module or project dashboard has | a link to a dashboard that does not exist sends whoever is paged to an empty page |
-| `alert-unique` | alert names are unique across modules and services | the name is the rule uid |
+| `alert-unique` | alert names are unique across modules and services, and none is `duty-overdue` while the manifest has [duties](manifest.md#duties) | the name is the rule uid |
 | `baseline-skip`, `baseline-quiet`, `baseline-empty` | a [baseline alert](modules.md#flow-baselines) skips only on labels of its series (`by`, with `host` also `project` and `group`), has no quiet window that starts where it ends, and counts empty answers only on a counter; a skip is a [waiver](#waivers-end) | an opt-out on a label the rule never groups by, or an empty window, matches nothing and looks like it works |
 | `alert-filter-nodata` | an alert whose no data counts as firing (every service alert, and a module alert with `no_data: alerting`) does not filter at the top level: `> 120` must be `> bool 120`, unless an `or` branch always returns a series | a filtering comparison returns no series while healthy, so with no data as firing the alert fires exactly when everything is fine; `bool` yields 0 or 1 and keeps the series |
 | `status-component` | a public component has an id (a slug of its title, or an explicit `id`), and one id carries one title | the [status page](status.md) shows ids and titles only, so they must be stable and unambiguous |
@@ -52,7 +52,7 @@ The built-in modules are held to the same rules: every service a module can run 
 entry with a description, metrics, alerts, a log source and a status mark, and every built-in
 alert has a page under [runbooks](runbooks/). Tests enforce both, and the other direction too:
 every page under runbooks is named after an alert of a built-in module (or the sentinel's
-`sentinel-central-down`), or is one of the few operating pages of a module (`glitchtip`,
+`sentinel-central-down`, or `duty-overdue` of the [duties](manifest.md#duties)), or is one of the few operating pages of a module (`glitchtip`,
 `infisical`, `oauth2-proxy`, `offsite`, `offsite-append-only`, `flow-baseline`), listed in
 `tests/test_unused.py` and linked from [modules](modules.md).
 
@@ -152,6 +152,8 @@ once, at the anchor. The same loader reads:
 | `ingress-unique` | a name below an ingress domain is routed on one host only |
 | `ingress-auth` | a host with ingress runs `auth` too, or its ingress states `without_auth: <why>` ([a waiver](#waivers-end)) |
 | `waiver-until` | the `until` of a [waiver](#waivers-end) is a day as `YYYY-MM-DD`; with `rules.waivers_need_until: true` every waiver has one |
+| `duty-every` | a [duty](manifest.md#duties) recurs at most every `3660d`, ten years |
+| `duty-done` | the `last_done` of a duty is a real day, `YYYY-MM-DD`, and not after today in the manifest's `timezone` (`aye check --today` moves today); a duty that is overdue is not an error of the manifest, it fires `duty-overdue` and fails `aye duties` |
 | `auth-route` | no ingress route is named `auth`; that name is the sign-in callback |
 | `auth-open` | every name in `auth.open` is an ingress route on the same host |
 | `auth-admins` | every address in `auth.admins` is in `auth.emails` |

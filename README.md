@@ -18,6 +18,10 @@ checks, backups monitoring with off-site copies and restore tests, alerts on Pos
 replication lag, a broken stream and two primaries, on-call escalation and an incident
 journal, a status page, an MCP hub, and the autopilot's first level in shadow mode, which
 diagnoses but runs no action. A module marked preview works and is tested, but its
+checks, [duties](docs/manifest.md#duties) only a person can do with an alert when one is
+overdue, backups monitoring with off-site copies and restore tests, on-call escalation and an
+incident journal, a status page, an MCP hub, and the autopilot's first level in shadow mode,
+which diagnoses but runs no action. A module marked preview works and is tested, but its
 settings, metrics or alerts may still change in a minor release ([changelog](CHANGELOG.md)).
 Actions of the autopilot, Kubernetes and the rest are on the [roadmap](docs/roadmap.md).
 

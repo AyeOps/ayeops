@@ -2219,7 +2219,8 @@ one host.
 | `locale` | `portal.locale` | language of the titles and legends of the AyeOps dashboards, `en` or `uk` |
 
 Provisioned: the VictoriaMetrics datasource (uid `victoriametrics`), the dashboards and alert
-rules of every module enabled on any host plus the alerts of your services, and with
+rules of every module enabled on any host plus the alerts of your services and, with
+[`duties`](manifest.md#duties), the rule `duty-overdue` in a group `duties`, and with
 `alerting.contact: telegram` a Telegram contact point and the default notification policy.
 With `alerting.contact: email` the contact point is an `email` one that sends to
 `alerting.emails`; with `alerting.contact: slack` a `slack` one that posts to the incoming
@@ -2238,7 +2239,9 @@ series has one, else its `host`, else none
 Grafana `13.2.3` expands label templates per alert instance and drops a label whose value comes
 out empty). The notification policy groups by `grafana_folder`, `alertname` and `scope`, not by
 `host`: 14 of 20 workers going down is one notification of the group `workers`, a host without
-a group still gets its own, and an alert without a host groups by its name alone. Grafana's
+a group still gets its own, and an alert without a host groups by its name alone. The
+`duty-overdue` rule sets `scope` to the duty's name instead, so each late duty is a notification
+of its own with its summary. Grafana's
 defaults hold: it waits 30 seconds after the first alert of a group, sends what joined later
 after 5 minutes, and repeats an unchanged group every 4 hours. `scope` is a label of its own
 because a rule label wins over a query label of the same name in Grafana, so a rule label
@@ -2291,7 +2294,8 @@ at 0 instead of vanishing:
 | `host-down`, with [`probes.links`](#links-between-hosts) | also `unless on (host) (label_replace(max by (peer) (<link> unless on (zone) (max by (zone) (<link>) > 0)), "host", "$1", "peer", "(.+)"))` with `<link>` `probe_success{job="blackbox-link"}`: the probed hosts of a zone none of whose probes succeed |
 | `link-down` | none from it; with windows its query drops the peers in an open window, `<link> unless on (peer) (label_replace(<windows>, "peer", "<host>", "", "") or ...)` |
 | `host-gone` | none from the hold: it judges the volatile hosts itself, by `1 - ((max by (host) (max_over_time(<up>[<volatile>])) + on (host) group_right () (0 * last_over_time(<up>[<volatile> + 7d]))) or 0 * last_over_time(<up>[<volatile> + 7d]))` with `<up>` `up{job="node", host=~"<hosts>"}`, one term per duration |
-| every rule, both of these included | `unless on (host) (label_replace(<windows>, "host", "<host>", "", "") or ...)` for every host with a window |
+| every rule, both of these included, but `duty-overdue` | `unless on (host) (label_replace(<windows>, "host", "<host>", "", "") or ...)` for every host with a window |
+| `duty-overdue` | none, neither from the hold nor from a window: a [duty](manifest.md#duties) is done by a person, not on a host, and its series carry no `host` label, so a host guard could never match them |
 | a service rule of a service whose `host` is volatile | also `unless on () (max by (host) (<node up of that host over <volatile> + 7d>) == 0)` |
 | a service rule of a service whose `host` has windows | also `unless on () (<windows of that host>)` |
 

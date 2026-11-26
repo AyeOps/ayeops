@@ -33,6 +33,9 @@ score = 78.6
 tests = ["tests/test_downtime.py"]
 score = 100.0
 
+[modules."src/ayeops/duties.py"]
+tests = ["tests/test_duties.py"]
+
 [modules."src/ayeops/eol.py"]
 tests = ["tests/test_eol.py"]
 score = 94.9

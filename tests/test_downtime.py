@@ -20,6 +20,7 @@ from ayeops.downtime import (
     gone_term,
     guarded,
     host_set,
+    hostless_alert,
     hosts_down,
     in_maintenance,
     in_window,
@@ -338,6 +339,11 @@ def test_a_service_on_a_volatile_maintained_host_is_held_by_that_host_alone() ->
         ("", EDGE_DOWN),
         ("", SUN_2300_3H),
     ]
+
+
+def test_a_hostless_alert_takes_no_guard() -> None:
+    alert = {"name": "duty-overdue", "expr": "vector(time() >= bool 1)"}
+    assert hostless_alert(alert) == {"name": "duty-overdue", "expr": "vector(time() >= bool 1)"}
 
 
 def test_a_service_elsewhere_gets_the_fleet_guards_only() -> None:

@@ -87,6 +87,9 @@ def test_a_maintenance_window_holds_every_rule_of_the_fleet_on_that_host(
 ) -> None:
     edge(data)["maintenance"] = [SUNDAY_NIGHT]
     rules = rendered_rules(data, modules)
+    duty = rules.pop("aye-duty-overdue")
+    assert unheld(expr(duty)) == expr(duty)
+    assert "unless" not in expr(duty)
     assert len(rules) > 40
     for uid, rule in rules.items():
         assert f" unless on (host) ({EDGE_WINDOW}) " in expr(rule), uid
