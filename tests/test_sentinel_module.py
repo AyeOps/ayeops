@@ -7,7 +7,14 @@ import pytest
 import yaml
 
 from ayeops.registry import Module, load_modules
-from ayeops.sentinel import check_problem, grafana_health, merged_checks
+from ayeops.sentinel import (
+    check_problem,
+    digest_url,
+    grafana_health,
+    merged_checks,
+    sentinel_context,
+    sentinel_problems,
+)
 from tests.conftest import check_once, manifest_from, pinned, render_once, rules_hit, tag_of
 from tests.test_sentinel import GRAFANA, SCRIPT, VM_HEALTH, VM_QUERY, s
 
@@ -193,6 +200,7 @@ def test_sentinel_alerts_are_rendered_into_central_grafana(
         "aye-sentinel-notify-failing",
         "aye-sentinel-ping-failing",
         "aye-sentinel-stalled",
+        "aye-sentinel-digest-overdue",
     ]
 
 
@@ -315,4 +323,154 @@ def test_sentinel_finding_for_a_host_without_defaults(data: dict[str, Any]) -> N
             "edge runs no grafana with root_url or exposed 3000 and no metrics server exposing"
             " 8428, so there is nothing to check by default: list checks",
         )
+    ]
+
+
+def sentinel_environment(data: dict[str, Any], modules: dict[str, Module]) -> dict[str, Any]:
+    environment: dict[str, Any] = edge_compose(data, modules)["services"]["sentinel"]["environment"]
+    return environment
+
+
+def test_the_example_sends_the_digest_at_eight_in_the_fleet_zone_from_the_samples_url(
+    data: dict[str, Any], modules: dict[str, Module]
+) -> None:
+    environment = sentinel_environment(data, modules)
+    assert environment["AYE_SENTINEL_DIGEST_AT"] == "08:00"
+    assert environment["AYE_SENTINEL_DIGEST_TIMEZONE"] == data["timezone"]
+    assert environment["AYE_SENTINEL_DIGEST_URL"] == VM_QUERY
+    passed = {k: str(v) for k, v in environment.items() if not str(v).startswith("${")}
+    loaded = s.config_from(passed)
+    assert (loaded.digest_at, loaded.digest_timezone, loaded.digest_url) == (
+        "08:00",
+        data["timezone"],
+        VM_QUERY,
+    )
+
+
+def test_the_digest_takes_its_own_time_zone_and_url(
+    data: dict[str, Any], modules: dict[str, Module]
+) -> None:
+    digest = {"at": "21:30", "timezone": "Asia/Tokyo", "url": "https://vm.example/api/v1/query"}
+    acme_with_sentinel(data, digest=digest)
+    environment = sentinel_environment(data, modules)
+    assert environment["AYE_SENTINEL_DIGEST_AT"] == "21:30"
+    assert environment["AYE_SENTINEL_DIGEST_TIMEZONE"] == "Asia/Tokyo"
+    assert environment["AYE_SENTINEL_DIGEST_URL"] == "https://vm.example/api/v1/query"
+    assert rules_hit(data) == set()
+
+
+def test_without_digest_the_container_and_grafana_know_nothing_of_it(
+    data: dict[str, Any], modules: dict[str, Module]
+) -> None:
+    acme_with_sentinel(data)
+    environment = sentinel_environment(data, modules)
+    assert not [name for name in environment if "DIGEST" in name]
+    tree = render_once(manifest_from(data), modules)
+    rules = yaml.safe_load(tree["central/grafana/provisioning/alerting/rules.yaml"])
+    sentinel = next(group for group in rules["groups"] if group["name"] == "sentinel")
+    assert "aye-sentinel-digest-overdue" not in [rule["uid"] for rule in sentinel["rules"]]
+
+
+def test_the_digest_overdue_alert_fires_two_hours_after_the_due_time(
+    modules: dict[str, Module],
+) -> None:
+    alert = next(a for a in modules["sentinel"].alerts if a["name"] == "sentinel-digest-overdue")
+    assert alert["expr"] == "time() - ayeops_sentinel_digest_due_timestamp_seconds > bool 7200"
+    assert (alert["severity"], alert["for"], alert["setting"]) == ("warning", "5m", "digest")
+
+
+def test_a_digest_without_a_samples_check_needs_its_url(data: dict[str, Any]) -> None:
+    acme_with_sentinel(data, digest={"at": "08:00"}, checks=[{"name": "samples", "enabled": False}])
+    assert rules_hit(data) == {"sentinel-digest"}
+    assert findings(data) == [
+        (
+            "hosts.edge.modules.sentinel.digest",
+            "sentinel-digest",
+            "the digest reads the backup metrics from the VictoriaMetrics of central and there"
+            " is no samples check to take its address from: set digest.url",
+        )
+    ]
+    data["hosts"]["edge"]["modules"]["sentinel"]["digest"]["url"] = VM_QUERY
+    assert rules_hit(data) == set()
+    data["hosts"]["edge"]["modules"]["sentinel"]["digest"] = None
+    assert rules_hit(data) == set()
+
+
+@pytest.mark.parametrize(
+    "digest",
+    [
+        {},
+        {"at": "8:00"},
+        {"at": "24:00"},
+        {"at": "08:00", "url": "ftp://vm"},
+        {"at": "08:00", "timezone": "not a zone"},
+        {"at": "08:00", "extra": 1},
+        "08:00",
+    ],
+)
+def test_digest_settings_schema(data: dict[str, Any], digest: Any) -> None:
+    acme_with_sentinel(data, digest=digest)
+    assert rules_hit(data) == {"module-settings"}
+
+
+@pytest.mark.parametrize(
+    ("settings", "checks", "url"),
+    [
+        (
+            {"digest": {"url": "http://own"}},
+            [{"name": "samples", "kind": "fresh", "url": "x"}],
+            "http://own",
+        ),
+        (
+            {"digest": {"url": ""}},
+            [{"name": "samples", "kind": "fresh", "url": "http://s"}],
+            "http://s",
+        ),
+        ({"digest": None}, [{"name": "samples", "kind": "fresh", "url": "http://s"}], "http://s"),
+        (
+            {},
+            [
+                {"name": "a", "kind": "fresh", "url": "http://a"},
+                {"name": "samples", "kind": "fresh", "url": "http://s"},
+            ],
+            "http://s",
+        ),
+        ({}, [{"name": "samples", "kind": "http", "url": "http://s"}], ""),
+        ({}, [{"name": "samples"}], ""),
+        ({}, [{"name": "other", "kind": "fresh", "url": "http://o"}], ""),
+        ({}, [{"name": "samples", "kind": "fresh"}], ""),
+        ({}, [], ""),
+    ],
+)
+def test_digest_url(settings: dict[str, Any], checks: list[dict[str, Any]], url: str) -> None:
+    assert digest_url(settings, checks) == url
+
+
+def test_the_sentinel_context_carries_the_digest_url(data: dict[str, Any]) -> None:
+    manifest = manifest_from(data)
+    settings = load_modules()["sentinel"].settings({"watch": "central"})
+    context = sentinel_context(manifest, settings)
+    assert context["digest_url"] == VM_QUERY
+    assert sentinel_context(manifest, None) == {}
+
+
+def test_a_sentinel_sharing_the_zone_of_its_host_is_told_why(data: dict[str, Any]) -> None:
+    acme_with_sentinel(data)
+    del data["hosts"]["edge"]["modules"]["offsite"]
+    data["services"]["acme-db"]["data"]["copies"] = ["host"]
+    data["hosts"]["edge"]["zone"] = "datacenter"
+    assert findings(data) == [
+        (
+            "hosts.edge.modules.sentinel.watch",
+            "sentinel-watch",
+            "edge and central are both in zone 'datacenter': one power or network outage"
+            " silences the host and its sentinel together",
+        )
+    ]
+
+
+def test_a_sentinel_without_watch_names_the_empty_host(data: dict[str, Any]) -> None:
+    data["hosts"]["edge"]["modules"]["sentinel"] = {}
+    assert sentinel_problems(manifest_from(data)) == [
+        ("hosts.edge.modules.sentinel.watch", "sentinel-watch", "unknown host ''")
     ]

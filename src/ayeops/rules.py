@@ -18,6 +18,7 @@ from ayeops.baseline import dashboard as baseline_dashboard
 from ayeops.baseline import is_baseline, rule_names, spec_problems
 from ayeops.checks import check_alerts, check_problems, service_checks, sql_baseline
 from ayeops.datastores import datastore_problems, datastore_warnings
+from ayeops.downtime import downtime_problems
 from ayeops.grafana_reader import SERVICE as READER_SERVICE
 from ayeops.grafana_reader import consumer_problems, declared, mounts_volume
 from ayeops.i18n import is_reserved
@@ -967,6 +968,7 @@ def check_manifest(
     findings += [Finding(*problem) for problem in brand_problems(manifest)]
     findings += [Finding(*problem) for problem in push_problems(manifest)]
     findings += [Finding(*problem) for problem in check_problems(manifest)]
+    findings += [Finding(*problem) for problem in downtime_problems(manifest)]
     findings += [Finding(*problem) for problem in offsite_problems(manifest)]
     findings += [Finding(*problem) for problem in backups_problems(manifest)]
     findings += [Finding(*problem) for problem in metrics_backup_problems(manifest)]
