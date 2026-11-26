@@ -88,6 +88,7 @@ def test_blackbox_may_ping_unprivileged_only_when_it_pings(
     services = host_compose(manifest_from(edge_probes(data, internet=True)), "edge", modules)
     sysctls = services["services"]["blackbox"]["sysctls"]
     assert sysctls == {"net.ipv4.ping_group_range": "0 2147483647"}
+    del data["hosts"]["central"]["modules"]["probes"]["links"]
     central = host_compose(manifest_from(data), "central", modules)["services"]["blackbox"]
     assert "sysctls" not in central
 

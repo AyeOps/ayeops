@@ -220,6 +220,7 @@ def test_scrape_config_lists_the_enabled_exporters(modules: dict[str, Module]) -
         "node",
         "blackbox",
         "blackbox-http",
+        "blackbox-link",
         "rdap",
         "grafana",
         "traefik",

@@ -25,7 +25,12 @@ and was never tagged.
 - `grafana`: `grafana-reader` counts the dashboards no file provisions as
   `ayeops_grafana_reader_dashboards_unmanaged`, and the `info` alert `dashboards-unmanaged`
   fires when there have been some for a day.
-
+- `probes`: `links` pings the private `address` of other hosts (a list of names, or `true` for
+  every other host with an address that is not volatile), whatever VPN carries it. The new
+  critical alert `link-down` fires when no probed host of a zone has answered for 3 minutes, and
+  while it holds the `host-down` of those hosts is held back, so a dropped tunnel or site pages
+  once with the zone's name instead of once per host. Peers in a maintenance window drop out of
+  it; rule `probe-links` checks the list. The `AyeOps / Probes` dashboard shows every link.
 - `metrics`: the alerts `metrics-shipping-backlog` (warning), when for 15 minutes a host's
   vmagent queue holds more than 30 minutes of its own traffic or more than half of its room, and
   `metrics-shipping-dropped` (critical), when in the last hour the full queue dropped blocks or

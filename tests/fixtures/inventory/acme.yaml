@@ -284,6 +284,7 @@ all:
       ayeops_project: acme
       ayeops_zone: datacenter
     edge:
+      ansible_host: 10.8.0.2
       ayeops_arch: amd64
       ayeops_project: acme
       ayeops_zone: office
