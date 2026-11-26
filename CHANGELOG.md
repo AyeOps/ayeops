@@ -47,6 +47,9 @@ and was never tagged.
 
 ### Changed
 
+- `grafana`: `grafana-reader` checks its health with busybox `wget` instead of starting a
+  second Python interpreter every 30 seconds, which took about half of its 32 MB and, together
+  with the dashboard count, got the reader killed for memory (exit 137) on a starting stack.
 - `metrics`: vmagent runs with `-remoteWrite.inmemoryQueues=1` and sends fresh samples ahead of
   its on-disk backlog, so a host that reconnects after an outage reports at once and its backlog
   fills in behind it.

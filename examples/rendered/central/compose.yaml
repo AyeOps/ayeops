@@ -616,9 +616,11 @@ services:
       start_period: 60s
       test:
       - CMD
-      - python
-      - -c
-      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:9137/health', timeout=5)
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:9137/health
       timeout: 10s
     image: python:3.13.16-alpine3.23@sha256:07b20c774a247152e74f622034c1482495d299e070eec620ddff13e01264290b
     labels:
