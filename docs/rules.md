@@ -35,7 +35,7 @@ or an external kept while its last client moves, is work in progress, not a brok
 |---|---|---|
 | `service-description` | a non-empty `description` | the person on call needs to know what breaks for whom |
 | `service-metrics` | at least one metric, or `metrics: {none: <reason>}` ([a waiver](#waivers-end)) | "no metrics" is allowed as a decision, never as an omission |
-| `service-alerts` | at least one alert | a metric nobody watches is a log with extra steps |
+| `service-alerts` | at least one alert, or a [`replication`](manifest.md#replication) block, which brings its own | a metric nobody watches is a log with extra steps |
 | `alert-severity` | every alert has `severity` | routing and urgency depend on it |
 | `alert-runbook` | every alert has `runbook`, and `runbook_base_url` is set | an alert without a next step trains people to ignore alerts |
 | `service-logs` | a log source | the first question after an alert is "what did it say" |
@@ -205,6 +205,24 @@ One warning belongs here, printed by `aye check` without failing it:
 | Rule | Warns when |
 |---|---|
 | `data-declared` | a `criticality: critical` service has no `data` and runs on a database: its compose image or its `units` entry is `postgres`, `postgresql`, `mysql`, `mariadb`, `mongo`, `mongodb` or `mongod` (registry, tag, digest and unit suffix aside, so `postgres:18.1-alpine` and `postgresql@16-main.service` count, `postgres-exporter` does not) |
+
+## Replication rules
+
+A service's [`replication`](manifest.md#replication) block declares it the streaming replica of
+another; these rules make sure its alerts can work. The paths name the field to change, on the
+replica or on its primary.
+
+| Rule | Requirement | Why |
+|---|---|---|
+| `replication-primary` | `primary` names another live service that is not itself a replica | a pair with a missing or planned primary has nothing to compare, and cascading replication (a replica of a replica) is not supported yet, which also rules out cycles |
+| `replication-engine` | the primary declares [`data`](manifest.md#data), and its `engine`, and the replica's when it declares `data`, is `postgres` | the alerts read the metrics of postgres_exporter; another engine would leave them without data |
+| `replication-metrics` | the replica lists `pg_replication_is_replica` in `metrics`, the primary `pg_replication_is_replica`, `pg_stat_replication_pg_current_wal_lsn_bytes` and `pg_stat_replication_pg_wal_lsn_diff` | the alerts read exactly these series; listing them is the promise that an exporter scrapes them with the service's label |
+| `replication-name` | no two replicas of one primary share an `application_name` | the primary tells its standbys apart by that name only, so two of them would hide each other |
+
+```text
+error [replication-primary] services.orders-replica.replication.primary: the primary orders-ro is itself a replica of orders: cascading replication is not supported, name the primary that is not in recovery
+error [replication-metrics] services.orders.metrics: the replication alerts of orders-replica read pg_stat_replication_pg_current_wal_lsn_bytes, pg_stat_replication_pg_wal_lsn_diff of orders: scrape its postgres_exporter with the label service=orders and list them in metrics
+```
 
 ## Waivers end
 

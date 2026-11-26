@@ -44,7 +44,8 @@ Every built-in module, what it runs, its settings and its alerts. The module tab
 | [`offsite`](#offsite) | restic copies of a host's newest backup to another host, with restore tests |
 
 After the modules: [flow baselines](#flow-baselines), an alert that compares a flow with its
-own usual level, and [write your own module](#write-your-own-module).
+own usual level, [database replication](#database-replication), the alerts of a declared
+primary and replica pair, and [write your own module](#write-your-own-module).
 
 ## How a module renders
 
@@ -3686,6 +3687,67 @@ With at least one baseline alert Grafana gets `AyeOps / Flow baselines` (uid
 `below` to `above` shaded, the actual window against the dashed usual level, and the weeks of
 history per series, blue while learning. Every rule of the alert links to its share panel, so
 the alert opens on the series that tripped it. Runbook: [flow-baseline](runbooks/flow-baseline.md).
+
+## Database replication
+
+A service with a [`replication`](manifest.md#replication) block is a PostgreSQL streaming
+replica of its `primary`, and gets three alerts in the `services` group, named after the
+replica. Every one returns a series while healthy, so missing data never fires them by itself;
+`replication-broken` is the one that says when a node reports nothing.
+
+| Alert | Severity, for | Fires when |
+|---|---|---|
+| `<replica>-replication-lag` | warning, 5m | the replica has not replayed the WAL position the primary had `max_lag` ago |
+| `<replica>-replication-broken` | critical, 5m | the replica left recovery or reports nothing, or the primary is up and writable and lists no standby of that `application_name` in state `streaming`; or the primary reports nothing |
+| `<replica>-replication-two-primaries` | critical, 2m | neither node is in recovery: both accept writes |
+
+The series come from postgres_exporter (default collectors, checked against v0.20.1) on both
+nodes, each scrape target labelled `service: <service name>`. A module of your own that scrapes
+two exporters on the vmagent network:
+
+```yaml
+- job_name: postgres
+  static_configs:
+    - targets: ["orders-exporter:9187"]
+      labels: {service: orders}
+    - targets: ["orders-replica-exporter:9187"]
+      labels: {service: orders-replica}
+```
+
+| Series | Node | From |
+|---|---|---|
+| `pg_replication_is_replica` | both | `pg_is_in_recovery()`: 1 on a standby, 0 on a writable node |
+| `pg_stat_replication_pg_current_wal_lsn_bytes` | primary | one series per row of `pg_stat_replication`, labelled `application_name`, `client_addr`, `state`, `slot_name`: the primary's current WAL position in bytes |
+| `pg_stat_replication_pg_wal_lsn_diff` | primary | the same rows: bytes the standby has not replayed yet, the current position minus its `replay_lsn` |
+
+**Why the lag is measured on the primary.** The usual replica-side lag,
+`now() - pg_last_xact_replay_timestamp()`, is the age of the last replayed transaction, so it
+grows while the primary is idle and a quiet night looks like a replica hours behind.
+postgres_exporter's `pg_replication_lag_seconds` reports 0 once the replica has replayed all it
+received, which fixes the idle case but reads 0 for a replica that receives nothing, and it
+jumps to the idle time for the moment between receiving the first write after a pause and
+replaying it. The rule compares positions instead: it fires when the bytes the replica has not
+replayed exceed what the primary wrote within the last `max_lag`, that is when its replay
+position is older than the oldest position the primary reported in that window
+(`min_over_time` of the current position over `max_lag`). An idle primary writes nothing and
+its standby has replayed everything, so both sides are 0 and the rule stays quiet; a replica
+that stops replaying while the primary keeps writing crosses it after `max_lag`, and one that
+was behind before the primary fell idle still counts. The window starts at the oldest sample
+it holds, up to one scrape interval inside `max_lag`. For the first `max_lag` after the standby
+connects the window is shorter, and the `for` of 5 minutes keeps that from firing on its own.
+
+**Broken and two primaries.** A replica that left recovery (promoted, or restarted without its
+standby signal) is broken; so is one that stays in recovery but does not stream: the primary
+lists it under another state, or not at all, as when it restores from the archive or cannot
+connect. While both nodes are writable only `two-primaries` fires, not `broken` as well. A
+primary whose PostgreSQL is down reports nothing, and `broken` fires with `side="primary"`; a
+replica that reports nothing fires it with `side="replica"`. Each series carries the `host` of
+its node in the manifest, not the host that scraped it, so while a whole host is down
+`host-down` holds back the series of that host only.
+
+Runbooks: [replication-lag](runbooks/replication-lag.md),
+[replication-broken](runbooks/replication-broken.md) and
+[replication-two-primaries](runbooks/replication-two-primaries.md).
 
 ## Write your own module
 

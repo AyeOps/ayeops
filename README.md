@@ -14,9 +14,10 @@ and `aye render` turns the manifest into a docker compose project per host with 
 vmagent, exporters and a provisioned Grafana.
 
 What ships today, as the [modules](#modules) below: metrics and logs, probes and declared
-checks, backups monitoring with off-site copies and restore tests, on-call escalation and an
-incident journal, a status page, an MCP hub, and the autopilot's first level in shadow mode,
-which diagnoses but runs no action. A module marked preview works and is tested, but its
+checks, backups monitoring with off-site copies and restore tests, alerts on PostgreSQL
+replication lag, a broken stream and two primaries, on-call escalation and an incident
+journal, a status page, an MCP hub, and the autopilot's first level in shadow mode, which
+diagnoses but runs no action. A module marked preview works and is tested, but its
 settings, metrics or alerts may still change in a minor release ([changelog](CHANGELOG.md)).
 Actions of the autopilot, Kubernetes and the rest are on the [roadmap](docs/roadmap.md).
 
@@ -271,7 +272,7 @@ Details: [docs/modules.md](docs/modules.md).
 - [Status page](docs/status.md): the Worker, its push contract, and `aye status deploy`
 - [MCP hub](docs/mcp.md): the four gateways compared, sources, and what `aye check` refuses
 - [Autopilot](docs/autopilot.md): level 1 in shadow mode, its caps and what leaves the host
-- [Failover](docs/failover.md): the design of failover by priority
+- [Failover](docs/failover.md): the design of failover by priority; the [replication](docs/manifest.md#replication) alerts of a declared replica ship
 - [End-to-end run](docs/e2e.md): the CI job that deploys a manifest on one runner and checks it
 - [Roadmap](docs/roadmap.md)
 - [Releasing](docs/releasing.md): bump the version, merge, push a `v<version>` tag

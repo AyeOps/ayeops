@@ -1,0 +1,7 @@
+pg_replication_is_replica
+pg_replication_lag_seconds
+pg_replication_last_replay_seconds
+pg_stat_replication_pg_current_wal_lsn_bytes
+pg_stat_replication_pg_wal_lsn_diff
+pg_stat_replication_pg_xlog_location_diff
+pg_up

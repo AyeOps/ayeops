@@ -8,6 +8,7 @@ from typing import Any
 from ayeops.baseline import expand, is_baseline
 from ayeops.checks_sql import SQL_END, sql_condition, sql_failed, sql_query_problem, sql_text
 from ayeops.manifest import Manifest
+from ayeops.replication import replication_alerts
 
 DEFAULT_INTERVAL = 60
 DEFAULT_TIMEOUT = 10
@@ -182,9 +183,10 @@ def baseline_sources(manifest: Manifest) -> list[tuple[str, dict[str, Any]]]:
 
 def service_alerts(manifest: Manifest, name: str, service: dict[str, Any]) -> list[dict[str, Any]]:
     own = [rule for alert in service.get("alerts") or [] for rule in manifest_alert(alert)]
-    return own + [
+    checked = [
         rule for c in service_checks(manifest) if c.service == name for rule in check_alerts(c)
     ]
+    return own + checked + replication_alerts(manifest, name, service)
 
 
 def http_module(check: Check, prober: dict[str, Any]) -> dict[str, Any]:
