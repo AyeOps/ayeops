@@ -224,6 +224,7 @@ their metrics and logs; set `group` on the profile or the host to name the group
 | `logs` | `service-logs` | `docker`, `journald`, `syslog` or `file:<path>` |
 | `status` | `service-status` | `{public: <status page component>}` or `{internal: <reason>}`; a public mark may add `id` and `probe`, see below; the internal reason is a [waiver](#waivers) |
 | `cloud` | `cloud-limit` | cloud dependencies: `{name, limit, on_exceed}` each |
+| `checks` | `check-*` | HTTP, TCP, SMTP, DNS, script and SQL checks, each with its metrics and alert, see [checks](checks.md) |
 | `depends_on` | `depends-known`, `depends-cycle` | what it needs to work: `<host>/<service>`, a service name unique across hosts, a cloud dependency name or `external:<name>` |
 | `url` | no | the address people open, e.g. a public website; the portal adds ingress routes by itself |
 | `login` | no | how to sign in, shown on the portal card; name where the credential lives, never the credential |
@@ -445,7 +446,7 @@ mail:
 |---|---|---|
 | `host` | required | relay host name |
 | `port` | `587` | relay port |
-| `from` | required | sender address; its domain must be a real domain the relay may send for (SPF, DKIM) |
+| `from` | required | sender address; its domain must be a real domain the relay may send for (SPF, DKIM); it is also the name [`smtp` checks](checks.md#smtp) give in `EHLO` unless they set `ehlo` |
 | `from_name` | `project` | sender display name |
 | `tls` | `starttls` | `starttls`: upgrade on a submission port such as 587 and refuse to send without it; `tls`: TLS from the first byte, port 465; `none`: plain, for a relay on a trusted network |
 

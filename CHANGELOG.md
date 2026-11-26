@@ -27,6 +27,14 @@ and was never tagged.
   Worker's notices stay on Telegram. The new rule `slack-webhook` refuses a Slack webhook URL
   anywhere in the manifest, and the autopilot masks one as `slack-webhook`
   ([manifest](docs/manifest.md#slack)).
+- [`smtp` checks](docs/checks.md#smtp): `type: smtp` with an `address` greets a mail server
+  through blackbox-exporter's `tcp` prober instead of only opening its port: `220`, `EHLO`,
+  `250`, then `STARTTLS` and a second `EHLO` over TLS (`tls: starttls`, the default on 25 and
+  587), TLS from the first byte (`tls: tls`, the default on 465), or the greeting alone
+  (`tls: none`). `EHLO` gives `ehlo`, or the domain of `mail.from`. Rule `check-smtp` refuses
+  `tls: tls` on 25 or 587, plain text on 465 and a check without an `EHLO` name.
+- `checks`: the alert `check-tls-expiring` (warning) when the certificate an `https` or TLS
+  `smtp` check sees expires in less than 14 days, like `tls-expiring` for `probes.http`.
 - `metrics`: the alerts `metrics-shipping-backlog` (warning), when for 15 minutes a host's
   vmagent queue holds more than 30 minutes of its own traffic or more than half of its room, and
   `metrics-shipping-dropped` (critical), when in the last hour the full queue dropped blocks or
