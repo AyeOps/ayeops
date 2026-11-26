@@ -179,6 +179,10 @@ def module_alert(alert: dict[str, Any], hold: bool, down: Downtime) -> dict[str,
     return guarded(alert, alert_guards(name, hold, down))
 
 
+def hostless_alert(alert: dict[str, Any]) -> dict[str, Any]:
+    return guarded(alert, [])
+
+
 def service_guards(host: str, hold: bool, down: Downtime) -> list[Guard]:
     guards = fleet_guards(hold) + window_guards(down)
     after = down.volatile.get(host)

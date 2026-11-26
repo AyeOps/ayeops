@@ -840,7 +840,10 @@ def grafana_rules(
     duty = overdue_alert(manifest)
     if duty is not None:
         rule = grafana_rule(
-            duty, MODULE_RUNBOOK_BASE, {"scope": escape_provisioning(DUTY_SCOPE)}, ("OK", "Error")
+            downtime.hostless_alert(duty),
+            MODULE_RUNBOOK_BASE,
+            {"scope": escape_provisioning(DUTY_SCOPE)},
+            ("OK", "Error"),
         )
         rule["annotations"]["runbook_url"] = escape_provisioning(runbook_annotation(manifest))
         groups.append(

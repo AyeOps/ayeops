@@ -2226,7 +2226,8 @@ at 0 instead of vanishing:
 |---|---|
 | `host-down` | `unless on (host) (label_replace(vector(1), "host", "<volatile host>", "", "") or ...)`: the volatile hosts are left out |
 | `host-gone` | none from the hold: it judges the volatile hosts itself, by `1 - ((max by (host) (max_over_time(<up>[<volatile>])) + on (host) group_right () (0 * last_over_time(<up>[<volatile> + 7d]))) or 0 * last_over_time(<up>[<volatile> + 7d]))` with `<up>` `up{job="node", host=~"<hosts>"}`, one term per duration |
-| every rule, both of these included | `unless on (host) (label_replace(<windows>, "host", "<host>", "", "") or ...)` for every host with a window |
+| every rule, both of these included, but `duty-overdue` | `unless on (host) (label_replace(<windows>, "host", "<host>", "", "") or ...)` for every host with a window |
+| `duty-overdue` | none, neither from the hold nor from a window: a [duty](manifest.md#duties) is done by a person, not on a host, and its series carry no `host` label, so a host guard could never match them |
 | a service rule of a service whose `host` is volatile | also `unless on () (max by (host) (<node up of that host over <volatile> + 7d>) == 0)` |
 | a service rule of a service whose `host` has windows | also `unless on () (<windows of that host>)` |
 
